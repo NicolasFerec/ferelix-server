@@ -1,0 +1,21 @@
+[project]
+name = "ferelix-server"
+version = "0.1.0"
+description = "A FastAPI application for managing media content"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard]",
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+  "ruff"
+]
+
+[tool.ruff]
+target-version = "py314"
+unsafe-fixes = true
+preview = true
+lint.extend-select = ["I", "C", "SIM", "TCH", "UP", "RUF"]

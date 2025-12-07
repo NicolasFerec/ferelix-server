@@ -3,8 +3,8 @@
 import os
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 __all__ = [
     "create_access_token",
@@ -15,11 +15,10 @@ __all__ = [
     "verify_token",
 ]
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # JWT configuration from environment
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-do-not-use-in-production-please-change-this")
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "dev-secret-key-do-not-use-in-production-please-change-this"
+)
 ALGORITHM = "HS256"  # Fixed algorithm for security
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -35,7 +34,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
 
 
 def get_password_hash(password: str) -> str:
@@ -47,7 +48,9 @@ def get_password_hash(password: str) -> str:
     Returns:
         The hashed password
     """
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+    return hashed.decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -121,4 +124,6 @@ def hash_token(token: str) -> str:
         The hashed token
     """
     # Using bcrypt for refresh token hashing (one-way hash)
-    return pwd_context.hash(token)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(token.encode("utf-8"), salt)
+    return hashed.decode("utf-8")

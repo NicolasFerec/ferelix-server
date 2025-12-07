@@ -1,53 +1,57 @@
-# Python
-__pycache__/
+# Git
+.git
+.gitignore
+.gitattributes
+
+# GitHub
+.github
+
+# Python cache and build artifacts
+__pycache__
 *.py[cod]
-*$py.class
 *.so
-.Python
-*.egg-info/
-dist/
-build/
-*.egg
-.pytest_cache/
+*.egg-info
+.pytest_cache
 .coverage
-htmlcov/
-.tox/
-.mypy_cache/
-.ruff_cache/
+.mypy_cache
+.ruff_cache
 
 # Virtual environments
-venv/
-env/
-ENV/
-.venv/
+.venv
+venv
+env
 
-# uv
-.uv/
+# uv lock file (we use --frozen in Dockerfile)
 uv.lock
 
 # IDEs
-.vscode/
-.idea/
+.vscode
+.idea
 *.swp
 *.swo
-*~
 
-# OS
-.DS_Store
-Thumbs.db
-*.log
-
-# Environment
+# Environment and local config
 .env
-.env.local
-.env.*.local
-
-# Database
+.env.*
 *.db
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
+*.sqlite*
+
+# Documentation and examples
+*.md
+!README.md
+LICENSE
+AGENTS.md
+docker-compose*.yml
+
+# Docker files (we're already in Docker build!)
+Dockerfile*
+.dockerignore
+
+# Build artifacts
+dist
+build
+*.egg
+
 
 # Alembic
 alembic/versions/__pycache__/
@@ -65,7 +69,7 @@ docker-compose.*.yml
 
 # Documentation (optional - include if you want docs in image)
 # README.md
-# AGENTS.md
+AGENTS.md
 # LICENSE
 
 # CI/CD

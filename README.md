@@ -19,10 +19,8 @@ A self-hosted media server with JWT-based authentication, role-based access cont
 The fastest way to get started is using Docker:
 
 ```bash
-# 1. Generate a secret key
-openssl rand -hex 32
-
-# 2. Create docker-compose.yml with your SECRET_KEY and media paths
+# 1. Create docker-compose.yml from the example below
+# 2. Update media paths in docker-compose.yml
 # 3. Start the server
 docker-compose up -d
 
@@ -36,7 +34,7 @@ curl -X POST "http://localhost:8000/api/v1/setup/admin" \
   }'
 ```
 
-See [Docker Deployment](#docker-deployment) section below for details.
+See [Docker Deployment](#docker-deployment) section below for the docker-compose.yml example.
 
 ## Prerequisites (For Development)
 
@@ -79,7 +77,7 @@ mkdir ferelix-server
 cd ferelix-server
 ```
 
-2. **Create `docker-compose.yml`:**
+2. **Create a `docker-compose.yml` file with this content:**
 ```yaml
 version: '3.8'
 
@@ -95,24 +93,25 @@ services:
       - /path/to/your/movies:/media/movies:ro
       - /path/to/your/tv:/media/tv:ro
     environment:
-      - SECRET_KEY=your-secret-key-here  # Generate with: openssl rand -hex 32
-      - DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db
-      - ALLOWED_ORIGINS=*
+      # Optional: All variables have sane defaults
+      # SECRET_KEY is auto-generated if not provided
+      # DATABASE_URL defaults to SQLite in /config/ferelix.db
+      
+      # If using your own PostgreSQL server:
+      # DATABASE_URL: postgresql+asyncpg://user:password@your-postgres-host:5432/ferelix
+      
+      # CORS configuration (defaults to allowing all origins)
+      ALLOWED_ORIGINS: "*"
 ```
 
-3. **Generate a secret key:**
-```bash
-openssl rand -hex 32
-```
+3. **Update media paths** in `docker-compose.yml`
 
-4. **Update `docker-compose.yml`** with your secret key and media paths
-
-5. **Start the server:**
+4. **Start the server:**
 ```bash
 docker-compose up -d
 ```
 
-6. **Create your admin account:**
+5. **Create your admin account:**
 ```bash
 curl -X POST "http://localhost:8000/api/v1/setup/admin" \
   -H "Content-Type: application/json" \
@@ -123,7 +122,7 @@ curl -X POST "http://localhost:8000/api/v1/setup/admin" \
   }'
 ```
 
-7. **View logs:**
+6. **View logs:**
 ```bash
 docker-compose logs -f ferelix
 ```
@@ -140,11 +139,11 @@ docker run -d \
   -p 8000:8000 \
   -v $(pwd)/config:/config \
   -v /path/to/movies:/media/movies:ro \
-  -e SECRET_KEY=$(openssl rand -hex 32) \
-  -e DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db \
   --restart unless-stopped \
   your-dockerhub-username/ferelix-server:latest
 ```
+
+**Note:** SECRET_KEY is auto-generated on first run and stored in `/config/.secret_key`
 
 ### Building Your Own Image
 
@@ -224,29 +223,29 @@ This will automatically create a virtual environment and install all dependencie
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
+All environment variables are **optional** with sane defaults. Create a `.env` file only if you need to customize:
 
 ```bash
-# Required: JWT secret key (generate with: openssl rand -hex 32)
-SECRET_KEY=your-secret-key-here
+# Optional: JWT secret key
+# Auto-generated in Docker, uses dev default for local development
+# For production outside Docker: generate with `openssl rand -hex 32`
+# SECRET_KEY=your-secret-key-here
 
-# Database connection
-DATABASE_URL=sqlite+aiosqlite:///./ferelix.db
-# Or PostgreSQL: postgresql+asyncpg://user:password@localhost/ferelix
+# Optional: Database connection (defaults to SQLite)
+# DATABASE_URL=sqlite+aiosqlite:///./ferelix.db
+
+# If using your own PostgreSQL server:
+# DATABASE_URL=postgresql+asyncpg://user:password@localhost/ferelix
 
 # Optional: JWT configuration (defaults shown)
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
-ALGORITHM=HS256
+# ACCESS_TOKEN_EXPIRE_MINUTES=30
+# REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # Optional: CORS configuration
-ALLOWED_ORIGINS=*  # For development; restrict in production
+# ALLOWED_ORIGINS=*  # For development; restrict in production
 ```
 
-**Generate a secure secret key:**
-```bash
-openssl rand -hex 32
-```
+**For development**, you don't need a `.env` file at all - just run the server with defaults.
 
 ## Database Setup
 
@@ -528,10 +527,10 @@ uv run alembic downgrade -1
 
 ### Production Deployment
 
-1. **Always set a strong SECRET_KEY**: Use `openssl rand -hex 32` to generate
+1. **SECRET_KEY**: Auto-generated in Docker, or set manually with `openssl rand -hex 32` for non-Docker deployments
 2. **Use HTTPS**: Never transmit tokens over unencrypted connections
 3. **Restrict CORS**: Set specific origins instead of `*` in production
-4. **Use PostgreSQL**: SQLite is fine for development, but use PostgreSQL in production
+4. **Database**: SQLite is fine for small deployments, PostgreSQL for larger ones (you manage your own PostgreSQL server)
 5. **Firewall Configuration**: Only expose necessary ports
 6. **Regular Updates**: Keep dependencies updated for security patches
 

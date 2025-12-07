@@ -7,17 +7,19 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
-# Install system dependencies including ffmpeg
+# Install system dependencies including ffmpeg, openssl, and su-exec
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     ca-certificates \
+    openssl \
+    su-exec \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Create app user and directories
+# Create app user and directories with default IDs
 RUN useradd -m -u 1000 ferelix && \
     mkdir -p /app /config /media && \
     chown -R ferelix:ferelix /app /config /media
@@ -38,11 +40,10 @@ COPY --chown=ferelix:ferelix . .
 RUN uv sync --frozen --no-dev
 
 # Copy and set up entrypoint
-COPY --chown=ferelix:ferelix docker-entrypoint.sh /usr/local/bin/
+COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Switch to non-root user
-USER ferelix
+# Don't switch to non-root user yet - entrypoint will handle it
 
 # Expose port
 EXPOSE 8000
@@ -57,7 +58,9 @@ VOLUME ["/config", "/media"]
 # Set default environment variables
 ENV DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db \
     HOST=0.0.0.0 \
-    PORT=8000
+    PORT=8000 \
+    PUID=1000 \
+    PGID=1000
 
 # Run entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]

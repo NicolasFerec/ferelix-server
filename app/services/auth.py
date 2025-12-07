@@ -6,20 +6,9 @@ from datetime import UTC, datetime, timedelta
 import bcrypt
 from jose import JWTError, jwt
 
-__all__ = [
-    "create_access_token",
-    "create_refresh_token",
-    "get_password_hash",
-    "hash_token",
-    "verify_password",
-    "verify_token",
-]
-
-# JWT configuration from environment
-SECRET_KEY = os.getenv(
-    "SECRET_KEY", "dev-secret-key-do-not-use-in-production-please-change-this"
-)
-ALGORITHM = "HS256"  # Fixed algorithm for security
+# JWT configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-do-not-use-in-production")
+ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 

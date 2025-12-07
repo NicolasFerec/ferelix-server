@@ -10,13 +10,6 @@ from app.database import get_session
 from app.models import User
 from app.services.auth import verify_token
 
-__all__ = [
-    "get_current_active_user",
-    "get_current_user",
-    "get_optional_user",
-    "require_admin",
-]
-
 # HTTP Bearer scheme for JWT tokens
 security = HTTPBearer(auto_error=False)
 

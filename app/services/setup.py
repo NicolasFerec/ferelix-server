@@ -11,12 +11,6 @@ from app.database import async_session_maker, get_session
 from app.models import User, UserSchema
 from app.services.auth import get_password_hash
 
-__all__ = [
-    "SetupMiddleware",
-    "is_setup_complete",
-    "router",
-]
-
 router = APIRouter(prefix="/api/v1/setup", tags=["setup"])
 
 

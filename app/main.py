@@ -1,7 +1,6 @@
 """Main FastAPI application with scheduled media scanning."""
 
 import logging
-import os
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -55,17 +54,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Ferelix Server", version="0.1.0", lifespan=lifespan)
 
-# Add CORS middleware
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "*")
-origins = (
-    [origin.strip() for origin in allowed_origins.split(",")]
-    if allowed_origins != "*"
-    else ["*"]
-)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

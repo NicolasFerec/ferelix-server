@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Push Docker Image to GHCR
 
 on:
   push:
@@ -12,15 +12,15 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/ferelix-server
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/ferelix-server
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
+      packages: write  # indispensable pour GHCR
+      id-token: write  # utile pour login via GitHub Actions
 
     steps:
       - name: Checkout repository
@@ -32,14 +32,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
+      # --- Login to GitHub Container Registry ---
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      # --- Extract metadata (tags, labels) ---
+      - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -48,8 +50,11 @@ jobs:
             type=raw,value=rolling,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha
             type=semver,pattern={{version}}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
 
-      - name: Build and push Docker image
+      # --- Build and push Docker image ---
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -59,12 +64,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Update Docker Hub description
-        if: github.event_name != 'pull_request'
-        uses: peter-evans/dockerhub-description@v5
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.IMAGE_NAME }}
-          readme-filepath: ./README.md
+          build-args: |
+            FRONT_RELEASE=rolling   # <-- injecte la dernière version front ici

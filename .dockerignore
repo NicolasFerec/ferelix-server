@@ -21,9 +21,6 @@ __pycache__
 venv
 env
 
-# uv lock file (we use --frozen in Dockerfile)
-uv.lock
-
 # IDEs
 .vscode
 .idea
@@ -96,3 +93,4 @@ media/
 # Config (should be mounted as volume)
 config/
 ferelix.db
+app/static/

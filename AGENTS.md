@@ -1,0 +1,199 @@
+# Agent Technical Documentation
+
+This file contains technical details and conventions for AI agents working on this project.
+
+## Package Manager
+
+**This project uses [uv](https://docs.astral.sh/uv/) as the package manager**.
+
+### Common Commands
+
+```bash
+# Sync dependencies (equivalent to pip install)
+uv sync
+
+# Add a new dependency
+uv add package-name
+
+# Add a dev dependency
+uv add --dev package-name
+
+# Remove a dependency
+uv remove package-name
+
+# Run a command in the virtual environment
+uv run python script.py
+
+# Update dependencies
+uv sync -U
+```
+
+## Running the Server
+
+**Use FastAPI CLI commands**:
+
+```bash
+# Development mode (auto-reload enabled)
+fastapi dev
+
+# Production mode
+fastapi run
+
+# Specify host/port
+fastapi dev --host 0.0.0.0 --port 8000
+```
+
+The `fastapi` CLI is installed as part of `fastapi[standard]` and provides better defaults than running uvicorn directly.
+
+## Database Migrations
+
+```bash
+# Create a new migration after model changes
+alembic revision --autogenerate -m "Description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# Show current version
+alembic current
+
+# Show migration history
+alembic history
+```
+
+## Project Structure Conventions
+
+- **Models**: All database models in `app/models.py` using SQLAlchemy ORM with Pydantic schemas for API
+- **Routers**: API endpoints organized by feature in `app/routers/`
+- **Services**: Business logic and background tasks in `app/services/`
+- **Database**: Configuration and session management in `app/database.py`
+
+## Environment Variables
+
+Database connection is configured via `DATABASE_URL` environment variable:
+
+```bash
+# SQLite (default)
+DATABASE_URL=sqlite+aiosqlite:///./ferelix.db
+
+# PostgreSQL (production)
+DATABASE_URL=postgresql+asyncpg://user:password@localhost/ferelix
+```
+
+## Code Style
+
+- Python 3.14+ features are allowed
+- Use type hints throughout
+- Async/await for all I/O operations
+- Follow the existing code structure
+
+## Dependencies
+
+Key dependencies and their purposes:
+
+- **fastapi[standard]**: Web framework with uvicorn included
+- **sqlalchemy**: ORM for database interactions
+- **pydantic**: Data validation and serialization for API schemas
+- **aiosqlite**: Async SQLite driver
+- **asyncpg**: Async PostgreSQL driver
+- **alembic**: Database migrations
+- **apscheduler**: Background task scheduling
+- **aiofiles**: Async file operations
+
+## Testing
+
+When tests are added, use:
+
+```bash
+# Run tests
+uv run pytest
+
+# Run with coverage
+uv run pytest --cov
+```
+
+## ffprobe Integration
+
+The scanner service uses `ffprobe` (part of ffmpeg) to extract video metadata. Required fields:
+
+- Duration
+- Width/Height (resolution)
+- Codec
+- Bitrate
+
+Make sure ffmpeg is installed on the system.
+
+## Scheduled Tasks
+
+The media scanner runs:
+1. Once on application startup
+2. Every 30 minutes via APScheduler
+
+Configured in `app/main.py` using FastAPI lifespan events.
+
+## API Design Patterns
+
+- Use async database sessions via `Depends(get_session)`
+- Return proper HTTP status codes
+- Use Pydantic models for request/response validation
+- Include proper error handling with HTTPException
+- Document endpoints with docstrings
+
+## Database Session Management
+
+Always use the dependency injection pattern:
+
+```python
+from typing import Annotated
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_session
+
+@router.get("/endpoint")
+async def endpoint(
+    session: Annotated[AsyncSession, Depends(get_session)]
+):
+    # Use session here
+    pass
+```
+
+Never create sessions manually unless in background tasks (use `async_session_maker()`).
+
+## Working with Models
+
+- Database models are defined using SQLAlchemy's declarative base in `app/models.py`
+- API schemas use Pydantic models with `model_config = ConfigDict(from_attributes=True)`
+- Use `select()` from SQLAlchemy for queries
+- Prefer using `.get()`, `.scalar()`, and `.scalars()` directly on session for cleaner code
+
+Example query patterns:
+
+```python
+from sqlalchemy import select
+from app.models import MediaFile
+
+# Get by primary key (most efficient)
+media_file = await session.get(MediaFile, media_id)
+
+# Get single result
+existing = await session.scalar(
+    select(MediaFile).where(MediaFile.file_path == path)
+)
+
+# Get multiple results (returns ScalarResult)
+media_files = await session.scalars(
+    select(MediaFile).offset(skip).limit(limit)
+)
+
+# If you need the full result object, use execute()
+result = await session.execute(select(MediaFile))
+media_files = result.scalars().all()
+```
+
+Key methods:
+- `session.get(Model, id)` - Get by primary key (fastest)
+- `session.scalar(stmt)` - Get single scalar result (or None)
+- `session.scalars(stmt)` - Get multiple scalar results as ScalarResult iterator
+- `session.execute(stmt)` - Get full Result object when you need more control

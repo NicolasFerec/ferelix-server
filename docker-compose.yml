@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  ferelix:
+    image: ferelix/server:latest
+    container_name: ferelix-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Configuration and database
+      - ./config:/config
+      # Media libraries (adjust paths to your media locations)
+      - /path/to/your/movies:/media/movies:ro
+      - /path/to/your/tv:/media/tv:ro
+    environment:
+      # Required: Generate with: openssl rand -hex 32
+      - SECRET_KEY=your-secret-key-here
+      
+      # Database (stored in /config volume)
+      - DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db
+      
+      # Optional: JWT configuration
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      
+      # Optional: CORS configuration
+      - ALLOWED_ORIGINS=*
+      
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+    
+    # Optional: Use PostgreSQL instead of SQLite
+    # depends_on:
+    #   - postgres
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Optional: PostgreSQL database for production
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: ferelix-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_USER=ferelix
+  #     - POSTGRES_PASSWORD=ferelix-db-password
+  #     - POSTGRES_DB=ferelix
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ferelix"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+# Optional: PostgreSQL volume
+# volumes:
+#   postgres_data:
+
+networks:
+  default:
+    name: ferelix-network

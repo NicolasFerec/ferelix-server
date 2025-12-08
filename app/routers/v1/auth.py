@@ -14,9 +14,7 @@ from app.models import RefreshToken, User, UserCreate, UserSchema
 from app.services.auth import (
     create_access_token,
     create_refresh_token,
-    get_password_hash,
     hash_token,
-    verify_password,
     verify_token,
 )
 
@@ -87,7 +85,7 @@ async def register(
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        hashed_password=get_password_hash(user_data.password),
+        password=user_data.password,
         is_admin=user_data.is_admin,
         is_active=True,
     )
@@ -121,7 +119,7 @@ async def login(
         select(User).where(User.username == login_data.username)
     )
 
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    if not user or user.password != login_data.password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

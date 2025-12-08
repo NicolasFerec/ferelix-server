@@ -1,9 +1,9 @@
-"""Authentication service for JWT token management and password hashing."""
+"""Authentication service for JWT token management and token hashing."""
 
+import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 
-import bcrypt
 from jose import JWTError, jwt
 
 # JWT configuration
@@ -11,35 +11,6 @@ SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-do-not-use-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash.
-
-    Args:
-        plain_password: The plain text password to verify
-        hashed_password: The hashed password to check against
-
-    Returns:
-        True if password matches, False otherwise
-    """
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-    )
-
-
-def get_password_hash(password: str) -> str:
-    """Hash a password using bcrypt.
-
-    Args:
-        password: The plain text password to hash
-
-    Returns:
-        The hashed password
-    """
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
-    return hashed.decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -104,15 +75,12 @@ def verify_token(token: str, token_type: str = "access") -> dict | None:
 
 
 def hash_token(token: str) -> str:
-    """Hash a token for secure storage in database.
+    """Hash a token for secure storage in database using SHA256.
 
     Args:
         token: The token to hash
 
     Returns:
-        The hashed token
+        The hashed token (hex digest)
     """
-    # Using bcrypt for refresh token hashing (one-way hash)
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(token.encode("utf-8"), salt)
-    return hashed.decode("utf-8")
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

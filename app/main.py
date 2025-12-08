@@ -12,7 +12,6 @@ from fastapi.staticfiles import StaticFiles
 
 from app.routers.v1 import auth, media, streaming, users
 from app.services.scanner import scan_all_libraries
-from app.services.setup import SetupMiddleware
 from app.services.setup import router as setup_router
 
 # Configure logging
@@ -64,9 +63,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Add setup middleware (must be added after CORS)
-app.add_middleware(SetupMiddleware)
 
 # Include routers (v1 API)
 app.include_router(setup_router)

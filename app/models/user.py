@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy_utils import PasswordType
 
 from .base import Base
 
@@ -17,7 +18,12 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String, index=True, unique=True)
     email: Mapped[str] = mapped_column(String, index=True, unique=True)
-    hashed_password: Mapped[str] = mapped_column(String)
+    password: Mapped[str | None] = mapped_column(
+        PasswordType(
+            schemes=["pbkdf2_sha512", "md5_crypt"],
+            deprecated=["md5_crypt"],
+        )
+    )
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

@@ -15,8 +15,9 @@ dependencies = [
     "aiofiles",
     "alembic",
     "python-jose[cryptography]",
-    "bcrypt",
     "python-multipart>=0.0.20",
+    "sqlalchemy-utils",
+    "passlib",
 ]
 
 [dependency-groups]

@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_session
 from app.dependencies import get_current_active_user, require_admin
 from app.models import User, UserSchema, UserUpdate
-from app.services.auth import get_password_hash
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -60,7 +59,7 @@ async def update_current_user(
         current_user.email = user_update.email
 
     if user_update.password is not None:
-        current_user.hashed_password = get_password_hash(user_update.password)
+        current_user.password = user_update.password
 
     # Note: Regular users cannot change their is_active status
 
@@ -162,7 +161,7 @@ async def update_user(
         user.email = user_update.email
 
     if user_update.password is not None:
-        user.hashed_password = get_password_hash(user_update.password)
+        user.password = user_update.password
 
     if user_update.is_active is not None:
         user.is_active = user_update.is_active

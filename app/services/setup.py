@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker, get_session
 from app.models import User, UserSchema
-from app.services.auth import get_password_hash
 
 router = APIRouter(prefix="/api/v1/setup", tags=["setup"])
 
@@ -72,7 +71,7 @@ async def create_first_admin(
     admin_user = User(
         username=admin_data.username,
         email=admin_data.email,
-        hashed_password=get_password_hash(admin_data.password),
+        password=admin_data.password,
         is_admin=True,
         is_active=True,
     )
@@ -82,66 +81,3 @@ async def create_first_admin(
     await session.refresh(admin_user)
 
     return admin_user
-
-
-class SetupMiddleware:
-    """Middleware to enforce setup completion before allowing API access."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        """Process request and check setup status.
-
-        Args:
-            scope: ASGI scope
-            receive: ASGI receive callable
-            send: ASGI send callable
-        """
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        path = scope.get("path", "")
-
-        # Allow setup endpoints and health checks
-        allowed_paths = [
-            "/api/v1/setup/status",
-            "/api/v1/setup/admin",
-            "/health",
-            "/docs",
-            "/redoc",
-            "/openapi.json",
-        ]
-
-        # Check if path is allowed
-        if any(path.startswith(allowed) for allowed in allowed_paths):
-            await self.app(scope, receive, send)
-            return
-
-        # Check if setup is complete
-        if not await is_setup_complete():
-            # Return 503 Service Unavailable with setup required message
-            response = {
-                "detail": "Initial setup required. Please create an admin account at POST /api/v1/setup/admin",
-                "setup_complete": False,
-            }
-
-            await send({
-                "type": "http.response.start",
-                "status": 503,
-                "headers": [
-                    [b"content-type", b"application/json"],
-                ],
-            })
-
-            import json
-
-            await send({
-                "type": "http.response.body",
-                "body": json.dumps(response).encode(),
-            })
-            return
-
-        # Setup complete, continue normally
-        await self.app(scope, receive, send)

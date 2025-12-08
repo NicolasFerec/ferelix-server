@@ -93,4 +93,3 @@ media/
 # Config (should be mounted as volume)
 config/
 ferelix.db
-app/static/

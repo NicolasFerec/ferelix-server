@@ -52,11 +52,19 @@ RUN --mount=type=secret,id=github_token,required=false \
     if [ -f /run/secrets/github_token ]; then \
       GITHUB_TOKEN=$(cat /run/secrets/github_token) \
       && mkdir -p /app/static \
-      && curl -fSL -H "Authorization: token ${GITHUB_TOKEN}" -H "Accept: application/octet-stream" \
-        -o /tmp/dist.zip \
-        https://github.com/NicolasFerec/ferelix-client-web/releases/download/${FRONT_RELEASE}/dist.zip \
+      && echo "Downloading frontend from private repository..." \
+      && curl -fSL \
+        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        -L \
+        "https://api.github.com/repos/NicolasFerec/ferelix-client-web/releases/tags/${FRONT_RELEASE}" \
+        | grep -o '"browser_download_url": "[^"]*dist\.zip"' \
+        | cut -d'"' -f4 \
+        | xargs -I {} curl -fSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -o /tmp/dist.zip {} \
       && unzip /tmp/dist.zip -d /app/static \
       && rm /tmp/dist.zip \
+      && chown -R ferelix:ferelix /app/static \
       && echo "Frontend downloaded from GitHub release"; \
     else \
       echo "INFO: Building without GitHub token - using local static files from app/static/"; \
@@ -86,4 +94,4 @@ ENV DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db \
 
 # Run entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["uv", "run", "--no-sync", "fastapi", "run", "--host", "0.0.0.0", "--port", "8659"]
+CMD ["uv", "run", "fastapi", "run", "--host", "0.0.0.0", "--port", "8659"]

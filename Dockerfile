@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1
 
-# Install system dependencies including ffmpeg, openssl, and gosu
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Create app user and directories with default IDs
+# Create app user and directories
 RUN useradd -m ferelix && \
     mkdir -p /app /config && \
     chown -R ferelix:ferelix /app /config
@@ -31,52 +31,32 @@ WORKDIR /app
 # Switch to ferelix user for installing dependencies
 USER ferelix
 
-# Copy dependency files
+# Copy and install dependencies
 COPY --chown=ferelix:ferelix pyproject.toml uv.lock ./
-
-# Install dependencies and project
 RUN uv sync --locked --no-default-groups
 
 # Copy application code
 COPY --chown=ferelix:ferelix . .
 
-# Switch back to root for the rest of the build
+# Switch back to root for frontend download and entrypoint setup
 USER root
 
-
-# Download and set up front-end static files (only in CI with github_token secret)
-# For local builds, frontend files should already be in app/static/
+# Download frontend static files from public GitHub release
 ARG FRONT_RELEASE=rolling
-ENV FRONT_RELEASE=${FRONT_RELEASE}
-RUN --mount=type=secret,id=github_token,required=false \
-    if [ -f /run/secrets/github_token ]; then \
-      GITHUB_TOKEN=$(cat /run/secrets/github_token) \
-      && mkdir -p /app/static \
-      && echo "Downloading frontend from private repository..." \
-      && curl -fSL \
-        -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-        -H "Accept: application/vnd.github+json" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        -L \
-        "https://api.github.com/repos/NicolasFerec/ferelix-client-web/releases/tags/${FRONT_RELEASE}" \
-        | grep -o '"browser_download_url": "[^"]*dist\.zip"' \
-        | cut -d'"' -f4 \
-        | xargs -I {} curl -fSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -o /tmp/dist.zip {} \
-      && unzip /tmp/dist.zip -d /app/static \
-      && rm /tmp/dist.zip \
-      && chown -R ferelix:ferelix /app/static \
-      && echo "Frontend downloaded from GitHub release"; \
-    else \
-      echo "INFO: Building without GitHub token - using local static files from app/static/"; \
-    fi
-
+RUN mkdir -p /app/static \
+    && curl -fSL -o /tmp/dist.zip \
+      "https://github.com/NicolasFerec/ferelix-client-web/releases/download/${FRONT_RELEASE}/dist.zip" \
+    && unzip /tmp/dist.zip -d /app/static \
+    && rm /tmp/dist.zip \
+    && chown -R ferelix:ferelix /app/static \
+    && echo "Frontend downloaded successfully"
 
 # Copy and set up entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port
-EXPOSE 8659
+EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -87,11 +67,9 @@ VOLUME /config
 
 # Set default environment variables
 ENV DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db \
-    HOST=0.0.0.0 \
-    PORT=8659 \
     PUID=1000 \
     PGID=1000
 
 # Run entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["uv", "run", "fastapi", "run", "--host", "0.0.0.0", "--port", "8659"]
+CMD ["uv", "run", "--no-sync", "fastapi", "run"]

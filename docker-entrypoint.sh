@@ -4,7 +4,7 @@ set -e
 echo "Starting Ferelix Server..."
 
 # -------------------------------
-# Handle PUID and PGID for Unraid
+# Handle PUID and PGID
 # -------------------------------
 PUID=${PUID:-1000}
 PGID=${PGID:-1000}
@@ -26,13 +26,10 @@ if [ "$PUID" != "$CURRENT_PUID" ]; then
 fi
 
 # -------------------------------
-# Ensure directories exist and have correct ownership
+# Ensure /config directory has correct ownership
 # -------------------------------
-echo "Setting up directories..."
+echo "Setting up /config directory..."
 mkdir -p /config
-
-# Only fix ownership on /config (mounted volume)
-# /app was already set up correctly at build time
 chown -R ferelix:ferelix /config
 chmod 755 /config
 
@@ -43,10 +40,8 @@ if [ -z "$SECRET_KEY" ]; then
     SECRET_FILE="/config/.secret_key"
     if [ ! -f "$SECRET_FILE" ]; then
         echo "Generating SECRET_KEY..."
-        # Create as ferelix user directly
-        su -s /bin/sh ferelix -c "openssl rand -hex 32 > $SECRET_FILE"
+        gosu ferelix openssl rand -hex 32 > "$SECRET_FILE"
         chmod 600 "$SECRET_FILE"
-        chown ferelix:ferelix "$SECRET_FILE"
     fi
     export SECRET_KEY=$(cat "$SECRET_FILE")
     echo "Using SECRET_KEY from $SECRET_FILE"
@@ -57,36 +52,27 @@ fi
 # -------------------------------
 echo "Running database migrations..."
 cd /app
+gosu ferelix uv run --no-sync alembic upgrade head
 
-# Ensure the database directory exists with correct permissions
-DB_DIR=$(dirname "${DATABASE_URL#*:///}")
-if [ "$DB_DIR" != "." ] && [ "$DB_DIR" != "" ]; then
-    mkdir -p "$DB_DIR"
-    chown ferelix:ferelix "$DB_DIR"
-fi
-
-# Run migrations as ferelix user
-su -s /bin/sh ferelix -c 'uv run --no-sync alembic upgrade head'
-
-# Fix permissions on database file if it exists
+# Fix permissions on database files if they exist
 DB_FILE="${DATABASE_URL#*:///}"
 if [ -f "$DB_FILE" ]; then
     chown ferelix:ferelix "$DB_FILE"
     chmod 644 "$DB_FILE"
-fi
 
-# Also fix any journal or wal files
-for ext in "-journal" "-wal" "-shm"; do
-    if [ -f "${DB_FILE}${ext}" ]; then
-        chown ferelix:ferelix "${DB_FILE}${ext}"
-        chmod 644 "${DB_FILE}${ext}"
-    fi
-done
+    # Fix SQLite journal files
+    for ext in "-journal" "-wal" "-shm"; do
+        if [ -f "${DB_FILE}${ext}" ]; then
+            chown ferelix:ferelix "${DB_FILE}${ext}"
+            chmod 644 "${DB_FILE}${ext}"
+        fi
+    done
+fi
 
 # -------------------------------
 # Check if setup is complete AS ferelix
 # -------------------------------
-SETUP_COMPLETE=$(su -s /bin/sh ferelix -c 'uv run --no-sync python -c "import asyncio; from app.services.setup import is_setup_complete; print(\"true\" if asyncio.run(is_setup_complete()) else \"false\")"' || echo "false")
+SETUP_COMPLETE=$(gosu ferelix uv run --no-sync python -c "import asyncio; from app.services.setup import is_setup_complete; print(\"true\" if asyncio.run(is_setup_complete()) else \"false\")" || echo "false")
 
 if [ "$SETUP_COMPLETE" = "false" ]; then
     echo ""
@@ -98,12 +84,12 @@ if [ "$SETUP_COMPLETE" = "false" ]; then
     echo "║   http://your-server:8659/api/v1/setup/admin                   ║"
     echo "║                                                                ║"
     echo "║ Example:                                                       ║"
-    echo "║   curl -X POST http://localhost:8659/api/v1/setup/admin \\     ║"
-    echo "║     -H 'Content-Type: application/json' \\                     ║"
+    echo "║   curl -X POST http://localhost:8659/api/v1/setup/admin \\      ║"
+    echo "║     -H 'Content-Type: application/json' \\                      ║"
     echo "║     -d '{                                                      ║"
-    echo "║       \"username\": \"admin\",                                 ║"
-    echo "║       \"email\": \"admin@example.com\",                        ║"
-    echo "║       \"password\": \"your-secure-password\"                   ║"
+    echo "║       \"username\": \"admin\",                                     ║"
+    echo "║       \"email\": \"admin@example.com\",                            ║"
+    echo "║       \"password\": \"your-secure-password\"                       ║"
     echo "║     }'                                                         ║"
     echo "║                                                                ║"
     echo "║ All other endpoints will be blocked until setup is complete.   ║"
@@ -115,4 +101,4 @@ fi
 # Execute the main command AS ferelix
 # -------------------------------
 echo "Starting application as user ferelix (UID=$PUID, GID=$PGID)..."
-exec setpriv --reuid=ferelix --regid=ferelix --clear-groups "$@"
+exec gosu ferelix "$@"

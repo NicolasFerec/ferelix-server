@@ -16,6 +16,7 @@ class LibraryPath(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     path: Mapped[str] = mapped_column(String, index=True, unique=True)
+    library_type: Mapped[str] = mapped_column(String, default="movie")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -27,5 +28,22 @@ class LibraryPathSchema(BaseModel):
 
     id: int | None = None
     path: str
+    library_type: str = "movie"
     enabled: bool = True
     created_at: datetime
+
+
+class LibraryPathCreate(BaseModel):
+    """Schema for creating a library path."""
+
+    path: str
+    library_type: str = "movie"
+    enabled: bool = True
+
+
+class LibraryPathUpdate(BaseModel):
+    """Schema for updating a library path."""
+
+    path: str | None = None
+    library_type: str | None = None
+    enabled: bool | None = None

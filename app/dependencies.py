@@ -2,6 +2,7 @@
 
 from typing import Annotated
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -157,3 +158,36 @@ def require_admin(
             detail="Admin privileges required",
         )
     return current_user
+
+
+# Global scheduler instance (set during app startup)
+_scheduler_instance: AsyncIOScheduler | None = None
+
+
+def set_scheduler(scheduler: AsyncIOScheduler) -> None:
+    """Set the global scheduler instance.
+
+    Called during app startup to make scheduler available to dependencies.
+
+    Args:
+        scheduler: The scheduler instance
+    """
+    global _scheduler_instance
+    _scheduler_instance = scheduler
+
+
+def get_scheduler() -> AsyncIOScheduler:
+    """Get the scheduler instance.
+
+    Returns:
+        The scheduler instance
+
+    Raises:
+        HTTPException: If scheduler is not available
+    """
+    if _scheduler_instance is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Scheduler not available",
+        )
+    return _scheduler_instance

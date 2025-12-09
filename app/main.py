@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routers.v1 import auth, media, streaming, users
+from app.dependencies import set_scheduler
+from app.routers.v1 import auth, jobs, media, streaming, users
 from app.services.scanner import scan_all_libraries
 from app.services.setup import router as setup_router
 
@@ -46,6 +47,10 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logger.info("Scheduled scanner started (running every 30 minutes)")
 
+    # Store scheduler in app state and global variable for API access
+    app.state.scheduler = scheduler
+    set_scheduler(scheduler)
+
     yield
 
     # Shutdown
@@ -70,6 +75,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(media.router)
 app.include_router(streaming.router)
+app.include_router(jobs.router)
 
 # Mount static files for frontend
 STATIC_DIR = Path(__file__).parent / "static"

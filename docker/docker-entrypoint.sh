@@ -34,6 +34,38 @@ chown -R ferelix:ferelix /config
 chmod 755 /config
 
 # -------------------------------
+# Extract and prepare database directory
+# -------------------------------
+if [[ "$DATABASE_URL" =~ sqlite ]]; then
+    # Extract database file path from DATABASE_URL
+    # Handle both 3 and 4 slashes
+    DB_FILE="${DATABASE_URL#*sqlite*://}"
+
+    echo "Database URL: $DATABASE_URL"
+    echo "Database file path: $DB_FILE"
+
+    # Ensure the database directory exists and has proper permissions
+    DB_DIR=$(dirname "$DB_FILE")
+    if [ "$DB_DIR" != "." ] && [ "$DB_DIR" != "/" ]; then
+        echo "Creating database directory: $DB_DIR"
+        mkdir -p "$DB_DIR"
+        chown -R ferelix:ferelix "$DB_DIR"
+        chmod 755 "$DB_DIR"
+    fi
+
+    # Test write permissions
+    echo "Testing write permissions in $DB_DIR..."
+    if gosu ferelix touch "$DB_DIR/.test_write" 2>/dev/null; then
+        gosu ferelix rm "$DB_DIR/.test_write"
+        echo "Write permissions OK"
+    else
+        echo "ERROR: ferelix user cannot write to $DB_DIR"
+        ls -la "$DB_DIR"
+        exit 1
+    fi
+fi
+
+# -------------------------------
 # SECRET_KEY
 # -------------------------------
 if [ -z "$SECRET_KEY" ]; then
@@ -55,8 +87,7 @@ cd /app
 gosu ferelix uv run --no-sync alembic upgrade head
 
 # Fix permissions on database files if they exist
-DB_FILE="${DATABASE_URL#*:///}"
-if [ -f "$DB_FILE" ]; then
+if [[ "$DATABASE_URL" =~ sqlite ]] && [ -n "$DB_FILE" ] && [ -f "$DB_FILE" ]; then
     chown ferelix:ferelix "$DB_FILE"
     chmod 644 "$DB_FILE"
 

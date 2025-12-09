@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -44,6 +44,21 @@ async def update_current_user(
     Returns:
         Updated user profile
     """
+    if user_update.username is not None:
+        # Check if username is already taken by another user (case-insensitive)
+        existing = await session.scalar(
+            select(User).where(
+                func.lower(User.username) == func.lower(user_update.username),
+                User.id != current_user.id,
+            )
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already in use",
+            )
+        current_user.username = user_update.username
+
     if user_update.email is not None:
         # Check if email is already taken by another user
         existing = await session.scalar(
@@ -60,6 +75,9 @@ async def update_current_user(
 
     if user_update.password is not None:
         current_user.password = user_update.password
+
+    if user_update.language is not None:
+        current_user.language = user_update.language
 
     # Note: Regular users cannot change their is_active status
 

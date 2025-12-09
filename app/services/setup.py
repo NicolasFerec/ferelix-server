@@ -19,6 +19,7 @@ class AdminSetupRequest(BaseModel):
     username: str
     email: str
     password: str
+    language: str = "en"
 
 
 async def is_setup_complete() -> bool:
@@ -74,6 +75,7 @@ async def create_first_admin(
         password=admin_data.password,
         is_admin=True,
         is_active=True,
+        language=admin_data.language,
     )
 
     session.add(admin_user)

@@ -26,6 +26,7 @@ class User(Base):
     )
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    language: Mapped[str] = mapped_column(String, default="en")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
@@ -41,6 +42,7 @@ class UserSchema(BaseModel):
     email: str
     is_admin: bool
     is_active: bool
+    language: str
     created_at: datetime
     updated_at: datetime
 
@@ -52,11 +54,14 @@ class UserCreate(BaseModel):
     email: str
     password: str
     is_admin: bool = False
+    language: str = "en"
 
 
 class UserUpdate(BaseModel):
     """Schema for updating user information."""
 
+    username: str | None = None
     email: str | None = None
     password: str | None = None
+    language: str | None = None
     is_active: bool | None = None

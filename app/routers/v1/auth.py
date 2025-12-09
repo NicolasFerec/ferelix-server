@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -63,9 +63,9 @@ async def register(
     Raises:
         HTTPException: If username or email already exists
     """
-    # Check if username exists
+    # Check if username exists (case-insensitive)
     existing = await session.scalar(
-        select(User).where(User.username == user_data.username)
+        select(User).where(func.lower(User.username) == func.lower(user_data.username))
     )
     if existing:
         raise HTTPException(
@@ -88,6 +88,7 @@ async def register(
         password=user_data.password,
         is_admin=user_data.is_admin,
         is_active=True,
+        language=user_data.language,
     )
 
     session.add(new_user)
@@ -114,9 +115,9 @@ async def login(
     Raises:
         HTTPException: If credentials are invalid
     """
-    # Get user by username
+    # Get user by username (case-insensitive)
     user = await session.scalar(
-        select(User).where(User.username == login_data.username)
+        select(User).where(func.lower(User.username) == func.lower(login_data.username))
     )
 
     if not user or user.password != login_data.password:

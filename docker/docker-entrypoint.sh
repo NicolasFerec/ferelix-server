@@ -101,34 +101,6 @@ if [[ "$DATABASE_URL" =~ sqlite ]] && [ -n "$DB_FILE" ] && [ -f "$DB_FILE" ]; th
 fi
 
 # -------------------------------
-# Check if setup is complete AS ferelix
-# -------------------------------
-SETUP_COMPLETE=$(gosu ferelix uv run --no-sync python -c "import asyncio; from app.services.setup import is_setup_complete; print(\"true\" if asyncio.run(is_setup_complete()) else \"false\")" || echo "false")
-
-if [ "$SETUP_COMPLETE" = "false" ]; then
-    echo ""
-    echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                   FIRST-TIME SETUP REQUIRED                    ║"
-    echo "╠════════════════════════════════════════════════════════════════╣"
-    echo "║ Create your admin account by sending a POST request to:        ║"
-    echo "║                                                                ║"
-    echo "║   http://your-server:8659/api/v1/setup/admin                   ║"
-    echo "║                                                                ║"
-    echo "║ Example:                                                       ║"
-    echo "║   curl -X POST http://localhost:8659/api/v1/setup/admin \\      ║"
-    echo "║     -H 'Content-Type: application/json' \\                      ║"
-    echo "║     -d '{                                                      ║"
-    echo "║       \"username\": \"admin\",                                     ║"
-    echo "║       \"email\": \"admin@example.com\",                            ║"
-    echo "║       \"password\": \"your-secure-password\"                       ║"
-    echo "║     }'                                                         ║"
-    echo "║                                                                ║"
-    echo "║ All other endpoints will be blocked until setup is complete.   ║"
-    echo "╚════════════════════════════════════════════════════════════════╝"
-    echo ""
-fi
-
-# -------------------------------
 # Execute the main command AS ferelix
 # -------------------------------
 echo "Starting application as user ferelix (UID=$PUID, GID=$PGID)..."

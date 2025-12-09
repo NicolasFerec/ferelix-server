@@ -12,11 +12,10 @@
   <WebUI>http://[IP]:[PORT:8659]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/NicolasFerec/ferelix-server/main/docker/unraid-template.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/NicolasFerec/ferelix-server/main/docker/icon.png</Icon>
-  <Config Name="WebUI Port" Target="8659" Default="8659" Mode="tcp" Description="Web interface and API port" Type="Port" Display="always" Required="true" Mask="false">8659</Config>
+  <Config Name="WebUI Port" Target="8000" Default="8659" Mode="tcp" Description="Web interface and API port" Type="Port" Display="always" Required="true" Mask="false">8659</Config>
   <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/ferelix" Mode="rw" Description="Directory where Ferelix stores its database and configuration files" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/ferelix</Config>
   <Config Name="Media Directory" Target="/media" Default="/mnt/user/media/movies" Mode="ro" Description="Directory containing your video files (read-only). You can add multiple paths by adding more path mappings." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/movies</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions (default: 99 for nobody on Unraid)" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file permissions (default: 100 for users on Unraid)" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
   <Config Name="Database URL" Target="DATABASE_URL" Default="sqlite+aiosqlite:////config/ferelix.db" Mode="" Description="Database connection string. Default uses SQLite in /config directory. Can be replaced by a PostgreSQL connection string with asyncpg driver (postgresql+asyncpg://)." Type="Variable" Display="advanced" Required="false" Mask="false">sqlite+aiosqlite:////config/ferelix.db</Config>
-  <Config Name="Secret Key" Target="SECRET_KEY" Default="" Mode="" Description="JWT secret key. Leave empty to auto-generate (recommended). Will be saved in /config/.secret_key" Type="Variable" Display="advanced" Required="false" Mask="true"/>
 </Container>

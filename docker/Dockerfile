@@ -43,12 +43,12 @@ USER root
 
 # Download frontend static files from public GitHub release
 ARG FRONT_RELEASE=rolling
-RUN mkdir -p /app/static \
+RUN mkdir -p /app/app/static \
     && curl -fSL -o /tmp/dist.zip \
       "https://github.com/NicolasFerec/ferelix-client-web/releases/download/${FRONT_RELEASE}/dist.zip" \
-    && unzip /tmp/dist.zip -d /app/static \
+    && unzip /tmp/dist.zip -d /app/app/static \
     && rm /tmp/dist.zip \
-    && chown -R ferelix:ferelix /app/static \
+    && chown -R ferelix:ferelix /app/app/static \
     && echo "Frontend downloaded successfully"
 
 # Copy and set up entrypoint

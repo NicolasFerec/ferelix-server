@@ -4,14 +4,12 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
-from fastapi.exceptions import WebSocketException
-from fastapi.websockets import WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session_maker, get_session
+from app.database import get_session
 from app.dependencies import get_scheduler, require_admin
 from app.models import (
     Library,
@@ -22,8 +20,7 @@ from app.models import (
     UserSchema,
     UserUpdate,
 )
-from app.services.auth import verify_token
-from app.services.jobs import JobState, get_job_state, get_job_states, job_event_stream
+from app.services.jobs import JobState, get_job_state, get_job_states
 
 # Router with admin-only security at the router level
 router = APIRouter(
@@ -177,23 +174,6 @@ async def update_library(
 # ============================================================================
 
 
-def _serialize_job_event(event: dict) -> dict:
-    """Serialize a job event dict, converting datetime objects to ISO strings."""
-
-    def serialize_datetime(value: datetime | None) -> str | None:
-        if value is None:
-            return None
-        if isinstance(value, datetime):
-            return value.isoformat()
-
-    return {
-        **event,
-        "last_run_time": serialize_datetime(event.get("last_run_time")),
-        "next_run_time": serialize_datetime(event.get("next_run_time")),
-        "running_since": serialize_datetime(event.get("running_since")),
-    }
-
-
 class JobSchema(BaseModel):
     """Schema for job API responses."""
 
@@ -260,6 +240,8 @@ async def trigger_job(
         )
 
     try:
+        # Set next_run_time to now to trigger the job immediately
+        # With event listeners set up, this will properly track job execution
         scheduler.modify_job(job_id, next_run_time=datetime.now(UTC))
         return JobTriggerResponse(
             success=True,
@@ -270,76 +252,6 @@ async def trigger_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger job: {e!s}",
         )
-
-
-async def _authenticate_admin_websocket(websocket: WebSocket) -> User:
-    """Authenticate websocket connections using the same JWT tokens as HTTP."""
-
-    auth_header = websocket.headers.get("authorization")
-    token = None
-    if auth_header and auth_header.lower().startswith("bearer "):
-        token = auth_header.split(" ", 1)[1]
-    elif "api_key" in websocket.query_params:
-        token = websocket.query_params["api_key"]
-
-    if not token:
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Missing token"
-        )
-
-    payload = verify_token(token, token_type="access")
-    if payload is None or "sub" not in payload:
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"
-        )
-
-    user_id = int(payload["sub"])
-    async with async_session_maker() as session:
-        user = await session.get(User, user_id)
-        if user is None or not user.is_admin:
-            raise WebSocketException(
-                code=status.WS_1008_POLICY_VIOLATION, reason="Admin privileges required"
-            )
-        return user
-
-
-@router.websocket("/jobs/ws")
-async def jobs_websocket(
-    websocket: WebSocket,
-    scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
-) -> None:
-    """Realtime job status stream for admins."""
-
-    try:
-        await _authenticate_admin_websocket(websocket)
-    except WebSocketException as exc:
-        await websocket.close(code=exc.code, reason=exc.reason)
-        return
-
-    await websocket.accept()
-
-    # Send initial snapshot
-    await websocket.send_json({
-        "type": "snapshot",
-        "jobs": [
-            JobSchema.from_state(state).model_dump(mode="json")
-            for state in get_job_states(scheduler)
-        ],
-    })
-
-    queue = await job_event_stream.subscribe()
-    try:
-        while True:
-            event = await queue.get()
-            # Serialize event dict (which comes from JobState.to_dict()) for JSON transmission
-            await websocket.send_json({
-                "type": "job_update",
-                "job": _serialize_job_event(event),
-            })
-    except WebSocketDisconnect:
-        pass
-    finally:
-        await job_event_stream.unsubscribe(queue)
 
 
 # ============================================================================

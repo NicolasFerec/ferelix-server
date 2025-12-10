@@ -61,40 +61,6 @@ class JobState:
         }
 
 
-class JobEventStream:
-    """In-process broadcaster for job state changes."""
-
-    def __init__(self) -> None:
-        self._queues: set[asyncio.Queue[dict[str, Any]]] = set()
-        self._lock = asyncio.Lock()
-
-    async def publish(self, payload: dict[str, Any]) -> None:
-        """Fan out payload to all subscribers."""
-        async with self._lock:
-            queues = list(self._queues)
-
-        for queue in queues:
-            try:
-                # If queue is full, drop the oldest to make room
-                if queue.full():
-                    queue.get_nowait()
-                queue.put_nowait(payload)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("Failed to publish job event: %s", exc)
-
-    async def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
-        """Register a new subscriber queue."""
-        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=20)
-        async with self._lock:
-            self._queues.add(queue)
-        return queue
-
-    async def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
-        """Remove a subscriber queue."""
-        async with self._lock:
-            self._queues.discard(queue)
-
-
 # Registry of known jobs. Add more entries as new background jobs are introduced.
 JOB_REGISTRY: dict[str, JobMeta] = {
     "library_scanner": JobMeta(
@@ -113,9 +79,6 @@ _JOB_STATES: dict[str, JobState] = {
     )
     for meta in JOB_REGISTRY.values()
 }
-
-# Shared broadcaster for WebSocket/long-poll subscribers (wired in later)
-job_event_stream = JobEventStream()
 
 
 def _ensure_state(job_id: str) -> JobState:
@@ -157,17 +120,6 @@ def _job_next_run(job: Any) -> datetime | None:
 def _next_run_for_job(scheduler: AsyncIOScheduler, job_id: str) -> datetime | None:
     job = scheduler.get_job(job_id)
     return _job_next_run(job) if job else None
-
-
-def _schedule_publish(payload: dict[str, Any]) -> None:
-    """Publish payload to subscribers without blocking the scheduler thread."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        # No running loop; nothing to publish to
-        return
-    task = loop.create_task(job_event_stream.publish(payload))
-    task.add_done_callback(lambda t: t.exception())
 
 
 def init_job_tracking(scheduler: AsyncIOScheduler) -> None:
@@ -216,7 +168,6 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
         logger.debug("Unhandled job event: %s", event)
 
     state.next_run_time = _next_run_for_job(scheduler, event.job_id)
-    _schedule_publish(state.to_dict())
 
 
 def track_job_task(job_id: str, task: asyncio.Task[Any]) -> None:
@@ -245,7 +196,6 @@ def mark_manual_run(job_id: str, status: JobStatus) -> JobState:
     state.last_run_time = now
     state.running_since = None
     state.next_run_time = state.next_run_time or now
-    _schedule_publish(state.to_dict())
     return state
 
 

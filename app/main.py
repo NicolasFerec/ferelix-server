@@ -2,6 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -12,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.dependencies import set_scheduler
 from app.routers.v1 import auth, dashboard, media, streaming, users
+from app.services.jobs import init_job_tracking
 from app.services.scanner import scan_all_libraries
 from app.services.setup import router as setup_router
 
@@ -27,14 +29,10 @@ scheduler = AsyncIOScheduler()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # noqa: RUF029
     """Application lifespan manager for startup and shutdown events."""
     # Startup
     logger.info("Starting Ferelix Server...")
-
-    # Run initial scan
-    logger.info("Running initial library scan...")
-    await scan_all_libraries()
 
     # Schedule periodic scans (every 30 minutes)
     scheduler.add_job(
@@ -43,6 +41,7 @@ async def lifespan(app: FastAPI):
         minutes=30,
         id="library_scanner",
         replace_existing=True,
+        next_run_time=datetime.now(),
     )
     scheduler.start()
     logger.info("Scheduled scanner started (running every 30 minutes)")
@@ -50,6 +49,9 @@ async def lifespan(app: FastAPI):
     # Store scheduler in app state and global variable for API access
     app.state.scheduler = scheduler
     set_scheduler(scheduler)
+
+    # Initialize job tracking (must be after scheduler.start())
+    init_job_tracking(scheduler)
 
     yield
 

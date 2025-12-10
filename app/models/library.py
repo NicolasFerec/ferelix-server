@@ -9,10 +9,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
 
-class LibraryPath(Base):
+class Library(Base):
     """Configured folders to scan for media files."""
 
-    __tablename__ = "librarypath"
+    __tablename__ = "library"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     path: Mapped[str] = mapped_column(String, index=True, unique=True)
@@ -21,8 +21,8 @@ class LibraryPath(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
-class LibraryPathSchema(BaseModel):
-    """Schema for LibraryPath API responses."""
+class LibrarySchema(BaseModel):
+    """Schema for Library API responses."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -33,16 +33,16 @@ class LibraryPathSchema(BaseModel):
     created_at: datetime
 
 
-class LibraryPathCreate(BaseModel):
-    """Schema for creating a library path."""
+class LibraryCreate(BaseModel):
+    """Schema for creating a library."""
 
     path: str
     library_type: str = "movie"
     enabled: bool = True
 
 
-class LibraryPathUpdate(BaseModel):
-    """Schema for updating a library path."""
+class LibraryUpdate(BaseModel):
+    """Schema for updating a library."""
 
     path: str | None = None
     library_type: str | None = None

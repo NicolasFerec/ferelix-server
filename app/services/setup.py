@@ -17,7 +17,6 @@ class AdminSetupRequest(BaseModel):
     """Request schema for first-run admin setup."""
 
     username: str
-    email: str
     password: str
     language: str = "en"
 
@@ -71,7 +70,6 @@ async def create_first_admin(
     # Create first admin user
     admin_user = User(
         username=admin_data.username,
-        email=admin_data.email,
         password=admin_data.password,
         is_admin=True,
         is_active=True,

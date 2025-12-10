@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.dependencies import set_scheduler
-from app.routers.v1 import auth, jobs, media, streaming, users
+from app.routers.v1 import auth, dashboard, media, streaming, users
 from app.services.scanner import scan_all_libraries
 from app.services.setup import router as setup_router
 
@@ -75,7 +75,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(media.router)
 app.include_router(streaming.router)
-app.include_router(jobs.router)
+app.include_router(dashboard.router)
 
 # Mount static files for frontend
 STATIC_DIR = Path(__file__).parent / "static"

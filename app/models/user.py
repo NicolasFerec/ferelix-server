@@ -17,7 +17,7 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String, index=True, unique=True)
-    email: Mapped[str] = mapped_column(String, index=True, unique=True)
+    email: Mapped[str | None]
     password: Mapped[str | None] = mapped_column(
         PasswordType(
             schemes=["pbkdf2_sha512", "md5_crypt"],
@@ -39,7 +39,7 @@ class UserSchema(BaseModel):
 
     id: int
     username: str
-    email: str
+    email: str | None
     is_admin: bool
     is_active: bool
     language: str
@@ -51,7 +51,7 @@ class UserCreate(BaseModel):
     """Schema for creating a new user."""
 
     username: str
-    email: str
+    email: str | None
     password: str
     is_admin: bool = False
     language: str = "en"

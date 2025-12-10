@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import LibraryPath, MediaFile
+from app.models import Library, MediaFile
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def extract_video_metadata(file_path: Path) -> dict:
         return {}
 
 
-async def scan_library_path(session: AsyncSession, library_path: LibraryPath) -> int:
+async def scan_library_path(session: AsyncSession, library_path: Library) -> int:
     """Scan a library path for video files and update the database.
 
     Returns the number of new files discovered.
@@ -151,9 +151,7 @@ async def scan_all_libraries() -> int:
     """
     async with async_session_maker() as session:
         # Get all enabled library paths
-        library_paths = await session.scalars(
-            select(LibraryPath).where(LibraryPath.enabled)
-        )
+        library_paths = await session.scalars(select(Library).where(Library.enabled))
 
         if not library_paths:
             logger.info("No library paths configured for scanning")

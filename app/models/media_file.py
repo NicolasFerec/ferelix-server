@@ -31,6 +31,9 @@ class MediaFile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     scanned_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
 
 
 class MediaFileSchema(BaseModel):
@@ -51,3 +54,4 @@ class MediaFileSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     scanned_at: datetime
+    deleted_at: datetime | None = None

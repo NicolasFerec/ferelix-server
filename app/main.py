@@ -1,6 +1,7 @@
 """Main FastAPI application with scheduled media scanning."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from app.dependencies import set_scheduler
 from app.routers.v1 import auth, dashboard, media, streaming, users
 from app.services.jobs import init_job_tracking
-from app.services.scanner import scan_all_libraries
+from app.services.scanner import cleanup_deleted_media, scan_all_libraries
 from app.services.setup import router as setup_router
 
 # Configure logging
@@ -43,8 +44,24 @@ async def lifespan(app: FastAPI):  # noqa: RUF029
         replace_existing=True,
         next_run_time=datetime.now(),
     )
+
+    # Schedule cleanup job (daily at 3 AM)
+    grace_period_days = int(os.getenv("CLEANUP_GRACE_PERIOD_DAYS", "30"))
+    scheduler.add_job(
+        cleanup_deleted_media,
+        "cron",
+        hour=3,
+        minute=0,
+        id="cleanup_deleted_media",
+        replace_existing=True,
+        kwargs={"grace_period_days": grace_period_days},
+    )
+
     scheduler.start()
     logger.info("Scheduled scanner started (running every 30 minutes)")
+    logger.info(
+        f"Cleanup job scheduled (daily at 3 AM, grace period: {grace_period_days} days)"
+    )
 
     # Store scheduler in app state and global variable for API access
     app.state.scheduler = scheduler

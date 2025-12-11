@@ -20,7 +20,14 @@ from app.models import (
     UserSchema,
     UserUpdate,
 )
-from app.services.jobs import JobState, get_job_state, get_job_states
+from app.services.jobs import (
+    JobExecutionRecord,
+    JobState,
+    get_job_history,
+    get_job_state,
+    get_job_states,
+)
+from app.services.scanner import schedule_library_scan
 
 # Router with admin-only security at the router level
 router = APIRouter(
@@ -84,6 +91,7 @@ async def create_library(
         )
 
     library_path = Library(
+        name=library_data.name,
         path=library_data.path,
         library_type=library_data.library_type,
         enabled=library_data.enabled,
@@ -144,6 +152,9 @@ async def update_library(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Library not found",
         )
+
+    if update_data.name is not None:
+        library_path.name = update_data.name
 
     # Check if path is being updated and if it conflicts with existing paths
     if update_data.path is not None and update_data.path != library_path.path:
@@ -209,6 +220,72 @@ class JobTriggerResponse(BaseModel):
     message: str
 
 
+@router.post("/libraries/{library_id}/scan", response_model=JobTriggerResponse)
+async def scan_library(
+    library_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
+) -> JobTriggerResponse:
+    """Trigger a scan for a specific library (returns immediately).
+
+    Args:
+        library_id: Library ID to scan
+        session: Database session
+        scheduler: APScheduler instance
+
+    Returns:
+        Job trigger response with job_id
+
+    Raises:
+        HTTPException: If library not found
+    """
+    # Verify library exists
+    library_path = await session.get(Library, library_id)
+    if not library_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    # Create one-off scan job with library name for display
+    job_id = schedule_library_scan(scheduler, library_id, library_path.name)
+
+    return JobTriggerResponse(
+        success=True,
+        message=f"Scan started for library {library_id}. Job ID: {job_id}",
+    )
+
+
+class JobExecutionSchema(BaseModel):
+    """Schema for job execution history."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    job_name: str
+    name_key: str | None = None
+    job_type: str
+    started_at: datetime
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    status: str
+    error: str | None = None
+
+    @classmethod
+    def from_record(cls, record: JobExecutionRecord) -> JobExecutionSchema:
+        return cls(
+            job_id=record.job_id,
+            job_name=record.job_name,
+            name_key=record.name_key,
+            job_type=record.job_type,
+            started_at=record.started_at,
+            completed_at=record.completed_at,
+            duration_seconds=record.duration_seconds,
+            status=record.status,
+            error=record.error,
+        )
+
+
 @router.get("/jobs", response_model=list[JobSchema])
 async def list_jobs(
     scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
@@ -252,6 +329,17 @@ async def trigger_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger job: {e!s}",
         )
+
+
+@router.get("/jobs/history", response_model=list[JobExecutionSchema])
+async def get_job_history_endpoint() -> list[JobExecutionSchema]:
+    """Get recent job execution history (admin only).
+
+    Returns:
+        List of job execution records (most recent first)
+    """
+    history = get_job_history()
+    return [JobExecutionSchema.from_record(record) for record in history]
 
 
 # ============================================================================

@@ -73,9 +73,13 @@ async def get_library_items(
         )
 
     # Find MediaFiles that belong to this library (file_path starts with library path)
+    # Exclude soft-deleted files
     result = await session.execute(
         select(MediaFile)
-        .where(MediaFile.file_path.startswith(library_path.path))
+        .where(
+            MediaFile.file_path.startswith(library_path.path),
+            MediaFile.deleted_at.is_(None),
+        )
         .offset(skip)
         .limit(limit)
     )
@@ -101,7 +105,13 @@ async def get_media_files(
     Returns:
         List of media files
     """
-    result = await session.execute(select(MediaFile).offset(skip).limit(limit))
+    # Exclude soft-deleted files
+    result = await session.execute(
+        select(MediaFile)
+        .where(MediaFile.deleted_at.is_(None))
+        .offset(skip)
+        .limit(limit)
+    )
     return list(result.scalars().all())
 
 
@@ -123,10 +133,10 @@ async def get_media_file(
         Media file details
 
     Raises:
-        HTTPException: If media file not found
+        HTTPException: If media file not found or is deleted
     """
     media_file = await session.get(MediaFile, media_id)
-    if not media_file:
+    if not media_file or media_file.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Media file not found",

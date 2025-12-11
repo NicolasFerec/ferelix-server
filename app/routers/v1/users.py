@@ -59,27 +59,23 @@ async def update_current_user(
             )
         current_user.username = user_update.username
 
+    # Handle email update (can be None to clear email, or a string)
     if user_update.email is not None:
-        # Check if email is already taken by another user
-        existing = await session.scalar(
-            select(User).where(
-                User.email == user_update.email, User.id != current_user.id
-            )
+        # Normalize email: convert empty string to None, strip whitespace
+        email_value = (
+            user_update.email.strip()
+            if isinstance(user_update.email, str) and user_update.email.strip()
+            else None
         )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already in use",
-            )
-        current_user.email = user_update.email
+
+        # Update email (can be None to clear it)
+        current_user.email = email_value
 
     if user_update.password is not None:
         current_user.password = user_update.password
 
     if user_update.language is not None:
         current_user.language = user_update.language
-
-    # Note: Regular users cannot change their is_active status
 
     await session.commit()
     await session.refresh(current_user)

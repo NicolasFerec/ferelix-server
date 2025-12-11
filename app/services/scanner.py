@@ -4,9 +4,10 @@ import json
 import logging
 import os
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,17 +86,23 @@ def extract_video_metadata(file_path: Path) -> dict:
         return {}
 
 
-async def scan_library_path(session: AsyncSession, library_path: Library) -> int:
+async def scan_library_path(
+    session: AsyncSession, library_path: Library
+) -> dict[str, int]:
     """Scan a library path for video files and update the database.
 
-    Returns the number of new files discovered.
+    Returns statistics about the scan: new, updated, deleted, and restored files.
     """
     path = Path(library_path.path)
     if not path.exists() or not path.is_dir():
         logger.warning(f"Library path does not exist or is not a directory: {path}")
-        return 0
+        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
 
     new_files_count = 0
+    updated_files_count = 0
+    restored_files_count = 0
+    scanned_paths: set[str] = set()
+
     logger.info(f"Scanning library path: {path}")
 
     # Walk the directory tree
@@ -108,12 +115,23 @@ async def scan_library_path(session: AsyncSession, library_path: Library) -> int
             if file_extension not in VIDEO_EXTENSIONS:
                 continue
 
+            file_path_str = str(file_path)
+            scanned_paths.add(file_path_str)
+
             # Check if file already exists in database
             existing_file = await session.scalar(
-                select(MediaFile).where(MediaFile.file_path == str(file_path))
+                select(MediaFile).where(MediaFile.file_path == file_path_str)
             )
 
             if existing_file:
+                # Check if file was previously marked as deleted (restored!)
+                if existing_file.deleted_at is not None:
+                    logger.info(f"File restored: {file_path}")
+                    existing_file.deleted_at = None
+                    restored_files_count += 1
+                else:
+                    updated_files_count += 1
+
                 # Update scanned_at timestamp
                 existing_file.scanned_at = datetime.now(UTC)
                 session.add(existing_file)
@@ -125,7 +143,7 @@ async def scan_library_path(session: AsyncSession, library_path: Library) -> int
 
             # Create new MediaFile entry
             media_file = MediaFile(
-                file_path=str(file_path),
+                file_path=file_path_str,
                 file_name=file_name,
                 file_size=file_path.stat().st_size,
                 file_extension=file_extension,
@@ -139,15 +157,43 @@ async def scan_library_path(session: AsyncSession, library_path: Library) -> int
             session.add(media_file)
             new_files_count += 1
 
+    # Find files in database that weren't scanned (soft delete them)
+    deleted_files_count = 0
+    library_files = await session.scalars(
+        select(MediaFile).where(
+            MediaFile.file_path.startswith(str(path)), MediaFile.deleted_at.is_(None)
+        )
+    )
+
+    now = datetime.now(UTC)
+    for db_file in library_files:
+        if db_file.file_path not in scanned_paths:
+            logger.info(f"File missing, marking as deleted: {db_file.file_path}")
+            db_file.deleted_at = now
+            session.add(db_file)
+            deleted_files_count += 1
+
     await session.commit()
-    logger.info(f"Scan complete. Found {new_files_count} new files in {path}")
-    return new_files_count
+
+    stats = {
+        "new": new_files_count,
+        "updated": updated_files_count,
+        "deleted": deleted_files_count,
+        "restored": restored_files_count,
+    }
+
+    logger.info(
+        f"Scan complete for {path}: {new_files_count} new, {updated_files_count} updated, "
+        f"{deleted_files_count} deleted, {restored_files_count} restored"
+    )
+
+    return stats
 
 
-async def scan_all_libraries() -> int:
+async def scan_all_libraries() -> dict[str, int]:
     """Scan all enabled library paths.
 
-    Returns the total number of new files discovered.
+    Returns aggregated statistics about the scan.
     """
     async with async_session_maker() as session:
         # Get all enabled library paths
@@ -155,12 +201,119 @@ async def scan_all_libraries() -> int:
 
         if not library_paths:
             logger.info("No library paths configured for scanning")
+            return {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
+
+        total_stats = {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
+
+        for library_path in library_paths:
+            stats = await scan_library_path(session, library_path)
+            for key in total_stats:
+                total_stats[key] += stats.get(key, 0)
+
+        logger.info(
+            f"Total scan results: {total_stats['new']} new, {total_stats['updated']} updated, "
+            f"{total_stats['deleted']} deleted, {total_stats['restored']} restored"
+        )
+        return total_stats
+
+
+async def scan_library_job(
+    library_id: int, library_name: str | None = None
+) -> dict[str, int]:
+    """Wrapper for scanning a single library (used by one-off jobs).
+
+    Args:
+        library_id: Library ID to scan
+        library_name: Library name - used for display purposes only
+
+    Returns:
+        Scan statistics dictionary
+
+    Raises:
+        ValueError: If library not found
+    """
+    async with async_session_maker() as session:
+        library = await session.get(Library, library_id)
+        if not library:
+            raise ValueError(f"Library {library_id} not found")
+
+        logger.info(f"Starting scan job for library {library_id}: {library.path}")
+        stats = await scan_library_path(session, library)
+        logger.info(f"Library scan job completed: {stats}")
+        return stats
+
+
+def schedule_library_scan(
+    scheduler: AsyncIOScheduler, library_id: int, library_name: str | None = None
+) -> str:
+    """Create a one-off job to scan a specific library.
+
+    Args:
+        scheduler: APScheduler instance
+        library_id: Library ID to scan
+        library_name: Library name for display purposes
+
+    Returns:
+        Job ID for tracking
+    """
+    timestamp = int(datetime.now(UTC).timestamp())
+    job_id = f"scan_library_{library_id}_{timestamp}"
+
+    scheduler.add_job(
+        func=scan_library_job,
+        trigger="date",
+        run_date=datetime.now(UTC),
+        id=job_id,
+        kwargs={"library_id": library_id, "library_name": library_name},
+        name=f"Library {library_id} Scan",
+    )
+
+    # Ensure state is initialized with library name immediately after job creation
+    # This prevents the state from being created with just the ID
+    from app.services.jobs import _ensure_state
+
+    state = _ensure_state(job_id, scheduler)
+    if library_name and state.fallback_name == f"Library Scanner: {library_id}":
+        # Update state with library name if it was created with just the ID
+        state.fallback_name = f"Library Scanner: {library_name}"
+
+    logger.info(f"Scheduled one-off scan job {job_id} for library {library_id}")
+    return job_id
+
+
+async def cleanup_deleted_media(grace_period_days: int = 30) -> int:
+    """Permanently delete media files marked as deleted beyond grace period.
+
+    Args:
+        grace_period_days: Number of days to keep deleted files before permanent deletion
+
+    Returns:
+        Number of files permanently deleted
+    """
+    async with async_session_maker() as session:
+        cutoff_date = datetime.now(UTC) - timedelta(days=grace_period_days)
+
+        # Find all files marked as deleted before the cutoff date
+        result = await session.execute(
+            select(MediaFile).where(
+                MediaFile.deleted_at.isnot(None), MediaFile.deleted_at < cutoff_date
+            )
+        )
+        files_to_delete = result.scalars().all()
+
+        if not files_to_delete:
+            logger.info("No deleted media files to clean up")
             return 0
 
-        total_new_files = 0
-        for library_path in library_paths:
-            new_files = await scan_library_path(session, library_path)
-            total_new_files += new_files
+        count = len(files_to_delete)
+        logger.info(
+            f"Cleaning up {count} deleted media files older than {grace_period_days} days"
+        )
 
-        logger.info(f"Total new files discovered: {total_new_files}")
-        return total_new_files
+        # Delete the files
+        for file in files_to_delete:
+            await session.delete(file)
+
+        await session.commit()
+        logger.info(f"Permanently deleted {count} media files")
+        return count

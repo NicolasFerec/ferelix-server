@@ -15,6 +15,7 @@ class Library(Base):
     __tablename__ = "library"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
     path: Mapped[str] = mapped_column(String, index=True, unique=True)
     library_type: Mapped[str] = mapped_column(String, default="movie")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -27,6 +28,7 @@ class LibrarySchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int | None = None
+    name: str
     path: str
     library_type: str = "movie"
     enabled: bool = True
@@ -36,6 +38,7 @@ class LibrarySchema(BaseModel):
 class LibraryCreate(BaseModel):
     """Schema for creating a library."""
 
+    name: str
     path: str
     library_type: str = "movie"
     enabled: bool = True
@@ -44,6 +47,7 @@ class LibraryCreate(BaseModel):
 class LibraryUpdate(BaseModel):
     """Schema for updating a library."""
 
+    name: str | None = None
     path: str | None = None
     library_type: str | None = None
     enabled: bool | None = None

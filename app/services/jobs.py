@@ -115,10 +115,10 @@ JOB_REGISTRY: dict[str, JobMeta] = {
         name_key="jobs.names.library_scanner",
         fallback_name="Library Scanner",
     ),
-    "cleanup_deleted_media": JobMeta(
-        id="cleanup_deleted_media",
-        name_key="jobs.names.cleanup_deleted_media",
-        fallback_name="Cleanup Deleted Media",
+    "database_maintenance": JobMeta(
+        id="database_maintenance",
+        name_key="jobs.names.database_maintenance",
+        fallback_name="Database Maintenance",
     ),
 }
 

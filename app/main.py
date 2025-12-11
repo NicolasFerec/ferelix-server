@@ -3,7 +3,6 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -48,7 +47,6 @@ async def lifespan(app: FastAPI):  # noqa: RUF029
         minutes=30,
         id="library_scanner",
         replace_existing=True,
-        next_run_time=datetime.now(),
     )
 
     # Schedule cleanup job (daily at 3 AM)
@@ -58,7 +56,7 @@ async def lifespan(app: FastAPI):  # noqa: RUF029
         "cron",
         hour=3,
         minute=0,
-        id="cleanup_deleted_media",
+        id="database_maintenance",
         replace_existing=True,
         kwargs={"grace_period_days": grace_period_days},
     )

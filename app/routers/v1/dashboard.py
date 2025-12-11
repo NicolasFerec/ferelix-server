@@ -68,12 +68,14 @@ async def get_libraries(
 async def create_library(
     library_data: LibraryCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
+    scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
 ) -> Library:
     """Add a new library path to scan (admin only).
 
     Args:
         library_data: Library path creation data
         session: Database session
+        scheduler: APScheduler instance
 
     Returns:
         Created library path
@@ -101,6 +103,10 @@ async def create_library(
     session.add(library_path)
     await session.commit()
     await session.refresh(library_path)
+
+    # Trigger scan for the newly created library
+    schedule_library_scan(scheduler, library_path.id, library_path.name)
+
     return library_path
 
 
@@ -134,6 +140,7 @@ async def update_library(
     library_id: int,
     update_data: LibraryUpdate,
     session: Annotated[AsyncSession, Depends(get_session)],
+    scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
 ) -> Library:
     """Update a library (admin only).
 
@@ -141,6 +148,7 @@ async def update_library(
         library_id: Library ID
         update_data: Library update data
         session: Database session
+        scheduler: APScheduler instance
 
     Returns:
         Updated library
@@ -159,6 +167,7 @@ async def update_library(
         library_path.name = update_data.name
 
     # Check if path is being updated and if it conflicts with existing paths
+    path_changed = False
     if update_data.path is not None and update_data.path != library_path.path:
         existing = await session.scalar(
             select(Library).where(Library.path == update_data.path)
@@ -169,6 +178,7 @@ async def update_library(
                 detail="Library path already exists",
             )
         library_path.path = update_data.path
+        path_changed = True
 
     if update_data.library_type is not None:
         library_path.library_type = update_data.library_type
@@ -179,6 +189,11 @@ async def update_library(
     session.add(library_path)
     await session.commit()
     await session.refresh(library_path)
+
+    # Trigger scan if path was changed
+    if path_changed:
+        schedule_library_scan(scheduler, library_path.id, library_path.name)
+
     return library_path
 
 

@@ -1,5 +1,6 @@
 """First-run setup service for admin account creation."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,7 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker, get_session
-from app.models import User, UserSchema
+from app.models import RefreshToken, User, UserSchema
+from app.services.auth import (
+    create_access_token,
+    create_refresh_token,
+    hash_token,
+)
 
 router = APIRouter(prefix="/api/v1/setup", tags=["setup"])
 
@@ -19,6 +25,15 @@ class AdminSetupRequest(BaseModel):
     username: str
     password: str
     language: str = "en"
+
+
+class TokenResponse(BaseModel):
+    """Response schema for token endpoints."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserSchema
 
 
 async def is_setup_complete() -> bool:
@@ -43,11 +58,13 @@ async def get_setup_status() -> dict[str, bool]:
     return {"setup_complete": await is_setup_complete()}
 
 
-@router.post("/admin", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admin", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_first_admin(
     admin_data: AdminSetupRequest,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> User:
+) -> TokenResponse:
     """Create the first admin account (only works if no users exist).
 
     Args:
@@ -55,7 +72,7 @@ async def create_first_admin(
         session: Database session
 
     Returns:
-        Created admin user
+        Access token, refresh token, and user info
 
     Raises:
         HTTPException: If setup already complete or validation fails
@@ -80,4 +97,22 @@ async def create_first_admin(
     await session.commit()
     await session.refresh(admin_user)
 
-    return admin_user
+    # Create tokens
+    access_token = create_access_token(data={"sub": str(admin_user.id)})
+    refresh_token_str = create_refresh_token(data={"sub": str(admin_user.id)})
+
+    # Store refresh token in database
+    refresh_token = RefreshToken(
+        user_id=admin_user.id,
+        token=hash_token(refresh_token_str),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+        device_info=None,
+    )
+    session.add(refresh_token)
+    await session.commit()
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token_str,
+        user=UserSchema.model_validate(admin_user),
+    )

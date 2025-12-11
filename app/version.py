@@ -33,13 +33,23 @@ def get_version_info() -> dict[str, str]:
         pass
 
     # Fallback to version.json (generated at build time in CI/CD)
-    version_file = Path(__file__).parent.parent / "version.json"
-    if version_file.exists():
-        try:
-            with open(version_file) as f:
-                return json.load(f)
-        except OSError, json.JSONDecodeError:
-            pass
+    # version.json is copied to /app/version.json in Docker container
+    # Since WORKDIR is /app, we can use cwd() or check relative to __file__
+    # Try multiple possible locations for robustness
+    possible_paths = [
+        Path.cwd() / "version.json",  # /app/version.json (most reliable for Docker)
+        Path(__file__).parent.parent
+        / "version.json",  # /app/version.json if __file__ is /app/app/version.py
+        Path(__file__).parent / "version.json",  # Fallback if structure differs
+    ]
+
+    for version_file in possible_paths:
+        if version_file.exists():
+            try:
+                with open(version_file) as f:
+                    return json.load(f)
+            except OSError, json.JSONDecodeError:
+                continue
 
     # Final fallback
     return {"commit": "unknown", "branch": "unknown"}

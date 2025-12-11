@@ -65,3 +65,4 @@ dmypy.json
 # Project specific
 app/static/
 .github_token
+version.json

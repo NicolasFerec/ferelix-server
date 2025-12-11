@@ -29,6 +29,7 @@ from app.services.jobs import (
     get_job_states,
 )
 from app.services.scanner import schedule_library_scan
+from app.version import get_version_info
 
 # Router with admin-only security at the router level
 router = APIRouter(
@@ -656,3 +657,20 @@ async def delete_user(
 
     await session.delete(user)
     await session.commit()
+
+
+# ============================================================================
+# Version Information Endpoint
+# ============================================================================
+
+
+@router.get("/version")
+async def get_version_info_endpoint() -> dict[str, str]:
+    """Get backend version information (git commit and branch).
+
+    Returns:
+        Dictionary with 'commit' and 'branch' keys containing version info.
+        In local dev, uses git commands. In production, reads from version.json
+        generated during Docker build.
+    """
+    return get_version_info()

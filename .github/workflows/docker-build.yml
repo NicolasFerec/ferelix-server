@@ -32,6 +32,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # --- Generate version info ---
+      - name: Generate version info
+        run: |
+          echo '{"commit":"${{ github.sha }}","branch":"${{ github.ref_name }}"}' > version.json
+          cat version.json
+
       # --- Set up QEMU and Buildx only for multi-platform builds ---
       - name: Set up QEMU
         if: ${{ inputs.platforms == 'linux/amd64,linux/arm64' || startsWith(github.ref, 'refs/tags/v') }}

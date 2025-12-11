@@ -86,58 +86,116 @@ def extract_video_metadata(file_path: Path) -> dict:
         return {}
 
 
-async def scan_library_path(
-    session: AsyncSession, library_path: Library
-) -> dict[str, int]:
+async def scan_library_path(  # noqa: C901
+    session: AsyncSession, library_path: Library, job_id: str | None = None
+) -> dict[str, int | bool]:
     """Scan a library path for video files and update the database.
 
-    Returns statistics about the scan: new, updated, deleted, and restored files.
+    Args:
+        session: Database session
+        library_path: Library to scan
+        job_id: Optional job ID for progress tracking and cancellation
+
+    Returns:
+        Statistics about the scan: new, updated, deleted, restored files, and cancelled flag
     """
+    from app.services.jobs import (
+        is_cancellation_requested,
+        mark_job_cancelled,
+        update_job_progress,
+    )
+
     path = Path(library_path.path)
     if not path.exists() or not path.is_dir():
         logger.warning(f"Library path does not exist or is not a directory: {path}")
-        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
+        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": False}
 
     new_files_count = 0
     updated_files_count = 0
     restored_files_count = 0
     scanned_paths: set[str] = set()
+    batch_size = 10  # Commit every 10 files
+    pending_changes = 0
+    was_cancelled = False
 
     logger.info(f"Scanning library path: {path}")
 
-    # Walk the directory tree
+    # First pass: Count video files for progress tracking
+    video_files = []
+    logger.info("Counting video files...")
     for root, dirs, files in os.walk(path):
+        # Check for cancellation during counting
+        if job_id and is_cancellation_requested(job_id):
+            logger.info("Cancellation requested during file counting")
+            was_cancelled = True
+            if job_id:
+                mark_job_cancelled(job_id)
+            return {
+                "new": 0,
+                "updated": 0,
+                "deleted": 0,
+                "restored": 0,
+                "cancelled": True,
+            }
+
         for file_name in files:
             file_path = Path(root) / file_name
             file_extension = file_path.suffix.lower()
 
             # Check if it's a video file
-            if file_extension not in VIDEO_EXTENSIONS:
-                continue
+            if file_extension in VIDEO_EXTENSIONS:
+                video_files.append((file_path, file_name, file_extension))
 
-            file_path_str = str(file_path)
-            scanned_paths.add(file_path_str)
+    files_total = len(video_files)
+    logger.info(f"Found {files_total} video files to process")
 
-            # Check if file already exists in database
-            existing_file = await session.scalar(
-                select(MediaFile).where(MediaFile.file_path == file_path_str)
-            )
+    # Update progress with total count
+    if job_id:
+        update_job_progress(job_id, files_total=files_total, files_processed=0)
 
-            if existing_file:
-                # Check if file was previously marked as deleted (restored!)
-                if existing_file.deleted_at is not None:
-                    logger.info(f"File restored: {file_path}")
-                    existing_file.deleted_at = None
-                    restored_files_count += 1
-                else:
-                    updated_files_count += 1
+    # Second pass: Process video files with progress tracking
+    for idx, (file_path, file_name, file_extension) in enumerate(video_files):
+        # Check for cancellation before processing each file
+        if job_id and is_cancellation_requested(job_id):
+            logger.info(f"Cancellation requested at file {idx + 1}/{files_total}")
+            was_cancelled = True
+            # Commit any pending changes before exiting
+            if pending_changes > 0:
+                await session.commit()
+                logger.info(
+                    f"Committed {pending_changes} pending changes before cancellation"
+                )
+            if job_id:
+                mark_job_cancelled(job_id)
+            break
 
-                # Update scanned_at timestamp
-                existing_file.scanned_at = datetime.now(UTC)
-                session.add(existing_file)
-                continue
+        file_path_str = str(file_path)
+        scanned_paths.add(file_path_str)
 
-            # Extract metadata
+        # Update progress with current file
+        if job_id:
+            update_job_progress(job_id, files_processed=idx, current_file=file_path_str)
+
+        # Check if file already exists in database
+        existing_file = await session.scalar(
+            select(MediaFile).where(MediaFile.file_path == file_path_str)
+        )
+
+        if existing_file:
+            # Check if file was previously marked as deleted (restored!)
+            if existing_file.deleted_at is not None:
+                logger.info(f"File restored: {file_path}")
+                existing_file.deleted_at = None
+                restored_files_count += 1
+            else:
+                updated_files_count += 1
+
+            # Update scanned_at timestamp
+            existing_file.scanned_at = datetime.now(UTC)
+            session.add(existing_file)
+            pending_changes += 1
+        else:
+            # Extract metadata for new file
             logger.info(f"Processing new file: {file_path}")
             metadata = extract_video_metadata(file_path)
 
@@ -156,75 +214,122 @@ async def scan_library_path(
 
             session.add(media_file)
             new_files_count += 1
+            pending_changes += 1
+
+        # Batch commit every N files
+        if pending_changes >= batch_size:
+            await session.commit()
+            logger.debug(f"Batch commit: {pending_changes} changes committed")
+            pending_changes = 0
+
+    # Update final progress
+    if job_id and not was_cancelled:
+        update_job_progress(job_id, files_processed=files_total, current_file=None)
+
+    # Commit any remaining changes
+    if pending_changes > 0:
+        await session.commit()
+        logger.debug(f"Final commit: {pending_changes} changes committed")
 
     # Find files in database that weren't scanned (soft delete them)
+    # Only do this if scan wasn't cancelled
     deleted_files_count = 0
-    library_files = await session.scalars(
-        select(MediaFile).where(
-            MediaFile.file_path.startswith(str(path)), MediaFile.deleted_at.is_(None)
+    if not was_cancelled:
+        library_files = await session.scalars(
+            select(MediaFile).where(
+                MediaFile.file_path.startswith(str(path)),
+                MediaFile.deleted_at.is_(None),
+            )
         )
-    )
 
-    now = datetime.now(UTC)
-    for db_file in library_files:
-        if db_file.file_path not in scanned_paths:
-            logger.info(f"File missing, marking as deleted: {db_file.file_path}")
-            db_file.deleted_at = now
-            session.add(db_file)
-            deleted_files_count += 1
+        now = datetime.now(UTC)
+        for db_file in library_files:
+            if db_file.file_path not in scanned_paths:
+                logger.info(f"File missing, marking as deleted: {db_file.file_path}")
+                db_file.deleted_at = now
+                session.add(db_file)
+                deleted_files_count += 1
 
-    await session.commit()
+        # Final commit for deletions
+        if deleted_files_count > 0:
+            await session.commit()
 
     stats = {
         "new": new_files_count,
         "updated": updated_files_count,
         "deleted": deleted_files_count,
         "restored": restored_files_count,
+        "cancelled": was_cancelled,
     }
 
-    logger.info(
-        f"Scan complete for {path}: {new_files_count} new, {updated_files_count} updated, "
-        f"{deleted_files_count} deleted, {restored_files_count} restored"
-    )
+    if was_cancelled:
+        logger.info(
+            f"Scan cancelled for {path}: {new_files_count} new, {updated_files_count} updated, "
+            f"{restored_files_count} restored (before cancellation)"
+        )
+    else:
+        logger.info(
+            f"Scan complete for {path}: {new_files_count} new, {updated_files_count} updated, "
+            f"{deleted_files_count} deleted, {restored_files_count} restored"
+        )
 
     return stats
 
 
-async def scan_all_libraries() -> dict[str, int]:
-    """Scan all enabled library paths.
+async def scan_all_libraries(
+    scheduler: AsyncIOScheduler | None = None,
+) -> dict[str, int]:
+    """Scan all enabled library paths by spawning individual per-library scan jobs.
 
-    Returns aggregated statistics about the scan.
+    Args:
+        scheduler: Optional scheduler instance to spawn per-library jobs
+
+    Returns:
+        Statistics about scheduled jobs (count of libraries to scan).
     """
     async with async_session_maker() as session:
         # Get all enabled library paths
         library_paths = await session.scalars(select(Library).where(Library.enabled))
+        libraries_list = list(library_paths)
 
-        if not library_paths:
+        if not libraries_list:
             logger.info("No library paths configured for scanning")
-            return {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
+            return {"libraries_scheduled": 0}
 
-        total_stats = {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
+        # If scheduler is provided, spawn per-library scan jobs
+        if scheduler:
+            logger.info(f"Scheduling scans for {len(libraries_list)} libraries")
+            for library in libraries_list:
+                schedule_library_scan(scheduler, library.id, library.name)
+            logger.info(f"Scheduled {len(libraries_list)} library scan jobs")
+            return {"libraries_scheduled": len(libraries_list)}
+        else:
+            # Fallback: scan directly (for backwards compatibility or if no scheduler)
+            logger.warning(
+                "No scheduler provided to scan_all_libraries, scanning directly (not recommended)"
+            )
+            total_stats = {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
+            for library_path in libraries_list:
+                stats = await scan_library_path(session, library_path)
+                for key in total_stats:
+                    total_stats[key] += stats.get(key, 0)
 
-        for library_path in library_paths:
-            stats = await scan_library_path(session, library_path)
-            for key in total_stats:
-                total_stats[key] += stats.get(key, 0)
-
-        logger.info(
-            f"Total scan results: {total_stats['new']} new, {total_stats['updated']} updated, "
-            f"{total_stats['deleted']} deleted, {total_stats['restored']} restored"
-        )
-        return total_stats
+            logger.info(
+                f"Total scan results: {total_stats['new']} new, {total_stats['updated']} updated, "
+                f"{total_stats['deleted']} deleted, {total_stats['restored']} restored"
+            )
+            return total_stats
 
 
 async def scan_library_job(
-    library_id: int, library_name: str | None = None
-) -> dict[str, int]:
+    library_id: int, library_name: str | None = None, job_id: str | None = None
+) -> dict[str, int | bool]:
     """Wrapper for scanning a single library (used by one-off jobs).
 
     Args:
         library_id: Library ID to scan
         library_name: Library name - used for display purposes only
+        job_id: Job ID for progress tracking and cancellation
 
     Returns:
         Scan statistics dictionary
@@ -238,7 +343,7 @@ async def scan_library_job(
             raise ValueError(f"Library {library_id} not found")
 
         logger.info(f"Starting scan job for library {library_id}: {library.path}")
-        stats = await scan_library_path(session, library)
+        stats = await scan_library_path(session, library, job_id)
         logger.info(f"Library scan job completed: {stats}")
         return stats
 
@@ -264,7 +369,11 @@ def schedule_library_scan(
         trigger="date",
         run_date=datetime.now(UTC),
         id=job_id,
-        kwargs={"library_id": library_id, "library_name": library_name},
+        kwargs={
+            "library_id": library_id,
+            "library_name": library_name,
+            "job_id": job_id,
+        },
         name=f"Library {library_id} Scan",
     )
 

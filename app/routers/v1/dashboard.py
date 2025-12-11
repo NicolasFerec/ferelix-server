@@ -400,6 +400,8 @@ class JobExecutionSchema(BaseModel):
     duration_seconds: float | None = None
     status: str
     error: str | None = None
+    files_total: int | None = None
+    files_processed: int | None = None
 
     @classmethod
     def from_record(cls, record: JobExecutionRecord) -> JobExecutionSchema:
@@ -413,6 +415,8 @@ class JobExecutionSchema(BaseModel):
             duration_seconds=record.duration_seconds,
             status=record.status,
             error=record.error,
+            files_total=record.files_total,
+            files_processed=record.files_processed,
         )
 
 
@@ -459,6 +463,53 @@ async def trigger_job(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger job: {e!s}",
         )
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobTriggerResponse)
+async def cancel_job(
+    job_id: str,
+    scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
+) -> JobTriggerResponse:
+    """Cancel a running job (admin only).
+
+    Args:
+        job_id: Job ID to cancel
+        scheduler: APScheduler instance
+
+    Returns:
+        Job trigger response
+
+    Raises:
+        HTTPException: If job not found or not running
+    """
+    from app.services.jobs import request_job_cancellation
+
+    # Check if job exists in scheduler or has state
+    state = get_job_state(job_id)
+    if not state:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job '{job_id}' not found",
+        )
+
+    if state.status != "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Job '{job_id}' is not running (status: {state.status})",
+        )
+
+    # Request cancellation
+    success = request_job_cancellation(job_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to request cancellation for job '{job_id}'",
+        )
+
+    return JobTriggerResponse(
+        success=True,
+        message=f"Cancellation requested for job '{job_id}'",
+    )
 
 
 @router.get("/jobs/history", response_model=list[JobExecutionSchema])

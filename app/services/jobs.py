@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Track running job tasks for cancellation during shutdown
 _RUNNING_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 
-JobStatus = Literal["pending", "running", "success", "failed"]
+JobStatus = Literal["pending", "running", "success", "failed", "cancelled"]
 JobType = Literal["scheduled", "one-off"]
 
 
@@ -49,6 +49,13 @@ class JobState:
     next_run_time: datetime | None = None
     running_since: datetime | None = None
     error: str | None = None
+    # Progress tracking fields
+    files_total: int | None = None
+    files_processed: int | None = None
+    current_file: str | None = None
+    # Cancellation fields
+    cancellation_requested: bool = False
+    cancelled_at: datetime | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +67,11 @@ class JobState:
             "next_run_time": self.next_run_time,
             "running_since": self.running_since,
             "error": self.error,
+            "files_total": self.files_total,
+            "files_processed": self.files_processed,
+            "current_file": self.current_file,
+            "cancellation_requested": self.cancellation_requested,
+            "cancelled_at": self.cancelled_at,
         }
 
 
@@ -73,9 +85,12 @@ class JobExecutionRecord:
     started_at: datetime
     completed_at: datetime | None = None
     duration_seconds: float | None = None
-    status: str = "running"  # "running", "completed", "failed"
+    status: str = "running"  # "running", "completed", "failed", "cancelled"
     error: str | None = None
     name_key: str | None = None
+    # Progress tracking fields
+    files_total: int | None = None
+    files_processed: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,6 +103,8 @@ class JobExecutionRecord:
             "duration_seconds": self.duration_seconds,
             "status": self.status,
             "error": self.error,
+            "files_total": self.files_total,
+            "files_processed": self.files_processed,
         }
 
 
@@ -324,6 +341,7 @@ def get_job_states(scheduler: AsyncIOScheduler) -> list[JobState]:
     """Return current job states, refreshing next_run_time from scheduler.
 
     Filters out one-off jobs (those with 'date' trigger type, which are one-time executions).
+    Only returns scheduled jobs (interval/cron triggers).
     """
     states = []
     for job in scheduler.get_jobs():
@@ -361,6 +379,86 @@ def mark_manual_run(job_id: str, status: JobStatus) -> JobState:
 def get_job_history() -> list[JobExecutionRecord]:
     """Get recent job execution history (most recent first)."""
     return list(reversed(_JOB_EXECUTION_HISTORY))
+
+
+def update_job_progress(
+    job_id: str,
+    files_total: int | None = None,
+    files_processed: int | None = None,
+    current_file: str | None = None,
+) -> None:
+    """Update progress information for a running job.
+
+    Args:
+        job_id: Job identifier
+        files_total: Total number of files to process (optional)
+        files_processed: Number of files processed so far (optional)
+        current_file: Path of file currently being processed (optional)
+    """
+    state = _JOB_STATES.get(job_id)
+    if state:
+        if files_total is not None:
+            state.files_total = files_total
+        if files_processed is not None:
+            state.files_processed = files_processed
+        if current_file is not None:
+            state.current_file = current_file
+
+    # Also update the execution record in history
+    for record in reversed(_JOB_EXECUTION_HISTORY):
+        if record.job_id == job_id and record.status == "running":
+            if files_total is not None:
+                record.files_total = files_total
+            if files_processed is not None:
+                record.files_processed = files_processed
+            break
+
+
+def request_job_cancellation(job_id: str) -> bool:
+    """Request cancellation of a running job.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        True if cancellation was requested, False if job not found or not running
+    """
+    state = _JOB_STATES.get(job_id)
+    if state and state.status == "running":
+        state.cancellation_requested = True
+        state.cancelled_at = datetime.now(UTC)
+        logger.info(f"Cancellation requested for job: {job_id}")
+        return True
+    return False
+
+
+def is_cancellation_requested(job_id: str) -> bool:
+    """Check if cancellation has been requested for a job.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        True if cancellation was requested, False otherwise
+    """
+    state = _JOB_STATES.get(job_id)
+    return state.cancellation_requested if state else False
+
+
+def mark_job_cancelled(job_id: str) -> None:
+    """Mark a job as cancelled (after it has gracefully stopped).
+
+    Args:
+        job_id: Job identifier
+    """
+    state = _JOB_STATES.get(job_id)
+    if state:
+        state.status = "cancelled"
+        state.running_since = None
+        state.cancellation_requested = False
+        # Update execution history
+        _update_execution_record(job_id, "cancelled", "Job was cancelled by user")
+        logger.info(f"Job marked as cancelled: {job_id}")
 
 
 async def cancel_all_running_jobs() -> None:

@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.dependencies import set_scheduler
+from app.dependencies import get_scheduler, set_scheduler
 from app.routers.v1 import auth, dashboard, media, streaming, users
 from app.services.jobs import init_job_tracking
 from app.services.scanner import cleanup_deleted_media, scan_all_libraries
@@ -29,6 +29,12 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+async def scan_all_libraries_job():
+    """Wrapper to call scan_all_libraries with scheduler from global context."""
+    scheduler_instance = get_scheduler()
+    return await scan_all_libraries(scheduler_instance)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: RUF029
     """Application lifespan manager for startup and shutdown events."""
@@ -37,7 +43,7 @@ async def lifespan(app: FastAPI):  # noqa: RUF029
 
     # Schedule periodic scans (every 30 minutes)
     scheduler.add_job(
-        scan_all_libraries,
+        scan_all_libraries_job,
         "interval",
         minutes=30,
         id="library_scanner",

@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,10 +14,23 @@ from app.models import (
     LibrarySchema,
     MediaFile,
     MediaFileSchema,
+    RecommendationRow,
     User,
 )
+from app.services.recommendation_row import apply_filter_criteria
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
+
+
+class HomepageRow(BaseModel):
+    """Schema for homepage row response."""
+
+    playlist_id: int
+    library_id: int
+    library_name: str
+    name: str
+    display_name: str
+    items: list[MediaFileSchema]
 
 
 # Library endpoints (authenticated users - enabled libraries only)
@@ -142,3 +156,171 @@ async def get_media_file(
             detail="Media file not found",
         )
     return media_file
+
+
+# Homepage rows endpoint
+@router.get("/homepage/rows", response_model=list[HomepageRow])
+async def get_homepage_rows(
+    _user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[HomepageRow]:
+    """Get all visible rows for homepage.
+
+    Returns playlists that are visible on homepage, with their filtered media files.
+
+    Args:
+        _user: Authenticated user (dependency)
+        session: Database session
+
+    Returns:
+        List of homepage rows with media files
+    """
+    # Get all recommendation rows visible on homepage from enabled libraries
+    result = await session.execute(
+        select(RecommendationRow, Library)
+        .join(Library, RecommendationRow.library_id == Library.id)
+        .where(RecommendationRow.visible_on_homepage == True, Library.enabled == True)  # noqa: E712
+        .order_by(Library.name, RecommendationRow.name)
+    )
+
+    rows = []
+
+    for recommendation_row, library in result.all():
+        # Build base query
+        query = select(MediaFile)
+        query = apply_filter_criteria(
+            query, recommendation_row.filter_criteria, library.path
+        )
+
+        # Execute query
+        media_result = await session.execute(query)
+        media_files = list(media_result.scalars().all())
+
+        # Determine display name
+        # Replace %LIBRARY_NAME% placeholder with actual library name
+        # Also support backward compatibility with {library_name}
+        display_name = recommendation_row.name
+        if "%LIBRARY_NAME%" in display_name:
+            display_name = display_name.replace("%LIBRARY_NAME%", library.name)
+        elif "{library_name}" in display_name:
+            # Backward compatibility with old format
+            display_name = display_name.replace("{library_name}", library.name)
+
+        rows.append({
+            "playlist_id": recommendation_row.id,
+            "library_id": library.id,
+            "library_name": library.name,
+            "name": recommendation_row.name,
+            "display_name": display_name,
+            "items": [MediaFileSchema.model_validate(mf) for mf in media_files],
+        })
+
+    # Auto-prefix duplicate names with library name
+    # First pass: count occurrences of each display name
+    display_name_counts: dict[str, int] = {}
+    for row in rows:
+        display_name = row["display_name"]
+        display_name_counts[display_name] = display_name_counts.get(display_name, 0) + 1
+
+    # Second pass: prefix duplicates
+    final_rows = []
+    for row in rows:
+        display_name = row["display_name"]
+
+        # If this name appears multiple times, prefix with library name
+        if display_name_counts[display_name] > 1:
+            display_name = f"{row['library_name']} - {display_name}"
+
+        final_rows.append(
+            HomepageRow(
+                playlist_id=row["playlist_id"],
+                library_id=row["library_id"],
+                library_name=row["library_name"],
+                name=row["name"],
+                display_name=display_name,
+                items=row["items"],
+            )
+        )
+
+    return final_rows
+
+
+# Library rows endpoint
+@router.get("/libraries/{library_id}/rows", response_model=list[HomepageRow])
+async def get_library_rows(
+    library_id: int,
+    _user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[HomepageRow]:
+    """Get rows for a specific library (for Library View "Recommended" tab).
+
+    Args:
+        library_id: Library ID
+        _user: Authenticated user (dependency)
+        session: Database session
+
+    Returns:
+        List of rows with media files for the library
+
+    Raises:
+        HTTPException: If library not found or is disabled
+    """
+    # Get the library
+    library = await session.get(Library, library_id)
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    if not library.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Library is disabled",
+        )
+
+    # Get recommendation rows visible in recommended tab
+    result = await session.execute(
+        select(RecommendationRow)
+        .where(
+            RecommendationRow.library_id == library_id,
+            RecommendationRow.visible_on_recommend,
+        )
+        .order_by(RecommendationRow.name)
+    )
+
+    rows = []
+
+    for recommendation_row in result.scalars().all():
+        # Build base query
+        query = select(MediaFile)
+        query = apply_filter_criteria(
+            query, recommendation_row.filter_criteria, library.path
+        )
+
+        # Execute query
+        media_result = await session.execute(query)
+        media_files = list(media_result.scalars().all())
+
+        # Determine display name
+        # Replace %LIBRARY_NAME% placeholder with actual library name
+        # Also support backward compatibility with {library_name}
+        display_name = recommendation_row.name
+        if "%LIBRARY_NAME%" in display_name:
+            display_name = display_name.replace("%LIBRARY_NAME%", library.name)
+        elif "{library_name}" in display_name:
+            # Backward compatibility with old format
+            display_name = display_name.replace("{library_name}", library.name)
+
+        rows.append(
+            HomepageRow(
+                playlist_id=recommendation_row.id,
+                library_id=library.id,
+                library_name=library.name,
+                name=recommendation_row.name,
+                display_name=display_name,
+                items=[MediaFileSchema.model_validate(mf) for mf in media_files],
+            )
+        )
+
+    return rows

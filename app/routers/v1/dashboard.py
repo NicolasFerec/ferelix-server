@@ -17,6 +17,10 @@ from app.models import (
     LibraryCreate,
     LibrarySchema,
     LibraryUpdate,
+    RecommendationRow,
+    RecommendationRowCreate,
+    RecommendationRowSchema,
+    RecommendationRowUpdate,
     User,
     UserSchema,
     UserUpdate,
@@ -28,6 +32,7 @@ from app.services.jobs import (
     get_job_state,
     get_job_states,
 )
+from app.services.recommendation_row import validate_filter_criteria
 from app.services.scanner import schedule_library_scan
 from app.version import get_version_info
 
@@ -103,6 +108,22 @@ async def create_library(
     session.add(library_path)
     await session.commit()
     await session.refresh(library_path)
+
+    # Automatically create "Recently Added" recommendation row for the new library
+    recently_added_row = RecommendationRow(
+        library_id=library_path.id,
+        name="Recently Added in %LIBRARY_NAME%",
+        filter_criteria={
+            "order_by": "scanned_at",
+            "order": "DESC",
+            "limit": 20,
+        },
+        visible_on_homepage=True,
+        visible_on_recommend=True,
+        is_special=True,
+    )
+    session.add(recently_added_row)
+    await session.commit()
 
     # Trigger scan for the newly created library
     schedule_library_scan(scheduler, library_path.id, library_path.name)
@@ -671,6 +692,428 @@ async def delete_user(
         )
 
     await session.delete(user)
+    await session.commit()
+
+
+# ============================================================================
+# Recommendation Row Management Endpoints (Admin Only)
+# ============================================================================
+
+
+@router.get("/recommendation-rows", response_model=list[RecommendationRowSchema])
+async def get_recommendation_rows(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    skip: int = 0,
+    limit: int = 100,
+) -> list[RecommendationRow]:
+    """List all recommendation rows (admin only).
+
+    Args:
+        session: Database session
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+
+    Returns:
+        List of recommendation rows
+    """
+    result = await session.execute(select(RecommendationRow).offset(skip).limit(limit))
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/recommendation-rows",
+    response_model=RecommendationRowSchema,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_recommendation_row(
+    row_data: RecommendationRowCreate,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecommendationRow:
+    """Create a new recommendation row (admin only).
+
+    Args:
+        row_data: Recommendation row creation data
+        session: Database session
+
+    Returns:
+        Created recommendation row
+
+    Raises:
+        HTTPException: If library not found or filter criteria is invalid
+    """
+    # Validate library exists
+    library = await session.get(Library, row_data.library_id)
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    # Validate filter criteria
+    try:
+        validate_filter_criteria(row_data.filter_criteria)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid filter criteria: {e}",
+        )
+
+    recommendation_row = RecommendationRow(
+        library_id=row_data.library_id,
+        name=row_data.name,
+        filter_criteria=row_data.filter_criteria,
+        visible_on_homepage=row_data.visible_on_homepage,
+        visible_on_recommend=row_data.visible_on_recommend,
+        is_special=False,
+    )
+    session.add(recommendation_row)
+    await session.commit()
+    await session.refresh(recommendation_row)
+
+    return recommendation_row
+
+
+@router.get("/recommendation-rows/{row_id}", response_model=RecommendationRowSchema)
+async def get_recommendation_row(
+    row_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecommendationRow:
+    """Get recommendation row by ID (admin only).
+
+    Args:
+        row_id: Recommendation row ID
+        session: Database session
+
+    Returns:
+        Recommendation row details
+
+    Raises:
+        HTTPException: If recommendation row not found
+    """
+    recommendation_row = await session.get(RecommendationRow, row_id)
+    if not recommendation_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recommendation row not found",
+        )
+    return recommendation_row
+
+
+@router.patch("/recommendation-rows/{row_id}", response_model=RecommendationRowSchema)
+async def update_recommendation_row(
+    row_id: int,
+    update_data: RecommendationRowUpdate,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecommendationRow:
+    """Update a recommendation row (admin only).
+
+    Args:
+        row_id: Recommendation row ID
+        update_data: Recommendation row update data
+        session: Database session
+
+    Returns:
+        Updated recommendation row
+
+    Raises:
+        HTTPException: If recommendation row not found or filter criteria is invalid
+    """
+    recommendation_row = await session.get(RecommendationRow, row_id)
+    if not recommendation_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recommendation row not found",
+        )
+
+    # Update fields if provided
+    if update_data.name is not None:
+        recommendation_row.name = update_data.name
+
+    if update_data.filter_criteria is not None:
+        # Validate filter criteria
+        try:
+            validate_filter_criteria(update_data.filter_criteria)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid filter criteria: {e}",
+            )
+        recommendation_row.filter_criteria = update_data.filter_criteria
+
+    if update_data.visible_on_homepage is not None:
+        recommendation_row.visible_on_homepage = update_data.visible_on_homepage
+
+    if update_data.visible_on_recommend is not None:
+        recommendation_row.visible_on_recommend = update_data.visible_on_recommend
+
+    session.add(recommendation_row)
+    await session.commit()
+    await session.refresh(recommendation_row)
+
+    return recommendation_row
+
+
+@router.delete("/recommendation-rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_recommendation_row(
+    row_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    """Delete a recommendation row (admin only).
+
+    Args:
+        row_id: Recommendation row ID
+        session: Database session
+
+    Raises:
+        HTTPException: If recommendation row not found or is special (cannot be deleted)
+    """
+    recommendation_row = await session.get(RecommendationRow, row_id)
+    if not recommendation_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recommendation row not found",
+        )
+
+    if recommendation_row.is_special:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete special recommendation rows",
+        )
+
+    await session.delete(recommendation_row)
+    await session.commit()
+
+
+# ============================================================================
+# Library-specific Recommendation Row Management Endpoints
+# ============================================================================
+
+
+@router.get(
+    "/libraries/{library_id}/recommendation-rows",
+    response_model=list[RecommendationRowSchema],
+)
+async def get_library_recommendation_rows(
+    library_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[RecommendationRow]:
+    """Get recommendation rows for a specific library (admin only).
+
+    Args:
+        library_id: Library ID
+        session: Database session
+
+    Returns:
+        List of recommendation rows for the library
+
+    Raises:
+        HTTPException: If library not found
+    """
+    # Validate library exists
+    library = await session.get(Library, library_id)
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    result = await session.execute(
+        select(RecommendationRow)
+        .where(RecommendationRow.library_id == library_id)
+        .order_by(RecommendationRow.name)
+    )
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/libraries/{library_id}/recommendation-rows",
+    response_model=RecommendationRowSchema,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_library_recommendation_row(
+    library_id: int,
+    row_data: RecommendationRowCreate,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecommendationRow:
+    """Add a recommendation row to a library (admin only).
+
+    Creates a new recommendation row or associates an existing one.
+
+    Args:
+        library_id: Library ID
+        row_data: Recommendation row data (library_id in body must match path param)
+        session: Database session
+
+    Returns:
+        Created or updated recommendation row
+
+    Raises:
+        HTTPException: If library not found or library_id mismatch
+    """
+    # Validate library exists
+    library = await session.get(Library, library_id)
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    # Ensure library_id matches
+    if row_data.library_id != library_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Library ID in body must match path parameter",
+        )
+
+    # Validate filter criteria
+    try:
+        validate_filter_criteria(row_data.filter_criteria)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid filter criteria: {e}",
+        )
+
+    recommendation_row = RecommendationRow(
+        library_id=row_data.library_id,
+        name=row_data.name,
+        filter_criteria=row_data.filter_criteria,
+        visible_on_homepage=row_data.visible_on_homepage,
+        visible_on_recommend=row_data.visible_on_recommend,
+        is_special=False,
+    )
+    session.add(recommendation_row)
+    await session.commit()
+    await session.refresh(recommendation_row)
+
+    return recommendation_row
+
+
+@router.patch(
+    "/libraries/{library_id}/recommendation-rows/{row_id}",
+    response_model=RecommendationRowSchema,
+)
+async def update_library_recommendation_row(
+    library_id: int,
+    row_id: int,
+    update_data: RecommendationRowUpdate,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> RecommendationRow:
+    """Update a recommendation row's visibility for a library (admin only).
+
+    Args:
+        library_id: Library ID
+        row_id: Recommendation row ID
+        update_data: Update data (typically visibility flags)
+        session: Database session
+
+    Returns:
+        Updated recommendation row
+
+    Raises:
+        HTTPException: If library or row not found, or row doesn't belong to library
+    """
+    # Validate library exists
+    library = await session.get(Library, library_id)
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    recommendation_row = await session.get(RecommendationRow, row_id)
+    if not recommendation_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recommendation row not found",
+        )
+
+    if recommendation_row.library_id != library_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recommendation row does not belong to this library",
+        )
+
+    # Update fields if provided
+    if update_data.name is not None:
+        recommendation_row.name = update_data.name
+
+    if update_data.filter_criteria is not None:
+        if recommendation_row.is_special:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot modify filter criteria for special recommendation rows",
+            )
+        # Validate filter criteria
+        try:
+            validate_filter_criteria(update_data.filter_criteria)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid filter criteria: {e}",
+            )
+        recommendation_row.filter_criteria = update_data.filter_criteria
+
+    if update_data.visible_on_homepage is not None:
+        recommendation_row.visible_on_homepage = update_data.visible_on_homepage
+
+    if update_data.visible_on_recommend is not None:
+        recommendation_row.visible_on_recommend = update_data.visible_on_recommend
+
+    session.add(recommendation_row)
+    await session.commit()
+    await session.refresh(recommendation_row)
+
+    return recommendation_row
+
+
+@router.delete(
+    "/libraries/{library_id}/recommendation-rows/{row_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_library_recommendation_row(
+    library_id: int,
+    row_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    """Remove a recommendation row from a library (admin only).
+
+    Args:
+        library_id: Library ID
+        row_id: Recommendation row ID
+        session: Database session
+
+    Raises:
+        HTTPException: If library or row not found, or row is special
+    """
+    # Validate library exists
+    library = await session.get(Library, library_id)
+    if not library:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Library not found",
+        )
+
+    recommendation_row = await session.get(RecommendationRow, row_id)
+    if not recommendation_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recommendation row not found",
+        )
+
+    if recommendation_row.library_id != library_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recommendation row does not belong to this library",
+        )
+
+    if recommendation_row.is_special:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete special recommendation rows",
+        )
+
+    await session.delete(recommendation_row)
     await session.commit()
 
 

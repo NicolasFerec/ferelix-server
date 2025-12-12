@@ -8,6 +8,12 @@ from .library import (
     LibraryUpdate,
 )
 from .media_file import MediaFile, MediaFileSchema
+from .recommendation_row import (
+    RecommendationRow,
+    RecommendationRowCreate,
+    RecommendationRowSchema,
+    RecommendationRowUpdate,
+)
 from .refresh_token import RefreshToken
 from .user import User, UserCreate, UserSchema, UserUpdate
 
@@ -19,6 +25,10 @@ __all__ = [
     "LibraryUpdate",
     "MediaFile",
     "MediaFileSchema",
+    "RecommendationRow",
+    "RecommendationRowCreate",
+    "RecommendationRowSchema",
+    "RecommendationRowUpdate",
     "RefreshToken",
     "User",
     "UserCreate",

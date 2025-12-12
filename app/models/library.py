@@ -1,12 +1,16 @@
 """LibraryPath model and schema."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Boolean, DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from .recommendation_row import RecommendationRow
 
 
 class Library(Base):
@@ -20,6 +24,11 @@ class Library(Base):
     library_type: Mapped[str] = mapped_column(String, default="movie")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    # Relationship
+    recommendation_rows: Mapped[list[RecommendationRow]] = relationship(
+        "RecommendationRow", back_populates="library"
+    )
 
 
 class LibrarySchema(BaseModel):

@@ -3,8 +3,8 @@
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import DateTime, Float, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 
@@ -35,6 +35,17 @@ class MediaFile(Base):
         DateTime, nullable=True, default=None
     )
 
+    # Relationships
+    video_tracks: Mapped[list[VideoTrack]] = relationship(
+        back_populates="media_file", cascade="all, delete-orphan"
+    )
+    audio_tracks: Mapped[list[AudioTrack]] = relationship(
+        back_populates="media_file", cascade="all, delete-orphan"
+    )
+    subtitle_tracks: Mapped[list[SubtitleTrack]] = relationship(
+        back_populates="media_file", cascade="all, delete-orphan"
+    )
+
 
 class MediaFileSchema(BaseModel):
     """Schema for MediaFile API responses."""
@@ -55,3 +66,113 @@ class MediaFileSchema(BaseModel):
     updated_at: datetime
     scanned_at: datetime
     deleted_at: datetime | None = None
+    video_tracks: list[VideoTrackSchema] = []
+    audio_tracks: list[AudioTrackSchema] = []
+    subtitle_tracks: list[SubtitleTrackSchema] = []
+
+
+class VideoTrack(Base):
+    """Video track information extracted from media files."""
+
+    __tablename__ = "video_track"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"))
+    stream_index: Mapped[int] = mapped_column(Integer)
+    codec: Mapped[str] = mapped_column(String)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    language: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Relationship
+    media_file: Mapped[MediaFile] = relationship(back_populates="video_tracks")
+
+
+class AudioTrack(Base):
+    """Audio track information extracted from media files."""
+
+    __tablename__ = "audio_track"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"))
+    stream_index: Mapped[int] = mapped_column(Integer)
+    codec: Mapped[str] = mapped_column(String)
+    language: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Relationship
+    media_file: Mapped[MediaFile] = relationship(back_populates="audio_tracks")
+
+
+class SubtitleTrack(Base):
+    """Subtitle track information extracted from media files."""
+
+    __tablename__ = "subtitle_track"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"))
+    stream_index: Mapped[int] = mapped_column(Integer)
+    codec: Mapped[str] = mapped_column(String)
+    language: Mapped[str | None] = mapped_column(String, nullable=True)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_forced: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Relationship
+    media_file: Mapped[MediaFile] = relationship(back_populates="subtitle_tracks")
+
+
+class VideoTrackSchema(BaseModel):
+    """Schema for VideoTrack API responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    media_file_id: int
+    stream_index: int
+    codec: str
+    width: int | None = None
+    height: int | None = None
+    bitrate: int | None = None
+    fps: float | None = None
+    language: str | None = None
+    title: str | None = None
+    is_default: bool
+
+
+class AudioTrackSchema(BaseModel):
+    """Schema for AudioTrack API responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    media_file_id: int
+    stream_index: int
+    codec: str
+    language: str | None = None
+    title: str | None = None
+    channels: int | None = None
+    bitrate: int | None = None
+    is_default: bool
+
+
+class SubtitleTrackSchema(BaseModel):
+    """Schema for SubtitleTrack API responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    media_file_id: int
+    stream_index: int
+    codec: str
+    language: str | None = None
+    title: str | None = None
+    is_forced: bool
+    is_default: bool

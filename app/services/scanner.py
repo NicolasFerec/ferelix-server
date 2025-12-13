@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
-from app.models import Library, MediaFile
+from app.models import AudioTrack, Library, MediaFile, SubtitleTrack, VideoTrack
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +20,27 @@ logger = logging.getLogger(__name__)
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".flv", ".wmv"}
 
 
-def extract_video_metadata(file_path: Path) -> dict:
+def _parse_fps(r_frame_rate: str | None) -> float | None:
+    """Parse frame rate from ffprobe format (e.g., '30/1' or '30000/1001')."""
+    if not r_frame_rate or "/" not in str(r_frame_rate):
+        return None
+    try:
+        parts = str(r_frame_rate).split("/")
+        if len(parts) == 2:
+            numerator = float(parts[0])
+            denominator = float(parts[1])
+            if denominator != 0:
+                return numerator / denominator
+    except ValueError, ZeroDivisionError:
+        pass
+    return None
+
+
+def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
     """Extract video metadata using ffprobe.
 
-    Returns a dictionary with duration, width, height, codec, and bitrate.
+    Returns a dictionary with duration, width, height, codec, bitrate,
+    and track information (video_tracks, audio_tracks, subtitle_tracks).
     """
     try:
         result = subprocess.run(
@@ -48,13 +65,6 @@ def extract_video_metadata(file_path: Path) -> dict:
 
         data = json.loads(result.stdout)
 
-        # Find video stream
-        video_stream = None
-        for stream in data.get("streams", []):
-            if stream.get("codec_type") == "video":
-                video_stream = stream
-                break
-
         metadata = {}
 
         # Extract format information
@@ -64,14 +74,65 @@ def extract_video_metadata(file_path: Path) -> dict:
         if "bit_rate" in format_info:
             metadata["bitrate"] = int(format_info["bit_rate"])
 
-        # Extract video stream information
-        if video_stream:
-            if "width" in video_stream:
-                metadata["width"] = int(video_stream["width"])
-            if "height" in video_stream:
-                metadata["height"] = int(video_stream["height"])
-            if "codec_name" in video_stream:
-                metadata["codec"] = video_stream["codec_name"]
+        # Extract video tracks
+        video_tracks = []
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "video":
+                track = {
+                    "stream_index": stream.get("index"),
+                    "codec": stream.get("codec_name"),
+                    "width": stream.get("width"),
+                    "height": stream.get("height"),
+                    "bitrate": stream.get("bit_rate"),
+                    "fps": _parse_fps(stream.get("r_frame_rate")),
+                    "language": stream.get("tags", {}).get("language"),
+                    "title": stream.get("tags", {}).get("title"),
+                    "is_default": stream.get("disposition", {}).get("default", 0) == 1,
+                }
+                video_tracks.append(track)
+
+        # Extract audio tracks
+        audio_tracks = []
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "audio":
+                track = {
+                    "stream_index": stream.get("index"),
+                    "codec": stream.get("codec_name"),
+                    "language": stream.get("tags", {}).get("language"),
+                    "title": stream.get("tags", {}).get("title"),
+                    "channels": stream.get("channels"),
+                    "bitrate": stream.get("bit_rate"),
+                    "is_default": stream.get("disposition", {}).get("default", 0) == 1,
+                }
+                audio_tracks.append(track)
+
+        # Extract subtitle tracks
+        subtitle_tracks = []
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "subtitle":
+                track = {
+                    "stream_index": stream.get("index"),
+                    "codec": stream.get("codec_name"),
+                    "language": stream.get("tags", {}).get("language"),
+                    "title": stream.get("tags", {}).get("title"),
+                    "is_forced": stream.get("disposition", {}).get("forced", 0) == 1,
+                    "is_default": stream.get("disposition", {}).get("default", 0) == 1,
+                }
+                subtitle_tracks.append(track)
+
+        # Keep legacy fields for compatibility (use first video track)
+        if video_tracks:
+            first_video = video_tracks[0]
+            if first_video.get("width"):
+                metadata["width"] = int(first_video["width"])
+            if first_video.get("height"):
+                metadata["height"] = int(first_video["height"])
+            if first_video.get("codec"):
+                metadata["codec"] = first_video["codec"]
+
+        metadata["video_tracks"] = video_tracks
+        metadata["audio_tracks"] = audio_tracks
+        metadata["subtitle_tracks"] = subtitle_tracks
 
         return metadata
 
@@ -84,6 +145,79 @@ def extract_video_metadata(file_path: Path) -> dict:
     except Exception as e:
         logger.error(f"Error extracting metadata for {file_path}: {e}")
         return {}
+
+
+async def _update_media_tracks(
+    session: AsyncSession, media_file: MediaFile, metadata: dict
+) -> None:
+    """Create or update track records for a media file.
+
+    Args:
+        session: Database session
+        media_file: MediaFile instance
+        metadata: Metadata dictionary with video_tracks, audio_tracks, subtitle_tracks
+    """
+    # Delete existing tracks
+    video_tracks_to_delete = await session.scalars(
+        select(VideoTrack).where(VideoTrack.media_file_id == media_file.id)
+    )
+    for track in video_tracks_to_delete:
+        await session.delete(track)
+
+    audio_tracks_to_delete = await session.scalars(
+        select(AudioTrack).where(AudioTrack.media_file_id == media_file.id)
+    )
+    for track in audio_tracks_to_delete:
+        await session.delete(track)
+
+    subtitle_tracks_to_delete = await session.scalars(
+        select(SubtitleTrack).where(SubtitleTrack.media_file_id == media_file.id)
+    )
+    for track in subtitle_tracks_to_delete:
+        await session.delete(track)
+
+    # Create video tracks
+    for track_data in metadata.get("video_tracks", []):
+        video_track = VideoTrack(
+            media_file_id=media_file.id,
+            stream_index=track_data.get("stream_index", 0),
+            codec=track_data.get("codec", "unknown"),
+            width=track_data.get("width"),
+            height=track_data.get("height"),
+            bitrate=track_data.get("bitrate"),
+            fps=track_data.get("fps"),
+            language=track_data.get("language"),
+            title=track_data.get("title"),
+            is_default=track_data.get("is_default", False),
+        )
+        session.add(video_track)
+
+    # Create audio tracks
+    for track_data in metadata.get("audio_tracks", []):
+        audio_track = AudioTrack(
+            media_file_id=media_file.id,
+            stream_index=track_data.get("stream_index", 0),
+            codec=track_data.get("codec", "unknown"),
+            language=track_data.get("language"),
+            title=track_data.get("title"),
+            channels=track_data.get("channels"),
+            bitrate=track_data.get("bitrate"),
+            is_default=track_data.get("is_default", False),
+        )
+        session.add(audio_track)
+
+    # Create subtitle tracks
+    for track_data in metadata.get("subtitle_tracks", []):
+        subtitle_track = SubtitleTrack(
+            media_file_id=media_file.id,
+            stream_index=track_data.get("stream_index", 0),
+            codec=track_data.get("codec", "unknown"),
+            language=track_data.get("language"),
+            title=track_data.get("title"),
+            is_forced=track_data.get("is_forced", False),
+            is_default=track_data.get("is_default", False),
+        )
+        session.add(subtitle_track)
 
 
 async def scan_library_path(  # noqa: C901
@@ -190,6 +324,10 @@ async def scan_library_path(  # noqa: C901
             else:
                 updated_files_count += 1
 
+            # Extract metadata and update tracks
+            metadata = extract_video_metadata(file_path)
+            await _update_media_tracks(session, existing_file, metadata)
+
             # Update scanned_at timestamp
             existing_file.scanned_at = datetime.now(UTC)
             session.add(existing_file)
@@ -213,6 +351,12 @@ async def scan_library_path(  # noqa: C901
             )
 
             session.add(media_file)
+            # Flush to get the ID
+            await session.flush()
+
+            # Create tracks
+            await _update_media_tracks(session, media_file, metadata)
+
             new_files_count += 1
             pending_changes += 1
 

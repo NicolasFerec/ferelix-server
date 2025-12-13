@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.dependencies import get_current_active_user
@@ -90,6 +91,11 @@ async def get_library_items(
     # Exclude soft-deleted files
     result = await session.execute(
         select(MediaFile)
+        .options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
         .where(
             MediaFile.file_path.startswith(library_path.path),
             MediaFile.deleted_at.is_(None),
@@ -122,6 +128,11 @@ async def get_media_files(
     # Exclude soft-deleted files
     result = await session.execute(
         select(MediaFile)
+        .options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
         .where(MediaFile.deleted_at.is_(None))
         .offset(skip)
         .limit(limit)
@@ -135,8 +146,8 @@ async def get_media_file(
     media_id: int,
     _user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> MediaFile:
-    """Get a specific media file by ID.
+) -> MediaFileSchema:
+    """Get a specific media file by ID with track information.
 
     Args:
         media_id: Media file ID
@@ -144,18 +155,29 @@ async def get_media_file(
         session: Database session
 
     Returns:
-        Media file details
+        Media file details with tracks
 
     Raises:
         HTTPException: If media file not found or is deleted
     """
-    media_file = await session.get(MediaFile, media_id)
+    result = await session.execute(
+        select(MediaFile)
+        .options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
+        .where(MediaFile.id == media_id)
+    )
+    media_file = result.scalar_one_or_none()
+
     if not media_file or media_file.deleted_at is not None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Media file not found",
         )
-    return media_file
+
+    return MediaFileSchema.model_validate(media_file)
 
 
 # Homepage rows endpoint
@@ -186,8 +208,12 @@ async def get_homepage_rows(
     rows = []
 
     for recommendation_row, library in result.all():
-        # Build base query
-        query = select(MediaFile)
+        # Build base query with eager loading of tracks
+        query = select(MediaFile).options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
         query = apply_filter_criteria(
             query, recommendation_row.filter_criteria, library.path
         )
@@ -292,8 +318,12 @@ async def get_library_rows(
     rows = []
 
     for recommendation_row in result.scalars().all():
-        # Build base query
-        query = select(MediaFile)
+        # Build base query with eager loading of tracks
+        query = select(MediaFile).options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
         query = apply_filter_criteria(
             query, recommendation_row.filter_criteria, library.path
         )

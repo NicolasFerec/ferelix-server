@@ -7,7 +7,16 @@ from .library import (
     LibrarySchema,
     LibraryUpdate,
 )
-from .media_file import MediaFile, MediaFileSchema
+from .media_file import (
+    AudioTrack,
+    AudioTrackSchema,
+    MediaFile,
+    MediaFileSchema,
+    SubtitleTrack,
+    SubtitleTrackSchema,
+    VideoTrack,
+    VideoTrackSchema,
+)
 from .recommendation_row import (
     RecommendationRow,
     RecommendationRowCreate,
@@ -23,6 +32,8 @@ from .settings import (
 from .user import User, UserCreate, UserSchema, UserUpdate
 
 __all__ = [
+    "AudioTrack",
+    "AudioTrackSchema",
     "Base",
     "Library",
     "LibraryCreate",
@@ -38,8 +49,12 @@ __all__ = [
     "Settings",
     "SettingsSchema",
     "SettingsUpdate",
+    "SubtitleTrack",
+    "SubtitleTrackSchema",
     "User",
     "UserCreate",
     "UserSchema",
     "UserUpdate",
+    "VideoTrack",
+    "VideoTrackSchema",
 ]

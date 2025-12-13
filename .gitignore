@@ -37,6 +37,7 @@ env/
 
 # Database
 *.db
+*.db-shm
 *.db-journal
 *.sqlite
 *.sqlite3
@@ -66,3 +67,4 @@ dmypy.json
 app/static/
 .github_token
 version.json
+transcoding_cache/

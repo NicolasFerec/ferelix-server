@@ -38,6 +38,34 @@ jobs:
           echo '{"commit":"${{ github.sha }}","branch":"${{ github.ref_name }}"}' > version.json
           cat version.json
 
+      # --- Get frontend release info for cache-busting ---
+      - name: Get frontend release info
+        id: frontend
+        run: |
+          # Try to fetch the latest release tag from the frontend repository
+          RELEASE_RESPONSE=$(curl -sf https://api.github.com/repos/NicolasFerec/ferelix-client-web/releases/latest || echo "")
+          if [ -n "$RELEASE_RESPONSE" ]; then
+            FRONTEND_TAG=$(echo "$RELEASE_RESPONSE" | grep -o '"tag_name":"[^"]*' | head -1 | cut -d'"' -f4)
+            if [ -n "$FRONTEND_TAG" ] && [ "$FRONTEND_TAG" != "null" ]; then
+              FRONTEND_CACHE_BUST="$FRONTEND_TAG"
+              echo "Using frontend release tag: $FRONTEND_TAG"
+            else
+              # Fallback to latest commit SHA
+              COMMIT_RESPONSE=$(curl -sf https://api.github.com/repos/NicolasFerec/ferelix-client-web/commits/main || echo "")
+              FRONTEND_SHA=$(echo "$COMMIT_RESPONSE" | grep -o '"sha":"[^"]*' | head -1 | cut -d'"' -f4 | cut -c1-7)
+              FRONTEND_CACHE_BUST="${FRONTEND_SHA:-$(date +%s)}"
+              echo "Using frontend commit SHA: $FRONTEND_SHA"
+            fi
+          else
+            # If API call fails, use latest commit SHA or timestamp as fallback
+            COMMIT_RESPONSE=$(curl -sf https://api.github.com/repos/NicolasFerec/ferelix-client-web/commits/main || echo "")
+            FRONTEND_SHA=$(echo "$COMMIT_RESPONSE" | grep -o '"sha":"[^"]*' | head -1 | cut -d'"' -f4 | cut -c1-7)
+            FRONTEND_CACHE_BUST="${FRONTEND_SHA:-$(date +%s)}"
+            echo "API call failed, using commit SHA or timestamp: $FRONTEND_CACHE_BUST"
+          fi
+          echo "frontend_cache_bust=$FRONTEND_CACHE_BUST" >> $GITHUB_OUTPUT
+          echo "Frontend cache-bust value: $FRONTEND_CACHE_BUST"
+
       # --- Set up QEMU and Buildx only for multi-platform builds ---
       - name: Set up QEMU
         if: ${{ inputs.platforms == 'linux/amd64,linux/arm64' || startsWith(github.ref, 'refs/tags/v') }}
@@ -83,3 +111,4 @@ jobs:
           sbom: ${{ startsWith(github.ref, 'refs/tags/v') }}
           build-args: |
             FRONT_RELEASE=rolling
+            FRONTEND_CACHE_BUST=${{ steps.frontend.outputs.frontend_cache_bust }}

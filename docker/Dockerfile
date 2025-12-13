@@ -45,13 +45,14 @@ USER root
 
 # Download frontend static files from public GitHub release
 ARG FRONT_RELEASE=rolling
+ARG FRONTEND_CACHE_BUST
 RUN mkdir -p /app/app/static \
     && curl -fSL -o /tmp/dist.zip \
       "https://github.com/NicolasFerec/ferelix-client-web/releases/download/${FRONT_RELEASE}/dist.zip" \
     && unzip /tmp/dist.zip -d /app/app/static \
     && rm /tmp/dist.zip \
     && chown -R ferelix:ferelix /app/app/static \
-    && echo "Frontend downloaded successfully"
+    && echo "Frontend downloaded successfully (cache-bust: ${FRONTEND_CACHE_BUST})"
 
 # Copy and set up entrypoint
 COPY docker/docker-entrypoint.sh /usr/local/bin/

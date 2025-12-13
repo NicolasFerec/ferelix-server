@@ -21,6 +21,9 @@ from app.models import (
     RecommendationRowCreate,
     RecommendationRowSchema,
     RecommendationRowUpdate,
+    Settings,
+    SettingsSchema,
+    SettingsUpdate,
     User,
     UserSchema,
     UserUpdate,
@@ -1115,6 +1118,104 @@ async def remove_library_recommendation_row(
 
     await session.delete(recommendation_row)
     await session.commit()
+
+
+# ============================================================================
+# Settings Management Endpoints (Admin Only)
+# ============================================================================
+
+
+@router.get("/settings", response_model=SettingsSchema)
+async def get_settings(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Settings:
+    """Get application settings (admin only).
+
+    Returns:
+        Current application settings
+    """
+    settings = await session.get(Settings, 1)
+    if not settings:
+        # Create default settings if they don't exist
+        settings = Settings()
+        session.add(settings)
+        await session.commit()
+        await session.refresh(settings)
+    return settings
+
+
+@router.patch("/settings", response_model=SettingsSchema)
+async def update_settings(
+    update_data: SettingsUpdate,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
+) -> Settings:
+    """Update application settings (admin only).
+
+    Args:
+        update_data: Settings update data
+        session: Database session
+        scheduler: APScheduler instance
+
+    Returns:
+        Updated settings
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    from app.services.settings import update_scheduler_jobs
+
+    settings = await session.get(Settings, 1)
+    if not settings:
+        # Create default settings if they don't exist
+        settings = Settings()
+        session.add(settings)
+        await session.commit()
+        await session.refresh(settings)
+
+    # Update fields if provided
+    if update_data.library_scan_interval_minutes is not None:
+        if update_data.library_scan_interval_minutes < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Library scan interval must be at least 1 minute",
+            )
+        settings.library_scan_interval_minutes = (
+            update_data.library_scan_interval_minutes
+        )
+
+    if update_data.cleanup_schedule_hour is not None:
+        if not 0 <= update_data.cleanup_schedule_hour <= 23:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cleanup schedule hour must be between 0 and 23",
+            )
+        settings.cleanup_schedule_hour = update_data.cleanup_schedule_hour
+
+    if update_data.cleanup_schedule_minute is not None:
+        if not 0 <= update_data.cleanup_schedule_minute <= 59:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cleanup schedule minute must be between 0 and 59",
+            )
+        settings.cleanup_schedule_minute = update_data.cleanup_schedule_minute
+
+    if update_data.cleanup_grace_period_days is not None:
+        if update_data.cleanup_grace_period_days < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cleanup grace period must be at least 1 day",
+            )
+        settings.cleanup_grace_period_days = update_data.cleanup_grace_period_days
+
+    session.add(settings)
+    await session.commit()
+    await session.refresh(settings)
+
+    # Update scheduler jobs with new settings
+    update_scheduler_jobs(scheduler, settings)
+
+    return settings
 
 
 # ============================================================================

@@ -15,6 +15,11 @@ from .recommendation_row import (
     RecommendationRowUpdate,
 )
 from .refresh_token import RefreshToken
+from .settings import (
+    Settings,
+    SettingsSchema,
+    SettingsUpdate,
+)
 from .user import User, UserCreate, UserSchema, UserUpdate
 
 __all__ = [
@@ -30,6 +35,9 @@ __all__ = [
     "RecommendationRowSchema",
     "RecommendationRowUpdate",
     "RefreshToken",
+    "Settings",
+    "SettingsSchema",
+    "SettingsUpdate",
     "User",
     "UserCreate",
     "UserSchema",

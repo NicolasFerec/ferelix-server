@@ -90,8 +90,17 @@ media/
 *.webm
 *.m4v
 
+
+# Database
+*.db
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+
 # Config (should be mounted as volume)
 config/
-ferelix.db
 
+# Project specific# Specific
 app/static/
+transcode_cache/

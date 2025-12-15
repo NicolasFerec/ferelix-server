@@ -67,4 +67,4 @@ dmypy.json
 app/static/
 .github_token
 version.json
-transcoding_cache/
+transcode_cache/

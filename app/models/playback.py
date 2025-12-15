@@ -37,6 +37,10 @@ class TranscodeReason(StrEnum):
     AUDIO_SAMPLE_RATE_NOT_SUPPORTED = "AudioSampleRateNotSupported"
     AUDIO_BITRATE_NOT_SUPPORTED = "AudioBitrateNotSupported"
 
+    # Audio-related reasons
+    VIDEO_DISABLED = "VideoDisabled"
+    AUDIO_TRANSCODE_REQUIRED = "AudioTranscodeRequired"
+
     # Other reasons
     DIRECT_PLAY_ERROR = "DirectPlayError"
     UNKNOWN_VIDEO_STREAM_INFO = "UnknownVideoStreamInfo"
@@ -122,6 +126,18 @@ class PlaybackInfoRequest(BaseModel):
     IsPlayback: bool = True
 
 
+class TranscodeSettings(BaseModel):
+    """Settings for transcoding operations."""
+
+    VideoCodec: str | None = None  # "h264", "hevc", "copy"
+    AudioCodec: str | None = None  # "aac", "mp3", "copy"
+    VideoBitrate: int | None = None
+    AudioBitrate: int | None = None
+    MaxWidth: int | None = None
+    MaxHeight: int | None = None
+    IsRemuxOnly: bool = False  # True for container conversion only
+
+
 class StreamInfo(BaseModel):
     """Information about how a media file should be streamed."""
 
@@ -135,6 +151,9 @@ class StreamInfo(BaseModel):
     # Playback method decision
     PlayMethod: PlayMethod
     TranscodeReasons: list[TranscodeReason] = []
+    IsRemuxOnly: bool = (
+        False  # True if only container conversion needed (fast DirectStream)
+    )
 
     # Stream URLs
     DirectStreamUrl: str | None = None
@@ -151,6 +170,7 @@ class StreamInfo(BaseModel):
     TranscodingContainer: str | None = None
     TranscodingVideoCodec: str | None = None
     TranscodingAudioCodec: str | None = None
+    TranscodeSettings: Any = None
 
     # Runtime info
     RunTimeTicks: int | None = None  # Duration in 100-nanosecond ticks

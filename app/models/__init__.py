@@ -29,6 +29,11 @@ from .settings import (
     SettingsSchema,
     SettingsUpdate,
 )
+from .transcoding import (
+    TranscodingJob,
+    TranscodingJobSchema,
+    TranscodingProgressUpdate,
+)
 from .user import User, UserCreate, UserSchema, UserUpdate
 
 __all__ = [
@@ -51,6 +56,9 @@ __all__ = [
     "SettingsUpdate",
     "SubtitleTrack",
     "SubtitleTrackSchema",
+    "TranscodingJob",
+    "TranscodingJobSchema",
+    "TranscodingProgressUpdate",
     "User",
     "UserCreate",
     "UserSchema",

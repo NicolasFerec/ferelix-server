@@ -42,6 +42,7 @@ class StreamBuilder:
             Container=media_file.file_extension.lstrip(".")
             if media_file.file_extension
             else "unknown",
+            PlayMethod=PlayMethod.DIRECT_PLAY,
             VideoType="VideoFile",
             RunTimeTicks=int(media_file.duration * 10_000_000)
             if media_file.duration
@@ -68,10 +69,19 @@ class StreamBuilder:
             direct_stream_result = self._check_direct_stream(media_file)
             if direct_stream_result.can_play:
                 stream_info.PlayMethod = PlayMethod.DIRECT_STREAM
-                stream_info.TranscodingUrl = (
-                    f"/api/v1/stream/{media_file.id}/master.m3u8"
+                stream_info.TranscodingUrl = f"/api/v1/hls/{media_file.id}/remux"
+                stream_info.TranscodingContainer = "ts"  # HLS segments
+
+                # Mark as remux-only for fast container conversion
+                stream_info.IsRemuxOnly = True
+
+                # Set remux transcoding settings
+                from ..models.playback import TranscodeSettings
+
+                stream_info.TranscodeSettings = TranscodeSettings(
+                    VideoCodec="copy", AudioCodec="copy", IsRemuxOnly=True
                 )
-                stream_info.TranscodingContainer = "mp4"  # HLS with fMP4 segments
+
                 logger.debug(
                     f"Direct stream (remux) enabled for {media_file.file_name}"
                 )
@@ -80,9 +90,38 @@ class StreamBuilder:
             # Add additional reasons
             stream_info.TranscodeReasons.extend(direct_stream_result.reasons)
 
-        # Fall back to transcoding
+            # If video can be copied but audio requires transcoding, prefer audio-transcode (copy video, transcode audio)
+            video_ok, audio_ok = self._needs_audio_transcode(media_file)
+            if video_ok and not audio_ok:
+                stream_info.PlayMethod = PlayMethod.TRANSCODE
+                stream_info.TranscodingUrl = (
+                    f"/api/v1/hls/{media_file.id}/audio-transcode/master.m3u8"
+                )
+                stream_info.TranscodingContainer = "mp4"
+                stream_info.TranscodingVideoCodec = "copy"
+                stream_info.TranscodingAudioCodec = "aac"
+                stream_info.TranscodeReasons.append(
+                    TranscodeReason.AUDIO_TRANSCODE_REQUIRED
+                )
+
+                from ..models.playback import TranscodeSettings
+
+                stream_info.TranscodeSettings = TranscodeSettings(
+                    VideoCodec="copy",
+                    AudioCodec="aac",
+                    AudioBitrate=128000,
+                    IsRemuxOnly=False,
+                )
+
+                logger.debug(
+                    f"Audio-transcode (video copy) enabled for {media_file.file_name}"
+                )
+                return stream_info
+
+        # Fall back to transcoding (treat media as video files; music handling removed)
         if enable_transcoding:
             stream_info.PlayMethod = PlayMethod.TRANSCODE
+            # Regular video transcoding
             stream_info.TranscodingUrl = f"/api/v1/stream/{media_file.id}/master.m3u8"
             stream_info.TranscodingContainer = "mp4"
             stream_info.TranscodingVideoCodec = "h264"
@@ -156,6 +195,26 @@ class StreamBuilder:
                 return PlaybackResult(False, reasons)
 
         return PlaybackResult(True, reasons)
+
+    def _needs_audio_transcode(self, media_file: MediaFile) -> tuple[bool, bool]:
+        """Return (video_ok, audio_ok) for remux target (mp4)."""
+        video_ok = True
+        audio_ok = True
+        # Check video support for remux target (mp4)
+        if media_file.video_tracks:
+            video_track = media_file.video_tracks[0]
+            video_res = self._check_video_codec_support(
+                video_track, target_container="mp4"
+            )
+            video_ok = video_res.can_play
+        # Check audio support for remux target (mp4)
+        if media_file.audio_tracks:
+            audio_track = media_file.audio_tracks[0]
+            audio_res = self._check_audio_codec_support(
+                audio_track, target_container="mp4"
+            )
+            audio_ok = audio_res.can_play
+        return video_ok, audio_ok
 
     def _check_video_codec_support(
         self, video_track: Any, target_container: str | None = None

@@ -4,7 +4,8 @@ import asyncio
 import logging
 import re
 import secrets
-from datetime import UTC, datetime
+import shutil
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -475,8 +476,6 @@ async def cleanup_session(session: AsyncSession, session_id: str) -> bool:
         output_dir = Path(transcode_session.output_path)
         if output_dir.exists():
             try:
-                import shutil
-
                 shutil.rmtree(output_dir)
                 logger.info(f"Cleaned up transcoding files for session {session_id}")
             except Exception as e:
@@ -498,8 +497,6 @@ async def cleanup_stale_sessions(max_age_hours: int = 24) -> int:
     Returns:
         Number of sessions cleaned up
     """
-    from datetime import timedelta
-
     async with async_session_maker() as session:
         cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
 

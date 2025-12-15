@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -273,19 +274,31 @@ async def get_hls_segment(
     await update_last_accessed(session, session_id)
 
     # Validate segment name to prevent directory traversal
-    if ".." in segment_name or "/" in segment_name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid segment name",
-        )
-
     if not transcode_session.output_path:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Output path not set",
         )
 
-    segment_path = Path(transcode_session.output_path) / segment_name
+    # Sanitize segment name - only allow alphanumeric, dots, dashes, and underscores
+    if not re.match(r'^[\w\-.]+$', segment_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid segment name",
+        )
+
+    # Resolve paths and verify segment is within output directory
+    output_dir = Path(transcode_session.output_path).resolve()
+    segment_path = (output_dir / segment_name).resolve()
+
+    # Ensure the resolved segment path is within the output directory
+    try:
+        segment_path.relative_to(output_dir)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid segment path",
+        )
     if not segment_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

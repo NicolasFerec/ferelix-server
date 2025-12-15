@@ -31,7 +31,7 @@ class RecommendationRow(Base):
     )
 
     # Relationship
-    library: Mapped[Library] = relationship(
+    library: Mapped["Library"] = relationship(
         "Library", back_populates="recommendation_rows"
     )  # type: ignore[type-arg]
 

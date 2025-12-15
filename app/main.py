@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import async_session_maker
 from app.dependencies import set_scheduler
-from app.routers.v1 import auth, dashboard, media, streaming, users
+from app.routers.v1 import auth, dashboard, media, streaming, transcoding, users
 from app.services.jobs import init_job_tracking
 from app.services.settings import get_or_create_settings, initialize_scheduler_jobs
 from app.services.setup import router as setup_router
@@ -73,6 +73,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(media.router)
 app.include_router(streaming.router)
+app.include_router(transcoding.router)
 app.include_router(dashboard.router)
 
 # Mount static files for frontend

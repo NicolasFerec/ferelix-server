@@ -36,13 +36,13 @@ class MediaFile(Base):
     )
 
     # Relationships
-    video_tracks: Mapped[list[VideoTrack]] = relationship(
+    video_tracks: Mapped[list["VideoTrack"]] = relationship(
         back_populates="media_file", cascade="all, delete-orphan"
     )
-    audio_tracks: Mapped[list[AudioTrack]] = relationship(
+    audio_tracks: Mapped[list["AudioTrack"]] = relationship(
         back_populates="media_file", cascade="all, delete-orphan"
     )
-    subtitle_tracks: Mapped[list[SubtitleTrack]] = relationship(
+    subtitle_tracks: Mapped[list["SubtitleTrack"]] = relationship(
         back_populates="media_file", cascade="all, delete-orphan"
     )
 
@@ -66,9 +66,9 @@ class MediaFileSchema(BaseModel):
     updated_at: datetime
     scanned_at: datetime
     deleted_at: datetime | None = None
-    video_tracks: list[VideoTrackSchema] = []
-    audio_tracks: list[AudioTrackSchema] = []
-    subtitle_tracks: list[SubtitleTrackSchema] = []
+    video_tracks: list["VideoTrackSchema"] = []
+    audio_tracks: list["AudioTrackSchema"] = []
+    subtitle_tracks: list["SubtitleTrackSchema"] = []
 
 
 class VideoTrack(Base):
@@ -89,7 +89,7 @@ class VideoTrack(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationship
-    media_file: Mapped[MediaFile] = relationship(back_populates="video_tracks")
+    media_file: Mapped["MediaFile"] = relationship(back_populates="video_tracks")
 
 
 class AudioTrack(Base):
@@ -108,7 +108,7 @@ class AudioTrack(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationship
-    media_file: Mapped[MediaFile] = relationship(back_populates="audio_tracks")
+    media_file: Mapped["MediaFile"] = relationship(back_populates="audio_tracks")
 
 
 class SubtitleTrack(Base):
@@ -126,7 +126,7 @@ class SubtitleTrack(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationship
-    media_file: Mapped[MediaFile] = relationship(back_populates="subtitle_tracks")
+    media_file: Mapped["MediaFile"] = relationship(back_populates="subtitle_tracks")
 
 
 class VideoTrackSchema(BaseModel):

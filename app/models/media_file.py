@@ -88,6 +88,38 @@ class VideoTrack(Base):
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Enhanced metadata for transcoding decisions
+    profile: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # e.g., "High", "Main"
+    level: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # e.g., "4.1", "5.1"
+    pixel_format: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # e.g., "yuv420p", "yuv420p10le"
+    bit_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 8, 10, 12
+    color_range: Mapped[str | None] = mapped_column(String, nullable=True)  # "tv", "pc"
+    color_space: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # "bt709", "bt2020nc"
+    color_primaries: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # "bt709", "bt2020"
+    color_transfer: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # "bt709", "smpte2084", "arib-std-b67"
+
+    # HDR metadata
+    max_luminance: Mapped[int | None] = mapped_column(Integer, nullable=True)  # nits
+    min_luminance: Mapped[float | None] = mapped_column(Float, nullable=True)  # nits
+    max_cll: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Content Light Level
+    max_fall: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Frame Average Light Level
+
     # Relationship
     media_file: Mapped[MediaFile] = relationship(back_populates="video_tracks")
 
@@ -106,6 +138,11 @@ class AudioTrack(Base):
     channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Enhanced metadata for transcoding decisions
+    sample_rate: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # Hz, e.g. 48000
 
     # Relationship
     media_file: Mapped[MediaFile] = relationship(back_populates="audio_tracks")
@@ -146,6 +183,20 @@ class VideoTrackSchema(BaseModel):
     title: str | None = None
     is_default: bool
 
+    # Enhanced metadata
+    profile: str | None = None
+    level: str | None = None
+    pixel_format: str | None = None
+    bit_depth: int | None = None
+    color_range: str | None = None
+    color_space: str | None = None
+    color_primaries: str | None = None
+    color_transfer: str | None = None
+    max_luminance: int | None = None
+    min_luminance: float | None = None
+    max_cll: int | None = None
+    max_fall: int | None = None
+
 
 class AudioTrackSchema(BaseModel):
     """Schema for AudioTrack API responses."""
@@ -161,6 +212,7 @@ class AudioTrackSchema(BaseModel):
     channels: int | None = None
     bitrate: int | None = None
     is_default: bool
+    sample_rate: int | None = None
 
 
 class SubtitleTrackSchema(BaseModel):

@@ -36,6 +36,59 @@ def _parse_fps(r_frame_rate: str | None) -> float | None:
     return None
 
 
+def _parse_hdr_metadata(side_data_list: list) -> dict:
+    """Parse HDR metadata from ffprobe side data."""
+    hdr_info = {}
+
+    for side_data in side_data_list:
+        side_type = side_data.get("side_data_type")
+
+        # Mastering Display Color Volume
+        if side_type == "Mastering display metadata":
+            if "max_luminance" in side_data:
+                # Convert from rational format "10000000/10000" to int
+                max_lum = side_data["max_luminance"]
+                if "/" in str(max_lum):
+                    num, den = map(float, str(max_lum).split("/"))
+                    hdr_info["max_luminance"] = int(num / den) if den != 0 else None
+                else:
+                    hdr_info["max_luminance"] = int(float(max_lum))
+
+            if "min_luminance" in side_data:
+                min_lum = side_data["min_luminance"]
+                if "/" in str(min_lum):
+                    num, den = map(float, str(min_lum).split("/"))
+                    hdr_info["min_luminance"] = num / den if den != 0 else None
+                else:
+                    hdr_info["min_luminance"] = float(min_lum)
+
+        # Content Light Level
+        elif side_type == "Content light level metadata":
+            if "max_content" in side_data:
+                hdr_info["max_cll"] = int(side_data["max_content"])
+            if "max_average" in side_data:
+                hdr_info["max_fall"] = int(side_data["max_average"])
+
+    return hdr_info
+
+
+def _parse_bit_depth(pix_fmt: str | None) -> int | None:
+    """Extract bit depth from pixel format (e.g., yuv420p -> 8, yuv420p10le -> 10)."""
+    if not pix_fmt:
+        return None
+
+    # Common patterns for bit depth in pixel format names
+    if "10le" in pix_fmt or "10be" in pix_fmt or "p010" in pix_fmt:
+        return 10
+    elif "12le" in pix_fmt or "12be" in pix_fmt or "p012" in pix_fmt:
+        return 12
+    elif "16le" in pix_fmt or "16be" in pix_fmt or "p016" in pix_fmt:
+        return 16
+    else:
+        # Default to 8-bit for most common formats
+        return 8
+
+
 def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
     """Extract video metadata using ffprobe.
 
@@ -78,6 +131,9 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
         video_tracks = []
         for stream in data.get("streams", []):
             if stream.get("codec_type") == "video":
+                # Parse HDR metadata from side data
+                hdr_info = _parse_hdr_metadata(stream.get("side_data_list", []))
+
                 track = {
                     "stream_index": stream.get("index"),
                     "codec": stream.get("codec_name"),
@@ -88,6 +144,20 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
                     "language": stream.get("tags", {}).get("language"),
                     "title": stream.get("tags", {}).get("title"),
                     "is_default": stream.get("disposition", {}).get("default", 0) == 1,
+                    # Enhanced metadata for transcoding decisions
+                    "profile": stream.get("profile"),
+                    "level": stream.get("level"),
+                    "pixel_format": stream.get("pix_fmt"),
+                    "bit_depth": _parse_bit_depth(stream.get("pix_fmt")),
+                    "color_range": stream.get("color_range"),
+                    "color_space": stream.get("color_space"),
+                    "color_primaries": stream.get("color_primaries"),
+                    "color_transfer": stream.get("color_trc"),
+                    # HDR metadata
+                    "max_luminance": hdr_info.get("max_luminance"),
+                    "min_luminance": hdr_info.get("min_luminance"),
+                    "max_cll": hdr_info.get("max_cll"),
+                    "max_fall": hdr_info.get("max_fall"),
                 }
                 video_tracks.append(track)
 
@@ -103,6 +173,7 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
                     "channels": stream.get("channels"),
                     "bitrate": stream.get("bit_rate"),
                     "is_default": stream.get("disposition", {}).get("default", 0) == 1,
+                    "sample_rate": stream.get("sample_rate"),
                 }
                 audio_tracks.append(track)
 
@@ -189,6 +260,19 @@ async def _update_media_tracks(
             language=track_data.get("language"),
             title=track_data.get("title"),
             is_default=track_data.get("is_default", False),
+            # Enhanced metadata
+            profile=track_data.get("profile"),
+            level=track_data.get("level"),
+            pixel_format=track_data.get("pixel_format"),
+            bit_depth=track_data.get("bit_depth"),
+            color_range=track_data.get("color_range"),
+            color_space=track_data.get("color_space"),
+            color_primaries=track_data.get("color_primaries"),
+            color_transfer=track_data.get("color_transfer"),
+            max_luminance=track_data.get("max_luminance"),
+            min_luminance=track_data.get("min_luminance"),
+            max_cll=track_data.get("max_cll"),
+            max_fall=track_data.get("max_fall"),
         )
         session.add(video_track)
 
@@ -203,6 +287,7 @@ async def _update_media_tracks(
             channels=track_data.get("channels"),
             bitrate=track_data.get("bitrate"),
             is_default=track_data.get("is_default", False),
+            sample_rate=track_data.get("sample_rate"),
         )
         session.add(audio_track)
 

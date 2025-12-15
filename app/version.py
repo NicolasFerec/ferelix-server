@@ -29,7 +29,7 @@ def get_version_info() -> dict[str, str]:
             text=True,
         ).strip()
         return {"commit": commit, "branch": branch}
-    except subprocess.CalledProcessError, FileNotFoundError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 
     # Fallback to version.json (generated at build time in CI/CD)
@@ -48,7 +48,7 @@ def get_version_info() -> dict[str, str]:
             try:
                 with open(version_file) as f:
                     return json.load(f)
-            except OSError, json.JSONDecodeError:
+            except (OSError, json.JSONDecodeError):
                 continue
 
     # Final fallback

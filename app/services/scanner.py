@@ -31,7 +31,7 @@ def _parse_fps(r_frame_rate: str | None) -> float | None:
             denominator = float(parts[1])
             if denominator != 0:
                 return numerator / denominator
-    except ValueError, ZeroDivisionError:
+    except (ValueError, ZeroDivisionError):
         pass
     return None
 

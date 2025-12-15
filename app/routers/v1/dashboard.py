@@ -282,7 +282,7 @@ async def browse_directory(
             try:
                 resolved = Path(path_to_check).resolve()
                 visited_resolved_paths.add(str(resolved))
-            except OSError, RuntimeError:
+            except (OSError, RuntimeError):
                 # Path can't be resolved, skip it
                 pass
 
@@ -313,7 +313,7 @@ async def browse_directory(
                             )
                         ):
                             skip_item = True
-                    except OSError, RuntimeError:
+                    except (OSError, RuntimeError):
                         # Symlink is broken or can't be resolved - skip it to be safe
                         skip_item = True
                         symlink_target = None

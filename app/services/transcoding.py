@@ -1,12 +1,9 @@
 """Transcoding service for adaptive video streaming."""
 
 import asyncio
-import json
 import logging
-import os
 import re
 import secrets
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +17,6 @@ from app.models import (
     MediaFile,
     SubtitleTrack,
     TranscodingFormat,
-    TranscodingProfile,
     TranscodingSession,
     TranscodingStatus,
     VideoTrack,
@@ -396,7 +392,9 @@ async def start_transcoding(
 
             # Monitor progress in background
             duration = media_file.duration or 0
-            asyncio.create_task(_monitor_ffmpeg_progress(process, session_id, duration))
+            task = asyncio.create_task(_monitor_ffmpeg_progress(process, session_id, duration))
+            # Store task reference to prevent GC (task will run to completion)
+            task.add_done_callback(lambda t: None)
 
             # Wait for process to complete
             await process.wait()

@@ -6,20 +6,18 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_active_user
 from app.models import (
-    ClientCapabilities,
     CompatibilityCheckRequest,
     CompatibilityCheckResponse,
     MediaFile,
     StartTranscodingRequest,
     TranscodingFormat,
     TranscodingProgressResponse,
-    TranscodingProfileSchema,
     TranscodingSessionSchema,
     TranscodingStatus,
     User,
@@ -113,7 +111,9 @@ async def start_transcode_session(
     )
 
     # Start transcoding in background
-    asyncio.create_task(start_transcoding(transcode_session.session_id))
+    task = asyncio.create_task(start_transcoding(transcode_session.session_id))
+    # Store task reference to prevent GC (task will run to completion)
+    task.add_done_callback(lambda t: None)
 
     return TranscodingSessionSchema.model_validate(transcode_session)
 
@@ -156,12 +156,12 @@ async def get_transcode_progress(
     )
 
 
-@router.get("/transcode/{session_id}/stream")
+@router.get("/transcode/{session_id}/stream", response_model=None)
 async def stream_transcoded(
     session_id: str,
     _user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> FileResponse | StreamingResponse:
+) -> FileResponse:
     """Stream transcoded content.
 
     For HLS format, returns the m3u8 playlist.

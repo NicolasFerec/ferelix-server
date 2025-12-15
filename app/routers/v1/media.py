@@ -18,9 +18,67 @@ from app.models import (
     RecommendationRow,
     User,
 )
+from app.models.playback import (
+    PlaybackInfoRequest,
+    PlaybackInfoResponse,
+)
 from app.services.recommendation_row import apply_filter_criteria
+from app.services.stream_builder import StreamBuilder
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
+
+
+@router.post("/playback-info/{media_id}", response_model=PlaybackInfoResponse)
+async def get_playback_info(
+    media_id: int,
+    playback_request: PlaybackInfoRequest,
+    _user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PlaybackInfoResponse:
+    """Get playback information for a media file.
+
+    Analyzes the media file against the provided device profile to determine
+    the optimal playback method (DirectPlay, DirectStream, or Transcode).
+
+    Args:
+        media_id: ID of the media file
+        playback_request: Device profile and playback preferences
+        _user: Authenticated user (dependency)
+        session: Database session
+
+    Returns:
+        Playback information with recommended streaming method
+
+    Raises:
+        404: Media file not found
+    """
+    # Get media file with all track information
+    result = await session.execute(
+        select(MediaFile)
+        .options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
+        .where(MediaFile.id == media_id)
+    )
+    media_file = result.scalar_one_or_none()
+
+    if not media_file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found"
+        )
+
+    # Build stream info using device profile
+    stream_builder = StreamBuilder(playback_request.DeviceProfile)
+    stream_info = stream_builder.build_stream_info(
+        media_file,
+        enable_direct_play=playback_request.EnableDirectPlay,
+        enable_direct_stream=playback_request.EnableDirectStream,
+        enable_transcoding=playback_request.EnableTranscoding,
+    )
+
+    return PlaybackInfoResponse(MediaSources=[stream_info])
 
 
 class HomepageRow(BaseModel):

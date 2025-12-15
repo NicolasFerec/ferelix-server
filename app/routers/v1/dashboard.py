@@ -370,7 +370,7 @@ class JobSchema(BaseModel):
     error: str | None = None
 
     @classmethod
-    def from_state(cls, state: JobState) -> JobSchema:
+    def from_state(cls, state: JobState) -> "JobSchema":
         return cls(
             id=state.id,
             name=state.fallback_name,
@@ -444,7 +444,7 @@ class JobExecutionSchema(BaseModel):
     files_processed: int | None = None
 
     @classmethod
-    def from_record(cls, record: JobExecutionRecord) -> JobExecutionSchema:
+    def from_record(cls, record: JobExecutionRecord) -> "JobExecutionSchema":
         return cls(
             job_id=record.job_id,
             job_name=record.job_name,

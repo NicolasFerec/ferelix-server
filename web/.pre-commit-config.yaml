@@ -1,0 +1,15 @@
+repos:
+- repo: local
+  hooks:
+    - id: generate-api-types
+      name: generate api types from openapi
+      entry: pnpm generate-api-types
+      language: system
+      pass_filenames: false
+      files: src/api/openapi.json
+
+    - id: biome-check
+      name: biome check
+      entry: pnpm biome check --write --files-ignore-unknown=true --no-errors-on-unmatched
+      language: system
+      types: [text]

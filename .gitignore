@@ -22,18 +22,14 @@ share/python-wheels/
 .installed.cfg
 *.egg
 
+# Node
+node_modules/
+
 # Virtual Environment
 .venv/
 venv/
 ENV/
 env/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
 
 # Database
 *.db

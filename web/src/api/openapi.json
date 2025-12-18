@@ -1,0 +1,5529 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ferelix Server",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/setup/status": {
+      "get": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Get Setup Status",
+        "description": "Check if initial setup is required.\n\nReturns:\n    Dictionary with setup_complete status",
+        "operationId": "get_setup_status_api_v1_setup_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object",
+                  "title": "Response Get Setup Status Api V1 Setup Status Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/setup/admin": {
+      "post": {
+        "tags": [
+          "setup"
+        ],
+        "summary": "Create First Admin",
+        "description": "Create the first admin account (only works if no users exist).\n\nArgs:\n    admin_data: Admin account credentials\n    session: Database session\n\nReturns:\n    Access token, refresh token, and user info\n\nRaises:\n    HTTPException: If setup already complete or validation fails",
+        "operationId": "create_first_admin_api_v1_setup_admin_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__routers__v1__auth__TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Register",
+        "description": "Register a new user account.\n\nArgs:\n    user_data: User registration data\n    session: Database session\n\nReturns:\n    The created user (without password)\n\nRaises:\n    HTTPException: If username or email already exists",
+        "operationId": "register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Login",
+        "description": "Authenticate user and return access + refresh tokens.\n\nArgs:\n    login_data: Login credentials\n    session: Database session\n\nReturns:\n    Access token, refresh token, and user info\n\nRaises:\n    HTTPException: If credentials are invalid",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__routers__v1__auth__TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Refresh",
+        "description": "Refresh access token using refresh token.\n\nArgs:\n    refresh_data: Refresh token\n    session: Database session\n\nReturns:\n    New access token, new refresh token, and user info\n\nRaises:\n    HTTPException: If refresh token is invalid or expired",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__routers__v1__auth__TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Logout",
+        "description": "Logout user by revoking refresh token.\n\nArgs:\n    refresh_data: Refresh token to revoke\n    current_user: Currently authenticated user\n    session: Database session",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Current User Info",
+        "description": "Get current user's information.\n\nArgs:\n    current_user: The authenticated user\n\nReturns:\n    Current user's profile",
+        "operationId": "get_current_user_info_api_v1_users_me_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update Current User",
+        "description": "Update current user's information.\n\nArgs:\n    user_update: User update data\n    current_user: The authenticated user\n    session: Database session\n\nReturns:\n    Updated user profile",
+        "operationId": "update_current_user_api_v1_users_me_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback-info/{media_id}": {
+      "post": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Playback Info",
+        "description": "Get playback information for a media file.\n\nAnalyzes the media file against the provided device profile to determine\nthe optimal playback method (DirectPlay, DirectStream, or Transcode).\n\nArgs:\n    media_id: ID of the media file\n    playback_request: Device profile and playback preferences\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    Playback information with recommended streaming method\n\nRaises:\n    404: Media file not found",
+        "operationId": "get_playback_info_api_v1_playback_info__media_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackInfoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/libraries": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Libraries",
+        "description": "Get enabled library paths (authenticated users).\n\nReturns only enabled libraries. Admin users should use /dashboard/libraries\nto see all libraries including disabled ones.\n\nArgs:\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    List of enabled library paths",
+        "operationId": "get_libraries_api_v1_libraries_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LibrarySchema"
+                  },
+                  "title": "Response Get Libraries Api V1 Libraries Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/libraries/{library_id}/items": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Library Items",
+        "description": "Get items (media files) from a specific library.\n\nArgs:\n    library_id: Library path ID\n    _user: Authenticated user (dependency)\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files from the library\n\nRaises:\n    HTTPException: If library not found",
+        "operationId": "get_library_items_api_v1_libraries__library_id__items_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MediaFileSchema"
+                  },
+                  "title": "Response Get Library Items Api V1 Libraries  Library Id  Items Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media-files": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Media Files",
+        "description": "Get all discovered media files.\n\nArgs:\n    _user: Authenticated user (dependency)\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files",
+        "operationId": "get_media_files_api_v1_media_files_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MediaFileSchema"
+                  },
+                  "title": "Response Get Media Files Api V1 Media Files Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media/{media_id}": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Media File",
+        "description": "Get a specific media file by ID with track information.\n\nArgs:\n    media_id: Media file ID\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    Media file details with tracks\n\nRaises:\n    HTTPException: If media file not found or is deleted",
+        "operationId": "get_media_file_api_v1_media__media_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaFileSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/homepage/rows": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Homepage Rows",
+        "description": "Get all visible rows for homepage.\n\nReturns playlists that are visible on homepage, with their filtered media files.\n\nArgs:\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    List of homepage rows with media files",
+        "operationId": "get_homepage_rows_api_v1_homepage_rows_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HomepageRow"
+                  },
+                  "title": "Response Get Homepage Rows Api V1 Homepage Rows Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/libraries/{library_id}/rows": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Library Rows",
+        "description": "Get rows for a specific library (for Library View \"Recommended\" tab).\n\nArgs:\n    library_id: Library ID\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    List of rows with media files for the library\n\nRaises:\n    HTTPException: If library not found or is disabled",
+        "operationId": "get_library_rows_api_v1_libraries__library_id__rows_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HomepageRow"
+                  },
+                  "title": "Response Get Library Rows Api V1 Libraries  Library Id  Rows Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/start-stream/{media_id}": {
+      "post": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Start Media Stream",
+        "description": "Start streaming for a media file with automatic transcoding decisions.\n\nUses StreamBuilder to determine the best streaming method and automatically\nstarts HLS transcoding if needed.\n\nReturns:\n    Dictionary with streaming URL or transcoding job ID",
+        "operationId": "start_media_stream_api_v1_start_stream__media_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackInfoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Start Media Stream Api V1 Start Stream  Media Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stream/{media_id}": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Stream Video",
+        "description": "Stream video file with HTTP Range request support for seeking.\n\nAuthentication is optional but recommended. Supports both:\n- Authorization: Bearer <token> header\n- ?api_key=<token> query parameter (for browser video tags)\n\nArgs:\n    media_id: Media file ID\n    session: Database session\n    user: Optional authenticated user\n    range_header: HTTP Range header for partial content requests\n\nReturns:\n    Streaming response with video content\n\nRaises:\n    HTTPException: If media file not found or range invalid",
+        "operationId": "stream_video_api_v1_stream__media_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{media_id}/remux": {
+      "post": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Start Hls Remux",
+        "description": "Start HLS remuxing (container conversion only, no re-encoding).",
+        "operationId": "start_hls_remux_api_v1_hls__media_id__remux_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodingJobSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{media_id}/start": {
+      "post": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Start Hls Stream",
+        "description": "Start HLS transcoding for a media file.\n\nReturns a transcoding job that can be used to access the HLS playlist once ready.",
+        "operationId": "start_hls_stream_api_v1_hls__media_id__start_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "video_codec",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "h264",
+              "title": "Video Codec"
+            }
+          },
+          {
+            "name": "audio_codec",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "aac",
+              "title": "Audio Codec"
+            }
+          },
+          {
+            "name": "video_bitrate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Video Bitrate"
+            }
+          },
+          {
+            "name": "audio_bitrate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Audio Bitrate"
+            }
+          },
+          {
+            "name": "max_width",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Width"
+            }
+          },
+          {
+            "name": "max_height",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Height"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodingJobSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{media_id}/audio-transcode": {
+      "post": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Start Hls Audio Transcode",
+        "description": "Start HLS audio-transcode: copy video streams and transcode only the audio track.",
+        "operationId": "start_hls_audio_transcode_api_v1_hls__media_id__audio_transcode_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "audio_codec",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "aac",
+              "title": "Audio Codec"
+            }
+          },
+          {
+            "name": "audio_bitrate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 128000,
+              "title": "Audio Bitrate"
+            }
+          },
+          {
+            "name": "max_width",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Width"
+            }
+          },
+          {
+            "name": "max_height",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Height"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodingJobSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{job_id}/playlist.m3u8": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Hls Playlist",
+        "description": "Get HLS playlist file for a transcoding job.",
+        "operationId": "get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{job_id}/segment_{segment_num}.ts": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Hls Segment",
+        "description": "Get HLS segment file for a transcoding job.",
+        "operationId": "get_hls_segment_api_v1_hls__job_id__segment__segment_num__ts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "segment_num",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Segment Num"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{job_id}/status": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Hls Status",
+        "description": "Get status of HLS transcoding job.",
+        "operationId": "get_hls_status_api_v1_hls__job_id__status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscodingJobSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{job_id}/stop": {
+      "delete": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Stop Hls Stream",
+        "description": "Stop HLS transcoding job.",
+        "operationId": "stop_hls_stream_api_v1_hls__job_id__stop_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Stop Hls Stream Api V1 Hls  Job Id  Stop Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/libraries": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Libraries",
+        "description": "Get all libraries (admin only - includes disabled libraries).\n\nArgs:\n    session: Database session\n\nReturns:\n    List of all libraries (including disabled)",
+        "operationId": "get_libraries_api_v1_dashboard_libraries_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LibrarySchema"
+                  },
+                  "title": "Response Get Libraries Api V1 Dashboard Libraries Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Create Library",
+        "description": "Add a new library path to scan (admin only).\n\nArgs:\n    library_data: Library path creation data\n    session: Database session\n    scheduler: APScheduler instance\n\nReturns:\n    Created library path\n\nRaises:\n    HTTPException: If path already exists",
+        "operationId": "create_library_api_v1_dashboard_libraries_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibrarySchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/libraries/{library_id}": {
+      "delete": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Delete Library",
+        "description": "Remove a library (admin only).\n\nArgs:\n    library_id: Library ID\n    session: Database session\n\nRaises:\n    HTTPException: If library not found",
+        "operationId": "delete_library_api_v1_dashboard_libraries__library_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Update Library",
+        "description": "Update a library (admin only).\n\nArgs:\n    library_id: Library ID\n    update_data: Library update data\n    session: Database session\n    scheduler: APScheduler instance\n\nReturns:\n    Updated library\n\nRaises:\n    HTTPException: If library not found or library already exists",
+        "operationId": "update_library_api_v1_dashboard_libraries__library_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibrarySchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/browse": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Browse Directory",
+        "description": "Browse directories and files at a given path (admin only).\n\nArgs:\n    path: Directory path to browse\n\nReturns:\n    List of directory items (directories first, then files)\n\nRaises:\n    HTTPException: If path doesn't exist or is not accessible",
+        "operationId": "browse_directory_api_v1_dashboard_browse_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Directory path to browse",
+              "title": "Path"
+            },
+            "description": "Directory path to browse"
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DirectoryItem"
+                  },
+                  "title": "Response Browse Directory Api V1 Dashboard Browse Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/libraries/{library_id}/scan": {
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Scan Library",
+        "description": "Trigger a scan for a specific library (returns immediately).\n\nArgs:\n    library_id: Library ID to scan\n    session: Database session\n    scheduler: APScheduler instance\n\nReturns:\n    Job trigger response with job_id\n\nRaises:\n    HTTPException: If library not found",
+        "operationId": "scan_library_api_v1_dashboard_libraries__library_id__scan_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobTriggerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/jobs": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "List Jobs",
+        "description": "List all scheduled jobs (admin only).",
+        "operationId": "list_jobs_api_v1_dashboard_jobs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobSchema"
+                  },
+                  "title": "Response List Jobs Api V1 Dashboard Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/jobs/{job_id}/trigger": {
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Trigger Job",
+        "description": "Manually trigger a scheduled job (admin only).",
+        "operationId": "trigger_job_api_v1_dashboard_jobs__job_id__trigger_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobTriggerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/jobs/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Cancel Job",
+        "description": "Cancel a running job (admin only).\n\nArgs:\n    job_id: Job ID to cancel\n    scheduler: APScheduler instance\n\nReturns:\n    Job trigger response\n\nRaises:\n    HTTPException: If job not found or not running",
+        "operationId": "cancel_job_api_v1_dashboard_jobs__job_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobTriggerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/jobs/history": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Job History Endpoint",
+        "description": "Get recent job execution history (admin only).\n\nReturns:\n    List of job execution records (most recent first)",
+        "operationId": "get_job_history_endpoint_api_v1_dashboard_jobs_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobExecutionSchema"
+                  },
+                  "title": "Response Get Job History Endpoint Api V1 Dashboard Jobs History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/users": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "List Users",
+        "description": "List all users (admin only).\n\nArgs:\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of users",
+        "operationId": "list_users_api_v1_dashboard_users_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserSchema"
+                  },
+                  "title": "Response List Users Api V1 Dashboard Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/users/{user_id}": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get User",
+        "description": "Get user by ID (admin only).\n\nArgs:\n    user_id: User ID\n    session: Database session\n\nReturns:\n    User profile\n\nRaises:\n    HTTPException: If user not found",
+        "operationId": "get_user_api_v1_dashboard_users__user_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Update User",
+        "description": "Update user by ID (admin only).\n\nArgs:\n    user_id: User ID\n    user_update: User update data\n    session: Database session\n\nReturns:\n    Updated user profile\n\nRaises:\n    HTTPException: If user not found",
+        "operationId": "update_user_api_v1_dashboard_users__user_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Delete User",
+        "description": "Delete user by ID (admin only).\n\nArgs:\n    user_id: User ID\n    admin: Admin user (dependency - needed to check if deleting self)\n    session: Database session\n\nRaises:\n    HTTPException: If user not found or trying to delete self",
+        "operationId": "delete_user_api_v1_dashboard_users__user_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/recommendation-rows": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Recommendation Rows",
+        "description": "List all recommendation rows (admin only).\n\nArgs:\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of recommendation rows",
+        "operationId": "get_recommendation_rows_api_v1_dashboard_recommendation_rows_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecommendationRowSchema"
+                  },
+                  "title": "Response Get Recommendation Rows Api V1 Dashboard Recommendation Rows Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Create Recommendation Row",
+        "description": "Create a new recommendation row (admin only).\n\nArgs:\n    row_data: Recommendation row creation data\n    session: Database session\n\nReturns:\n    Created recommendation row\n\nRaises:\n    HTTPException: If library not found or filter criteria is invalid",
+        "operationId": "create_recommendation_row_api_v1_dashboard_recommendation_rows_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRowCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationRowSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/recommendation-rows/{row_id}": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Recommendation Row",
+        "description": "Get recommendation row by ID (admin only).\n\nArgs:\n    row_id: Recommendation row ID\n    session: Database session\n\nReturns:\n    Recommendation row details\n\nRaises:\n    HTTPException: If recommendation row not found",
+        "operationId": "get_recommendation_row_api_v1_dashboard_recommendation_rows__row_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationRowSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Update Recommendation Row",
+        "description": "Update a recommendation row (admin only).\n\nArgs:\n    row_id: Recommendation row ID\n    update_data: Recommendation row update data\n    session: Database session\n\nReturns:\n    Updated recommendation row\n\nRaises:\n    HTTPException: If recommendation row not found or filter criteria is invalid",
+        "operationId": "update_recommendation_row_api_v1_dashboard_recommendation_rows__row_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRowUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationRowSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Delete Recommendation Row",
+        "description": "Delete a recommendation row (admin only).\n\nArgs:\n    row_id: Recommendation row ID\n    session: Database session\n\nRaises:\n    HTTPException: If recommendation row not found or is special (cannot be deleted)",
+        "operationId": "delete_recommendation_row_api_v1_dashboard_recommendation_rows__row_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/libraries/{library_id}/recommendation-rows": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Library Recommendation Rows",
+        "description": "Get recommendation rows for a specific library (admin only).\n\nArgs:\n    library_id: Library ID\n    session: Database session\n\nReturns:\n    List of recommendation rows for the library\n\nRaises:\n    HTTPException: If library not found",
+        "operationId": "get_library_recommendation_rows_api_v1_dashboard_libraries__library_id__recommendation_rows_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecommendationRowSchema"
+                  },
+                  "title": "Response Get Library Recommendation Rows Api V1 Dashboard Libraries  Library Id  Recommendation Rows Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Add Library Recommendation Row",
+        "description": "Add a recommendation row to a library (admin only).\n\nCreates a new recommendation row or associates an existing one.\n\nArgs:\n    library_id: Library ID\n    row_data: Recommendation row data (library_id in body must match path param)\n    session: Database session\n\nReturns:\n    Created or updated recommendation row\n\nRaises:\n    HTTPException: If library not found or library_id mismatch",
+        "operationId": "add_library_recommendation_row_api_v1_dashboard_libraries__library_id__recommendation_rows_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRowCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationRowSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/libraries/{library_id}/recommendation-rows/{row_id}": {
+      "patch": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Update Library Recommendation Row",
+        "description": "Update a recommendation row's visibility for a library (admin only).\n\nArgs:\n    library_id: Library ID\n    row_id: Recommendation row ID\n    update_data: Update data (typically visibility flags)\n    session: Database session\n\nReturns:\n    Updated recommendation row\n\nRaises:\n    HTTPException: If library or row not found, or row doesn't belong to library",
+        "operationId": "update_library_recommendation_row_api_v1_dashboard_libraries__library_id__recommendation_rows__row_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRowUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationRowSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Remove Library Recommendation Row",
+        "description": "Remove a recommendation row from a library (admin only).\n\nArgs:\n    library_id: Library ID\n    row_id: Recommendation row ID\n    session: Database session\n\nRaises:\n    HTTPException: If library or row not found, or row is special",
+        "operationId": "remove_library_recommendation_row_api_v1_dashboard_libraries__library_id__recommendation_rows__row_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "library_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Library Id"
+            }
+          },
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/settings": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Settings",
+        "description": "Get application settings (admin only).\n\nReturns:\n    Current application settings",
+        "operationId": "get_settings_api_v1_dashboard_settings_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Update Settings",
+        "description": "Update application settings (admin only).\n\nArgs:\n    update_data: Settings update data\n    session: Database session\n    scheduler: APScheduler instance\n\nReturns:\n    Updated settings\n\nRaises:\n    HTTPException: If validation fails",
+        "operationId": "update_settings_api_v1_dashboard_settings_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdminSetupRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AdminSetupRequest",
+        "description": "Request schema for first-run admin setup."
+      },
+      "AudioTrackSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "stream_index": {
+            "type": "integer",
+            "title": "Stream Index"
+          },
+          "codec": {
+            "type": "string",
+            "title": "Codec"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "media_file_id",
+          "stream_index",
+          "codec",
+          "is_default"
+        ],
+        "title": "AudioTrackSchema",
+        "description": "Schema for AudioTrack API responses."
+      },
+      "CodecProfile": {
+        "properties": {
+          "Type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "Codec": {
+            "type": "string",
+            "title": "Codec"
+          },
+          "Conditions": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceProfileCondition"
+            },
+            "type": "array",
+            "title": "Conditions",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "Type",
+          "Codec"
+        ],
+        "title": "CodecProfile",
+        "description": "Profile defining codec constraints and limitations."
+      },
+      "DeviceProfile": {
+        "properties": {
+          "Name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "Id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "Identification": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identification"
+          },
+          "DirectPlayProfiles": {
+            "items": {
+              "$ref": "#/components/schemas/DirectPlayProfile"
+            },
+            "type": "array",
+            "title": "Directplayprofiles",
+            "default": []
+          },
+          "CodecProfiles": {
+            "items": {
+              "$ref": "#/components/schemas/CodecProfile"
+            },
+            "type": "array",
+            "title": "Codecprofiles",
+            "default": []
+          },
+          "TranscodingProfiles": {
+            "items": {
+              "$ref": "#/components/schemas/TranscodingProfile"
+            },
+            "type": "array",
+            "title": "Transcodingprofiles",
+            "default": []
+          },
+          "SubtitleProfiles": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleProfile"
+            },
+            "type": "array",
+            "title": "Subtitleprofiles",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "Name",
+          "Id"
+        ],
+        "title": "DeviceProfile",
+        "description": "Complete device profile describing client capabilities."
+      },
+      "DeviceProfileCondition": {
+        "properties": {
+          "Condition": {
+            "type": "string",
+            "title": "Condition"
+          },
+          "Property": {
+            "type": "string",
+            "title": "Property"
+          },
+          "Value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "IsRequired": {
+            "type": "boolean",
+            "title": "Isrequired",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "Condition",
+          "Property",
+          "Value"
+        ],
+        "title": "DeviceProfileCondition",
+        "description": "Condition used in codec profiles to define constraints."
+      },
+      "DirectPlayProfile": {
+        "properties": {
+          "Type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "Container": {
+            "type": "string",
+            "title": "Container"
+          },
+          "VideoCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videocodec"
+          },
+          "AudioCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audiocodec"
+          }
+        },
+        "type": "object",
+        "required": [
+          "Type",
+          "Container"
+        ],
+        "title": "DirectPlayProfile",
+        "description": "Profile defining formats the client can play natively."
+      },
+      "DirectoryItem": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "is_directory": {
+            "type": "boolean",
+            "title": "Is Directory"
+          },
+          "is_symlink": {
+            "type": "boolean",
+            "title": "Is Symlink",
+            "default": false
+          },
+          "symlink_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symlink Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "is_directory"
+        ],
+        "title": "DirectoryItem",
+        "description": "Schema for directory browser items."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HomepageRow": {
+        "properties": {
+          "playlist_id": {
+            "type": "integer",
+            "title": "Playlist Id"
+          },
+          "library_id": {
+            "type": "integer",
+            "title": "Library Id"
+          },
+          "library_name": {
+            "type": "string",
+            "title": "Library Name"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MediaFileSchema"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "playlist_id",
+          "library_id",
+          "library_name",
+          "name",
+          "display_name",
+          "items"
+        ],
+        "title": "HomepageRow",
+        "description": "Schema for homepage row response."
+      },
+      "JobExecutionSchema": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "job_name": {
+            "type": "string",
+            "title": "Job Name"
+          },
+          "name_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Key"
+          },
+          "job_type": {
+            "type": "string",
+            "title": "Job Type"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "files_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Files Total"
+          },
+          "files_processed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Files Processed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "job_name",
+          "job_type",
+          "started_at",
+          "status"
+        ],
+        "title": "JobExecutionSchema",
+        "description": "Schema for job execution history."
+      },
+      "JobSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "name_key": {
+            "type": "string",
+            "title": "Name Key"
+          },
+          "last_run_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Time"
+          },
+          "next_run_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run Time"
+          },
+          "running_since": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Since"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "name_key",
+          "last_run_time",
+          "next_run_time",
+          "running_since",
+          "status"
+        ],
+        "title": "JobSchema",
+        "description": "Schema for job API responses."
+      },
+      "JobTriggerResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "JobTriggerResponse",
+        "description": "Response schema for job trigger."
+      },
+      "LibraryCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "library_type": {
+            "type": "string",
+            "title": "Library Type",
+            "default": "movie"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "LibraryCreate",
+        "description": "Schema for creating a library."
+      },
+      "LibrarySchema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "library_type": {
+            "type": "string",
+            "title": "Library Type",
+            "default": "movie"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "created_at"
+        ],
+        "title": "LibrarySchema",
+        "description": "Schema for Library API responses."
+      },
+      "LibraryUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "library_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Type"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "title": "LibraryUpdate",
+        "description": "Schema for updating a library."
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "device_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Info"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "description": "Request schema for user login."
+      },
+      "MediaFileSchema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "file_path": {
+            "type": "string",
+            "title": "File Path"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "file_size": {
+            "type": "integer",
+            "title": "File Size"
+          },
+          "file_extension": {
+            "type": "string",
+            "title": "File Extension"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec"
+          },
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "scanned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scanned At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "video_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/VideoTrackSchema"
+            },
+            "type": "array",
+            "title": "Video Tracks",
+            "default": []
+          },
+          "audio_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/AudioTrackSchema"
+            },
+            "type": "array",
+            "title": "Audio Tracks",
+            "default": []
+          },
+          "subtitle_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleTrackSchema"
+            },
+            "type": "array",
+            "title": "Subtitle Tracks",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_path",
+          "file_name",
+          "file_size",
+          "file_extension",
+          "created_at",
+          "updated_at",
+          "scanned_at"
+        ],
+        "title": "MediaFileSchema",
+        "description": "Schema for MediaFile API responses."
+      },
+      "PlayMethod": {
+        "type": "string",
+        "enum": [
+          "DirectPlay",
+          "DirectStream",
+          "Transcode"
+        ],
+        "title": "PlayMethod",
+        "description": "Playback methods supported by the client."
+      },
+      "PlaybackInfoRequest": {
+        "properties": {
+          "DeviceProfile": {
+            "$ref": "#/components/schemas/DeviceProfile"
+          },
+          "EnableDirectPlay": {
+            "type": "boolean",
+            "title": "Enabledirectplay",
+            "default": true
+          },
+          "EnableDirectStream": {
+            "type": "boolean",
+            "title": "Enabledirectstream",
+            "default": true
+          },
+          "EnableTranscoding": {
+            "type": "boolean",
+            "title": "Enabletranscoding",
+            "default": true
+          },
+          "AllowVideoStreamCopy": {
+            "type": "boolean",
+            "title": "Allowvideostreamcopy",
+            "default": true
+          },
+          "AllowAudioStreamCopy": {
+            "type": "boolean",
+            "title": "Allowaudiostreamcopy",
+            "default": true
+          },
+          "IsPlayback": {
+            "type": "boolean",
+            "title": "Isplayback",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "DeviceProfile"
+        ],
+        "title": "PlaybackInfoRequest",
+        "description": "Request for playback information."
+      },
+      "PlaybackInfoResponse": {
+        "properties": {
+          "MediaSources": {
+            "items": {
+              "$ref": "#/components/schemas/StreamInfo"
+            },
+            "type": "array",
+            "title": "Mediasources"
+          },
+          "PlaySessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playsessionid"
+          },
+          "ErrorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "MediaSources"
+        ],
+        "title": "PlaybackInfoResponse",
+        "description": "Response containing playback information and media sources."
+      },
+      "RecommendationRowCreate": {
+        "properties": {
+          "library_id": {
+            "type": "integer",
+            "title": "Library Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "filter_criteria": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Filter Criteria",
+            "description": "Filter criteria JSON"
+          },
+          "visible_on_homepage": {
+            "type": "boolean",
+            "title": "Visible On Homepage",
+            "default": false
+          },
+          "visible_on_recommend": {
+            "type": "boolean",
+            "title": "Visible On Recommend",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "library_id",
+          "name",
+          "filter_criteria"
+        ],
+        "title": "RecommendationRowCreate",
+        "description": "Schema for creating a recommendation row."
+      },
+      "RecommendationRowSchema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "library_id": {
+            "type": "integer",
+            "title": "Library Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "filter_criteria": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Filter Criteria"
+          },
+          "visible_on_homepage": {
+            "type": "boolean",
+            "title": "Visible On Homepage",
+            "default": false
+          },
+          "visible_on_recommend": {
+            "type": "boolean",
+            "title": "Visible On Recommend",
+            "default": false
+          },
+          "is_special": {
+            "type": "boolean",
+            "title": "Is Special",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "library_id",
+          "name",
+          "filter_criteria",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RecommendationRowSchema",
+        "description": "Schema for RecommendationRow API responses."
+      },
+      "RecommendationRowUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "filter_criteria": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Criteria",
+            "description": "Filter criteria JSON"
+          },
+          "visible_on_homepage": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible On Homepage"
+          },
+          "visible_on_recommend": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visible On Recommend"
+          }
+        },
+        "type": "object",
+        "title": "RecommendationRowUpdate",
+        "description": "Schema for updating a recommendation row."
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "description": "Request schema for token refresh."
+      },
+      "SettingsSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "library_scan_interval_minutes": {
+            "type": "integer",
+            "title": "Library Scan Interval Minutes"
+          },
+          "cleanup_schedule_hour": {
+            "type": "integer",
+            "title": "Cleanup Schedule Hour"
+          },
+          "cleanup_schedule_minute": {
+            "type": "integer",
+            "title": "Cleanup Schedule Minute"
+          },
+          "cleanup_grace_period_days": {
+            "type": "integer",
+            "title": "Cleanup Grace Period Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "library_scan_interval_minutes",
+          "cleanup_schedule_hour",
+          "cleanup_schedule_minute",
+          "cleanup_grace_period_days"
+        ],
+        "title": "SettingsSchema",
+        "description": "Schema for Settings API responses."
+      },
+      "SettingsUpdate": {
+        "properties": {
+          "library_scan_interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Scan Interval Minutes"
+          },
+          "cleanup_schedule_hour": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanup Schedule Hour"
+          },
+          "cleanup_schedule_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanup Schedule Minute"
+          },
+          "cleanup_grace_period_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanup Grace Period Days"
+          }
+        },
+        "type": "object",
+        "title": "SettingsUpdate",
+        "description": "Schema for updating settings."
+      },
+      "StreamInfo": {
+        "properties": {
+          "Id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "Path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "Protocol": {
+            "type": "string",
+            "title": "Protocol",
+            "default": "File"
+          },
+          "PlayMethod": {
+            "$ref": "#/components/schemas/PlayMethod"
+          },
+          "TranscodeReasons": {
+            "items": {
+              "$ref": "#/components/schemas/TranscodeReason"
+            },
+            "type": "array",
+            "title": "Transcodereasons",
+            "default": []
+          },
+          "IsRemuxOnly": {
+            "type": "boolean",
+            "title": "Isremuxonly",
+            "default": false
+          },
+          "DirectStreamUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directstreamurl"
+          },
+          "TranscodingUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcodingurl"
+          },
+          "Container": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container"
+          },
+          "VideoType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videotype"
+          },
+          "MediaStreams": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Mediastreams",
+            "default": []
+          },
+          "TranscodingContainer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcodingcontainer"
+          },
+          "TranscodingVideoCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcodingvideocodec"
+          },
+          "TranscodingAudioCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcodingaudiocodec"
+          },
+          "TranscodeSettings": {
+            "title": "Transcodesettings"
+          },
+          "RunTimeTicks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtimeticks"
+          },
+          "Bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "RequiredHttpHeaders": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Requiredhttpheaders",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "Id",
+          "PlayMethod"
+        ],
+        "title": "StreamInfo",
+        "description": "Information about how a media file should be streamed."
+      },
+      "SubtitleProfile": {
+        "properties": {
+          "Format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "Method": {
+            "type": "string",
+            "title": "Method"
+          }
+        },
+        "type": "object",
+        "required": [
+          "Format",
+          "Method"
+        ],
+        "title": "SubtitleProfile",
+        "description": "Profile defining subtitle format support."
+      },
+      "SubtitleTrackSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "stream_index": {
+            "type": "integer",
+            "title": "Stream Index"
+          },
+          "codec": {
+            "type": "string",
+            "title": "Codec"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "is_forced": {
+            "type": "boolean",
+            "title": "Is Forced"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "media_file_id",
+          "stream_index",
+          "codec",
+          "is_forced",
+          "is_default"
+        ],
+        "title": "SubtitleTrackSchema",
+        "description": "Schema for SubtitleTrack API responses."
+      },
+      "TranscodeReason": {
+        "type": "string",
+        "enum": [
+          "ContainerNotSupported",
+          "VideoCodecNotSupported",
+          "AudioCodecNotSupported",
+          "SubtitleCodecNotSupported",
+          "VideoProfileNotSupported",
+          "VideoLevelNotSupported",
+          "VideoResolutionNotSupported",
+          "VideoBitDepthNotSupported",
+          "VideoFramerateNotSupported",
+          "VideoBitrateNotSupported",
+          "VideoRangeNotSupported",
+          "AudioChannelsNotSupported",
+          "AudioSampleRateNotSupported",
+          "AudioBitrateNotSupported",
+          "VideoDisabled",
+          "AudioTranscodeRequired",
+          "DirectPlayError",
+          "UnknownVideoStreamInfo",
+          "UnknownAudioStreamInfo"
+        ],
+        "title": "TranscodeReason",
+        "description": "Reasons why transcoding may be required."
+      },
+      "TranscodingJobSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TranscodingJobType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TranscodingJobStatus"
+          },
+          "video_codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Codec"
+          },
+          "audio_codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Codec"
+          },
+          "video_bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Bitrate"
+          },
+          "audio_bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Bitrate"
+          },
+          "max_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Width"
+          },
+          "max_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height"
+          },
+          "progress_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Percent"
+          },
+          "transcoded_duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoded Duration"
+          },
+          "current_fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Fps"
+          },
+          "current_bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Bitrate"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "retry_count": {
+            "type": "integer",
+            "title": "Retry Count",
+            "default": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "last_accessed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Accessed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "media_file_id",
+          "type",
+          "status",
+          "created_at",
+          "last_accessed_at"
+        ],
+        "title": "TranscodingJobSchema",
+        "description": "Schema for TranscodingJob API responses."
+      },
+      "TranscodingJobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "TranscodingJobStatus",
+        "description": "Status of transcoding jobs."
+      },
+      "TranscodingJobType": {
+        "type": "string",
+        "enum": [
+          "hls",
+          "progressive",
+          "remux",
+          "audio_transcode"
+        ],
+        "title": "TranscodingJobType",
+        "description": "Types of transcoding jobs."
+      },
+      "TranscodingProfile": {
+        "properties": {
+          "Type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "Container": {
+            "type": "string",
+            "title": "Container"
+          },
+          "VideoCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videocodec"
+          },
+          "AudioCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audiocodec"
+          },
+          "Protocol": {
+            "type": "string",
+            "title": "Protocol",
+            "default": "hls"
+          },
+          "EstimateContentLength": {
+            "type": "boolean",
+            "title": "Estimatecontentlength",
+            "default": false
+          },
+          "EnableMpegtsM2TsMode": {
+            "type": "boolean",
+            "title": "Enablempegtsm2Tsmode",
+            "default": false
+          },
+          "TranscodeSeekInfo": {
+            "type": "string",
+            "title": "Transcodeseekinfo",
+            "default": "Auto"
+          },
+          "CopyTimestamps": {
+            "type": "boolean",
+            "title": "Copytimestamps",
+            "default": false
+          },
+          "Context": {
+            "type": "string",
+            "title": "Context",
+            "default": "Streaming"
+          },
+          "EnableSubtitlesInManifest": {
+            "type": "boolean",
+            "title": "Enablesubtitlesinmanifest",
+            "default": false
+          },
+          "MaxAudioChannels": {
+            "type": "string",
+            "title": "Maxaudiochannels",
+            "default": "8"
+          }
+        },
+        "type": "object",
+        "required": [
+          "Type",
+          "Container"
+        ],
+        "title": "TranscodingProfile",
+        "description": "Profile defining fallback transcoding configurations."
+      },
+      "UserCreate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "is_admin": {
+            "type": "boolean",
+            "title": "Is Admin",
+            "default": false
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "title": "UserCreate",
+        "description": "Schema for creating a new user."
+      },
+      "UserSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "is_admin": {
+            "type": "boolean",
+            "title": "Is Admin"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "is_admin",
+          "is_active",
+          "language",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserSchema",
+        "description": "Schema for User API responses (excludes password)."
+      },
+      "UserUpdate": {
+        "properties": {
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate",
+        "description": "Schema for updating user information."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VideoTrackSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "stream_index": {
+            "type": "integer",
+            "title": "Stream Index"
+          },
+          "codec": {
+            "type": "string",
+            "title": "Codec"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "is_default": {
+            "type": "boolean",
+            "title": "Is Default"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "pixel_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pixel Format"
+          },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
+          "color_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Range"
+          },
+          "color_space": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Space"
+          },
+          "color_primaries": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Primaries"
+          },
+          "color_transfer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Transfer"
+          },
+          "max_luminance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Luminance"
+          },
+          "min_luminance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Luminance"
+          },
+          "max_cll": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cll"
+          },
+          "max_fall": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Fall"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "media_file_id",
+          "stream_index",
+          "codec",
+          "is_default"
+        ],
+        "title": "VideoTrackSchema",
+        "description": "Schema for VideoTrack API responses."
+      },
+      "app__routers__v1__auth__TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "user"
+        ],
+        "title": "TokenResponse",
+        "description": "Response schema for token endpoints."
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

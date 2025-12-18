@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "server"
+		},
+		{
+			"path": "web"
+		},
+		{
+			"path": ".",
+			"name": "root"
+		}
+	],
+	"settings": {}
+}

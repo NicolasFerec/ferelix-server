@@ -21,7 +21,8 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "plugins": [{ "name": "@vue/typescript-plugin" }]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/**/*.d.ts"],
   "exclude": ["node_modules", "dist"]

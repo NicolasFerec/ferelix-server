@@ -81,9 +81,7 @@ async def stream_video(
     media_file = await session.get(MediaFile, media_id)
 
     if not media_file:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
     file_path = Path(media_file.file_path)
     if not file_path.exists():
@@ -123,9 +121,7 @@ async def stream_video(
         ".webm": "video/webm",
         ".m4v": "video/x-m4v",
     }
-    content_type = content_type_map.get(
-        media_file.file_extension.lower(), "application/octet-stream"
-    )
+    content_type = content_type_map.get(media_file.file_extension.lower(), "application/octet-stream")
 
     headers = {
         "Accept-Ranges": "bytes",
@@ -351,9 +347,7 @@ async def start_hls_audio_transcode(
         # Clean up failed job
         await session.delete(job)
         await session.commit()
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start audio-transcode: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to start audio-transcode: {e}")
 
 
 @router.get("/hls/{job_id}/playlist.m3u8")
@@ -365,18 +359,13 @@ async def get_hls_playlist(
     """Get HLS playlist file for a transcoding job."""
 
     # Get job from database
-    result = await session.execute(
-        select(TranscodingJob).where(TranscodingJob.id == job_id)
-    )
+    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:
         raise HTTPException(status_code=404, detail="Transcoding job not found")
 
-    if (
-        job.status != TranscodingJobStatus.RUNNING
-        and job.status != TranscodingJobStatus.COMPLETED
-    ):
+    if job.status != TranscodingJobStatus.RUNNING and job.status != TranscodingJobStatus.COMPLETED:
         raise HTTPException(status_code=404, detail="Playlist not ready yet")
 
     if not job.playlist_path:
@@ -417,9 +406,7 @@ async def get_hls_segment(
     """Get HLS segment file for a transcoding job."""
 
     # Get job from database
-    result = await session.execute(
-        select(TranscodingJob).where(TranscodingJob.id == job_id)
-    )
+    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:
@@ -457,9 +444,7 @@ async def get_hls_status(
 ) -> TranscodingJobSchema:
     """Get status of HLS transcoding job."""
 
-    result = await session.execute(
-        select(TranscodingJob).where(TranscodingJob.id == job_id)
-    )
+    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:
@@ -477,9 +462,7 @@ async def stop_hls_stream(
     """Stop HLS transcoding job."""
 
     # Check job exists
-    result = await session.execute(
-        select(TranscodingJob).where(TranscodingJob.id == job_id)
-    )
+    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:

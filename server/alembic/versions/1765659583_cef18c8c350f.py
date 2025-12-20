@@ -45,9 +45,7 @@ def upgrade() -> None:
         sa.Column("deleted_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_mediafile_file_path"), "mediafile", ["file_path"], unique=True
-    )
+    op.create_index(op.f("ix_mediafile_file_path"), "mediafile", ["file_path"], unique=True)
     op.create_table(
         "settings",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -127,9 +125,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_refresh_token_token"), "refresh_token", ["token"], unique=True
-    )
+    op.create_index(op.f("ix_refresh_token_token"), "refresh_token", ["token"], unique=True)
     op.create_table(
         "subtitle_track",
         sa.Column("id", sa.Integer(), nullable=False),

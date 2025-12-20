@@ -196,9 +196,7 @@ def _ensure_state(job_id: str, scheduler: AsyncIOScheduler | None = None) -> Job
                     parts = job_id.split("_")
                     library_id = parts[2] if len(parts) >= 3 else None
                     # Only update if current name doesn't already have the library name
-                    if not state.fallback_name.startswith(
-                        f"Library Scanner: {library_name}"
-                    ):
+                    if not state.fallback_name.startswith(f"Library Scanner: {library_name}"):
                         state.fallback_name = f"Library Scanner: {library_name}"
     return _JOB_STATES[job_id]
 
@@ -281,8 +279,7 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
         # Determine job type: one-off jobs typically have timestamps or unique suffixes
         job_type: JobType = (
             "one-off"
-            if "_" in event.job_id
-            and any(event.job_id.startswith(prefix) for prefix in ["scan_library_"])
+            if "_" in event.job_id and any(event.job_id.startswith(prefix) for prefix in ["scan_library_"])
             else "scheduled"
         )
 
@@ -299,9 +296,7 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
 
     elif event.code == EVENT_JOB_EXECUTED:
         state.status = "success"
-        state.last_run_time = _as_aware(
-            event.scheduled_run_time if isinstance(event, JobExecutionEvent) else now
-        )
+        state.last_run_time = _as_aware(event.scheduled_run_time if isinstance(event, JobExecutionEvent) else now)
         state.running_since = None
         state.error = None
         # Remove from tracking
@@ -312,9 +307,7 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
 
     elif event.code in (EVENT_JOB_ERROR, EVENT_JOB_MISSED):
         state.status = "failed"
-        state.last_run_time = _as_aware(
-            event.scheduled_run_time if isinstance(event, JobExecutionEvent) else now
-        )
+        state.last_run_time = _as_aware(event.scheduled_run_time if isinstance(event, JobExecutionEvent) else now)
         state.running_since = None
         error_msg = None
         if isinstance(event, JobExecutionEvent) and event.exception:

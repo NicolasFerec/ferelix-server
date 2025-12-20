@@ -5,24 +5,24 @@ import { defineConfig } from "vite";
 import vueDevTools from "vite-plugin-vue-devtools";
 
 export default defineConfig({
-  plugins: [vue(), vueDevTools(), tailwindcss()],
-  resolve: {
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    plugins: [vue(), vueDevTools(), tailwindcss()],
+    resolve: {
+        alias: {
+            "@": fileURLToPath(new URL("./src", import.meta.url)),
+        },
     },
-  },
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-        ws: true,
-      },
+    server: {
+        proxy: {
+            "/api": {
+                target: "http://localhost:8000",
+                changeOrigin: true,
+                ws: true,
+            },
+        },
     },
-  },
-  build: {
-    outDir: "dist",
-    assetsDir: "assets",
-    sourcemap: false,
-  },
+    build: {
+        outDir: "dist",
+        assetsDir: "assets",
+        sourcemap: false,
+    },
 });

@@ -22,15 +22,9 @@ def upgrade() -> None:
     op.add_column("video_track", sa.Column("bit_depth", sa.Integer(), nullable=True))
     op.add_column("video_track", sa.Column("color_range", sa.String(), nullable=True))
     op.add_column("video_track", sa.Column("color_space", sa.String(), nullable=True))
-    op.add_column(
-        "video_track", sa.Column("color_primaries", sa.String(), nullable=True)
-    )
-    op.add_column(
-        "video_track", sa.Column("color_transfer", sa.String(), nullable=True)
-    )
-    op.add_column(
-        "video_track", sa.Column("max_luminance", sa.Integer(), nullable=True)
-    )
+    op.add_column("video_track", sa.Column("color_primaries", sa.String(), nullable=True))
+    op.add_column("video_track", sa.Column("color_transfer", sa.String(), nullable=True))
+    op.add_column("video_track", sa.Column("max_luminance", sa.Integer(), nullable=True))
     op.add_column("video_track", sa.Column("min_luminance", sa.Float(), nullable=True))
     op.add_column("video_track", sa.Column("max_cll", sa.Integer(), nullable=True))
     op.add_column("video_track", sa.Column("max_fall", sa.Integer(), nullable=True))

@@ -151,9 +151,7 @@ class StreamInfo(BaseModel):
     # Playback method decision
     PlayMethod: PlayMethod
     TranscodeReasons: list[TranscodeReason] = []
-    IsRemuxOnly: bool = (
-        False  # True if only container conversion needed (fast DirectStream)
-    )
+    IsRemuxOnly: bool = False  # True if only container conversion needed (fast DirectStream)
 
     # Stream URLs
     DirectStreamUrl: str | None = None

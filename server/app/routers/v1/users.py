@@ -63,9 +63,7 @@ async def update_current_user(
     if user_update.email is not None:
         # Normalize email: convert empty string to None, strip whitespace
         email_value = (
-            user_update.email.strip()
-            if isinstance(user_update.email, str) and user_update.email.strip()
-            else None
+            user_update.email.strip() if isinstance(user_update.email, str) and user_update.email.strip() else None
         )
 
         # Update email (can be None to clear it)

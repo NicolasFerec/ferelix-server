@@ -6,7 +6,7 @@ import "./style.css";
 
 // Import device profile test in development
 if (import.meta.env.DEV) {
-  import("./services/deviceProfileTest");
+    import("./services/deviceProfileTest");
 }
 
 createApp(App).use(router).use(i18n).mount("#app");

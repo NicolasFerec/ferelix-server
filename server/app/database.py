@@ -12,9 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./ferelix.db")
 engine = create_async_engine(DATABASE_URL)
 
 # Create async session factory
-async_session_maker = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:

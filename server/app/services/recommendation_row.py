@@ -45,9 +45,7 @@ def validate_order_by(field: str) -> None:
         ValueError: If field is not in the whitelist
     """
     if field not in ALLOWED_ORDER_FIELDS:
-        raise ValueError(
-            f"Invalid order_by field: {field}. Allowed fields: {sorted(ALLOWED_ORDER_FIELDS)}"
-        )
+        raise ValueError(f"Invalid order_by field: {field}. Allowed fields: {sorted(ALLOWED_ORDER_FIELDS)}")
 
 
 def validate_filter_field(field: str) -> None:
@@ -60,9 +58,7 @@ def validate_filter_field(field: str) -> None:
         ValueError: If field is not in the whitelist
     """
     if field not in ALLOWED_FILTER_FIELDS:
-        raise ValueError(
-            f"Invalid filter field: {field}. Allowed fields: {sorted(ALLOWED_FILTER_FIELDS)}"
-        )
+        raise ValueError(f"Invalid filter field: {field}. Allowed fields: {sorted(ALLOWED_FILTER_FIELDS)}")
 
 
 def parse_where_clause(where_clause: list[dict[str, Any]]) -> list[Any]:  # noqa: C901
@@ -180,10 +176,7 @@ def apply_filter_criteria(
         column = getattr(MediaFile, order_field)
         order_direction = filter_criteria.get("order", "ASC").upper()
 
-        if order_direction == "DESC":
-            query = query.order_by(desc(column))
-        else:
-            query = query.order_by(asc(column))
+        query = query.order_by(desc(column)) if order_direction == "DESC" else query.order_by(asc(column))
 
     # Apply limit
     if "limit" in filter_criteria:

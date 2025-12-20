@@ -58,9 +58,7 @@ async def get_setup_status() -> dict[str, bool]:
     return {"setup_complete": await is_setup_complete()}
 
 
-@router.post(
-    "/admin", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/admin", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def create_first_admin(
     admin_data: AdminSetupRequest,
     session: Annotated[AsyncSession, Depends(get_session)],

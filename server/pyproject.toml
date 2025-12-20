@@ -29,6 +29,7 @@ dev = [
 target-version = "py314"
 unsafe-fixes = true
 preview = true
+line-length = 120
 lint.extend-select = ["I", "C", "SIM", "TCH", "UP", "RUF"]
 lint.mccabe.max-complexity = 15
 lint.ignore = ["TC001", "TC002", "TC003"]

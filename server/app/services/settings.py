@@ -64,9 +64,7 @@ def initialize_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -
         kwargs={"grace_period_days": settings.cleanup_grace_period_days},
     )
 
-    logger.info(
-        f"Scheduled library scanner (every {settings.library_scan_interval_minutes} minutes)"
-    )
+    logger.info(f"Scheduled library scanner (every {settings.library_scan_interval_minutes} minutes)")
     logger.info(
         f"Scheduled cleanup job (daily at {settings.cleanup_schedule_hour:02d}:{settings.cleanup_schedule_minute:02d}, "
         f"grace period: {settings.cleanup_grace_period_days} days)"
@@ -88,9 +86,7 @@ def update_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -> No
             trigger="interval",
             minutes=settings.library_scan_interval_minutes,
         )
-        logger.info(
-            f"Updated library scanner interval to {settings.library_scan_interval_minutes} minutes"
-        )
+        logger.info(f"Updated library scanner interval to {settings.library_scan_interval_minutes} minutes")
 
     # Update cleanup job - reschedule with new cron schedule and update kwargs
     job = scheduler.get_job("database_maintenance")

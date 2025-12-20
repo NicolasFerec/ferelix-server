@@ -1,6 +1,6 @@
 {
-    "files.exclude": {
-        "web/": true,
-        "server/": true
-    }
+    "biome.enabled": true,
+    "biome.configurationPath": "web/biome.json",
+    "biome.lsp.bin": "web/node_modules/.bin/biome",
+    "editor.defaultFormatter": "biomejs.biome"
 }

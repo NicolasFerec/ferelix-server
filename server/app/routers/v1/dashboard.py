@@ -91,9 +91,7 @@ async def create_library(
         HTTPException: If path already exists
     """
     # Check if path already exists
-    existing = await session.scalar(
-        select(Library).where(Library.path == library_data.path)
-    )
+    existing = await session.scalar(select(Library).where(Library.path == library_data.path))
 
     if existing:
         raise HTTPException(
@@ -192,9 +190,7 @@ async def update_library(
     # Check if path is being updated and if it conflicts with existing paths
     path_changed = False
     if update_data.path is not None and update_data.path != library_path.path:
-        existing = await session.scalar(
-            select(Library).where(Library.path == update_data.path)
-        )
+        existing = await session.scalar(select(Library).where(Library.path == update_data.path))
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -307,9 +303,7 @@ async def browse_directory(
                         if (
                             symlink_target_str in visited_resolved_paths
                             or resolved_path == current_real_path
-                            or str(current_real_path).startswith(
-                                symlink_target_str + "/"
-                            )
+                            or str(current_real_path).startswith(symlink_target_str + "/")
                         ):
                             skip_item = True
                     except OSError, RuntimeError:
@@ -642,9 +636,7 @@ async def update_user(
 
     if user_update.email is not None:
         # Check if email is already taken by another user
-        existing = await session.scalar(
-            select(User).where(User.email == user_update.email, User.id != user_id)
-        )
+        existing = await session.scalar(select(User).where(User.email == user_update.email, User.id != user_id))
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -920,9 +912,7 @@ async def get_library_recommendation_rows(
         )
 
     result = await session.execute(
-        select(RecommendationRow)
-        .where(RecommendationRow.library_id == library_id)
-        .order_by(RecommendationRow.name)
+        select(RecommendationRow).where(RecommendationRow.library_id == library_id).order_by(RecommendationRow.name)
     )
     return list(result.scalars().all())
 
@@ -1179,9 +1169,7 @@ async def update_settings(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Library scan interval must be at least 1 minute",
             )
-        settings.library_scan_interval_minutes = (
-            update_data.library_scan_interval_minutes
-        )
+        settings.library_scan_interval_minutes = update_data.library_scan_interval_minutes
 
     if update_data.cleanup_schedule_hour is not None:
         if not 0 <= update_data.cleanup_schedule_hour <= 23:

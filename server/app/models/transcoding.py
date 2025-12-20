@@ -35,9 +35,7 @@ class TranscodingJob(Base):
 
     __tablename__ = "transcoding_job"
 
-    id: Mapped[str] = mapped_column(
-        String, primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     media_file_id: Mapped[int] = mapped_column(Integer, index=True)
 
     # Job configuration
@@ -47,12 +45,8 @@ class TranscodingJob(Base):
     )  # TranscodingJobStatus enum values
 
     # Transcoding settings
-    video_codec: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # h264, hevc, copy
-    audio_codec: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # aac, mp3, copy
+    video_codec: Mapped[str | None] = mapped_column(String, nullable=True)  # h264, hevc, copy
+    audio_codec: Mapped[str | None] = mapped_column(String, nullable=True)  # aac, mp3, copy
     video_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)  # bps
     audio_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)  # bps
     max_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -64,9 +58,7 @@ class TranscodingJob(Base):
 
     # Progress tracking
     progress_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
-    transcoded_duration: Mapped[float | None] = mapped_column(
-        Float, nullable=True
-    )  # seconds
+    transcoded_duration: Mapped[float | None] = mapped_column(Float, nullable=True)  # seconds
     current_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
     current_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

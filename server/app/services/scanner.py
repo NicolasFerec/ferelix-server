@@ -218,9 +218,7 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
         return {}
 
 
-async def _update_media_tracks(
-    session: AsyncSession, media_file: MediaFile, metadata: dict
-) -> None:
+async def _update_media_tracks(session: AsyncSession, media_file: MediaFile, metadata: dict) -> None:
     """Create or update track records for a media file.
 
     Args:
@@ -229,15 +227,11 @@ async def _update_media_tracks(
         metadata: Metadata dictionary with video_tracks, audio_tracks, subtitle_tracks
     """
     # Delete existing tracks
-    video_tracks_to_delete = await session.scalars(
-        select(VideoTrack).where(VideoTrack.media_file_id == media_file.id)
-    )
+    video_tracks_to_delete = await session.scalars(select(VideoTrack).where(VideoTrack.media_file_id == media_file.id))
     for track in video_tracks_to_delete:
         await session.delete(track)
 
-    audio_tracks_to_delete = await session.scalars(
-        select(AudioTrack).where(AudioTrack.media_file_id == media_file.id)
-    )
+    audio_tracks_to_delete = await session.scalars(select(AudioTrack).where(AudioTrack.media_file_id == media_file.id))
     for track in audio_tracks_to_delete:
         await session.delete(track)
 
@@ -381,9 +375,7 @@ async def scan_library_path(  # noqa: C901
             # Commit any pending changes before exiting
             if pending_changes > 0:
                 await session.commit()
-                logger.info(
-                    f"Committed {pending_changes} pending changes before cancellation"
-                )
+                logger.info(f"Committed {pending_changes} pending changes before cancellation")
             if job_id:
                 mark_job_cancelled(job_id)
             break
@@ -396,9 +388,7 @@ async def scan_library_path(  # noqa: C901
             update_job_progress(job_id, files_processed=idx, current_file=file_path_str)
 
         # Check if file already exists in database
-        existing_file = await session.scalar(
-            select(MediaFile).where(MediaFile.file_path == file_path_str)
-        )
+        existing_file = await session.scalar(select(MediaFile).where(MediaFile.file_path == file_path_str))
 
         if existing_file:
             # Check if file was previously marked as deleted (restored!)
@@ -534,9 +524,7 @@ async def scan_all_libraries(
             return {"libraries_scheduled": len(libraries_list)}
         else:
             # Fallback: scan directly (for backwards compatibility or if no scheduler)
-            logger.warning(
-                "No scheduler provided to scan_all_libraries, scanning directly (not recommended)"
-            )
+            logger.warning("No scheduler provided to scan_all_libraries, scanning directly (not recommended)")
             total_stats = {"new": 0, "updated": 0, "deleted": 0, "restored": 0}
             for library_path in libraries_list:
                 stats = await scan_library_path(session, library_path)
@@ -577,9 +565,7 @@ async def scan_library_job(
         return stats
 
 
-def schedule_library_scan(
-    scheduler: AsyncIOScheduler, library_id: int, library_name: str | None = None
-) -> str:
+def schedule_library_scan(scheduler: AsyncIOScheduler, library_id: int, library_name: str | None = None) -> str:
     """Create a one-off job to scan a specific library.
 
     Args:
@@ -633,9 +619,7 @@ async def cleanup_deleted_media(grace_period_days: int = 30) -> int:
 
         # Find all files marked as deleted before the cutoff date
         result = await session.execute(
-            select(MediaFile).where(
-                MediaFile.deleted_at.isnot(None), MediaFile.deleted_at < cutoff_date
-            )
+            select(MediaFile).where(MediaFile.deleted_at.isnot(None), MediaFile.deleted_at < cutoff_date)
         )
         files_to_delete = result.scalars().all()
 
@@ -644,9 +628,7 @@ async def cleanup_deleted_media(grace_period_days: int = 30) -> int:
             return 0
 
         count = len(files_to_delete)
-        logger.info(
-            f"Cleaning up {count} deleted media files older than {grace_period_days} days"
-        )
+        logger.info(f"Cleaning up {count} deleted media files older than {grace_period_days} days")
 
         # Delete the files
         for file in files_to_delete:

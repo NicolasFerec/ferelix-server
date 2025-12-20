@@ -65,9 +65,7 @@ async def get_playback_info(
     media_file = result.scalar_one_or_none()
 
     if not media_file:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
     # Build stream info using device profile
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
@@ -272,9 +270,7 @@ async def get_homepage_rows(
             selectinload(MediaFile.audio_tracks),
             selectinload(MediaFile.subtitle_tracks),
         )
-        query = apply_filter_criteria(
-            query, recommendation_row.filter_criteria, library.path
-        )
+        query = apply_filter_criteria(query, recommendation_row.filter_criteria, library.path)
 
         # Execute query
         media_result = await session.execute(query)
@@ -382,9 +378,7 @@ async def get_library_rows(
             selectinload(MediaFile.audio_tracks),
             selectinload(MediaFile.subtitle_tracks),
         )
-        query = apply_filter_criteria(
-            query, recommendation_row.filter_criteria, library.path
-        )
+        query = apply_filter_criteria(query, recommendation_row.filter_criteria, library.path)
 
         # Execute query
         media_result = await session.execute(query)
@@ -498,9 +492,7 @@ async def start_media_stream(
                 }
 
             except Exception as e:
-                raise HTTPException(
-                    status_code=500, detail=f"Failed to start remuxing: {e}"
-                )
+                raise HTTPException(status_code=500, detail=f"Failed to start remuxing: {e}")
 
         else:
             # Direct streaming (no transcoding needed)
@@ -548,12 +540,8 @@ async def start_media_stream(
                 user=_user,
                 video_codec=video_codec,
                 audio_codec=audio_codec,
-                video_bitrate=transcode_settings.VideoBitrate
-                if transcode_settings
-                else None,
-                audio_bitrate=transcode_settings.AudioBitrate
-                if transcode_settings
-                else None,
+                video_bitrate=transcode_settings.VideoBitrate if transcode_settings else None,
+                audio_bitrate=transcode_settings.AudioBitrate if transcode_settings else None,
                 max_width=transcode_settings.MaxWidth if transcode_settings else None,
                 max_height=transcode_settings.MaxHeight if transcode_settings else None,
             )
@@ -567,6 +555,4 @@ async def start_media_stream(
             }
 
         except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to start streaming: {e}"
-            )
+            raise HTTPException(status_code=500, detail=f"Failed to start streaming: {e}")

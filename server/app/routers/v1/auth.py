@@ -44,9 +44,7 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-@router.post(
-    "/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED
-)
+@router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -64,9 +62,7 @@ async def register(
         HTTPException: If username or email already exists
     """
     # Check if username exists (case-insensitive)
-    existing = await session.scalar(
-        select(User).where(func.lower(User.username) == func.lower(user_data.username))
-    )
+    existing = await session.scalar(select(User).where(func.lower(User.username) == func.lower(user_data.username)))
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -116,9 +112,7 @@ async def login(
         HTTPException: If credentials are invalid
     """
     # Get user by username (case-insensitive)
-    user = await session.scalar(
-        select(User).where(func.lower(User.username) == func.lower(login_data.username))
-    )
+    user = await session.scalar(select(User).where(func.lower(User.username) == func.lower(login_data.username)))
 
     if not user or user.password != login_data.password:
         raise HTTPException(

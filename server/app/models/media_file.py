@@ -31,17 +31,11 @@ class MediaFile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     scanned_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True, default=None
-    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     # Relationships
-    video_tracks: Mapped[list[VideoTrack]] = relationship(
-        back_populates="media_file", cascade="all, delete-orphan"
-    )
-    audio_tracks: Mapped[list[AudioTrack]] = relationship(
-        back_populates="media_file", cascade="all, delete-orphan"
-    )
+    video_tracks: Mapped[list[VideoTrack]] = relationship(back_populates="media_file", cascade="all, delete-orphan")
+    audio_tracks: Mapped[list[AudioTrack]] = relationship(back_populates="media_file", cascade="all, delete-orphan")
     subtitle_tracks: Mapped[list[SubtitleTrack]] = relationship(
         back_populates="media_file", cascade="all, delete-orphan"
     )
@@ -89,36 +83,20 @@ class VideoTrack(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Enhanced metadata for transcoding decisions
-    profile: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # e.g., "High", "Main"
-    level: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # e.g., "4.1", "5.1"
-    pixel_format: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # e.g., "yuv420p", "yuv420p10le"
+    profile: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g., "High", "Main"
+    level: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g., "4.1", "5.1"
+    pixel_format: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g., "yuv420p", "yuv420p10le"
     bit_depth: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 8, 10, 12
     color_range: Mapped[str | None] = mapped_column(String, nullable=True)  # "tv", "pc"
-    color_space: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # "bt709", "bt2020nc"
-    color_primaries: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # "bt709", "bt2020"
-    color_transfer: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )  # "bt709", "smpte2084", "arib-std-b67"
+    color_space: Mapped[str | None] = mapped_column(String, nullable=True)  # "bt709", "bt2020nc"
+    color_primaries: Mapped[str | None] = mapped_column(String, nullable=True)  # "bt709", "bt2020"
+    color_transfer: Mapped[str | None] = mapped_column(String, nullable=True)  # "bt709", "smpte2084", "arib-std-b67"
 
     # HDR metadata
     max_luminance: Mapped[int | None] = mapped_column(Integer, nullable=True)  # nits
     min_luminance: Mapped[float | None] = mapped_column(Float, nullable=True)  # nits
-    max_cll: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )  # Content Light Level
-    max_fall: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )  # Frame Average Light Level
+    max_cll: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Content Light Level
+    max_fall: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Frame Average Light Level
 
     # Relationship
     media_file: Mapped[MediaFile] = relationship(back_populates="video_tracks")
@@ -140,9 +118,7 @@ class AudioTrack(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Enhanced metadata for transcoding decisions
-    sample_rate: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )  # Hz, e.g. 48000
+    sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Hz, e.g. 48000
 
     # Relationship
     media_file: Mapped[MediaFile] = relationship(back_populates="audio_tracks")

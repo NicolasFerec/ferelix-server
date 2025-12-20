@@ -113,16 +113,12 @@ class FFmpegTranscoder:
             # Update job with process ID
             async with async_session_maker() as session:
                 await session.execute(
-                    update(TranscodingJob)
-                    .where(TranscodingJob.id == job_id)
-                    .values(process_id=process.pid)
+                    update(TranscodingJob).where(TranscodingJob.id == job_id).values(process_id=process.pid)
                 )
                 await session.commit()
 
             # Start progress monitoring
-            task = asyncio.create_task(
-                self._monitor_progress(job_id, process, media_file.duration)
-            )
+            task = asyncio.create_task(self._monitor_progress(job_id, process, media_file.duration))
             # Store task reference to prevent garbage collection
             if not hasattr(self, "_background_tasks"):
                 self._background_tasks = set()
@@ -133,9 +129,7 @@ class FFmpegTranscoder:
 
         except Exception as e:
             await self._mark_job_failed(job_id, str(e))
-            raise HTTPException(
-                status_code=500, detail=f"Failed to start transcoding: {e}"
-            )
+            raise HTTPException(status_code=500, detail=f"Failed to start transcoding: {e}")
 
     async def start_remux_hls(
         self,
@@ -198,16 +192,12 @@ class FFmpegTranscoder:
             # Update job with process ID
             async with async_session_maker() as session:
                 await session.execute(
-                    update(TranscodingJob)
-                    .where(TranscodingJob.id == job_id)
-                    .values(process_id=process.pid)
+                    update(TranscodingJob).where(TranscodingJob.id == job_id).values(process_id=process.pid)
                 )
                 await session.commit()
 
             # Start progress monitoring
-            task = asyncio.create_task(
-                self._monitor_progress(job_id, process, media_file.duration)
-            )
+            task = asyncio.create_task(self._monitor_progress(job_id, process, media_file.duration))
             # Store task reference to prevent garbage collection
             if not hasattr(self, "_background_tasks"):
                 self._background_tasks = set()
@@ -218,9 +208,7 @@ class FFmpegTranscoder:
 
         except Exception as e:
             await self._mark_job_failed(job_id, str(e))
-            raise HTTPException(
-                status_code=500, detail=f"Failed to start remuxing: {e}"
-            )
+            raise HTTPException(status_code=500, detail=f"Failed to start remuxing: {e}")
 
     def _build_remux_hls_command(
         self,
@@ -338,7 +326,9 @@ class FFmpegTranscoder:
         # Resolution scaling
         if max_width or max_height:
             if max_width and max_height:
-                scale_filter = f"scale='min({max_width},iw)':'min({max_height},ih)':force_original_aspect_ratio=decrease"
+                scale_filter = (
+                    f"scale='min({max_width},iw)':'min({max_height},ih)':force_original_aspect_ratio=decrease"
+                )
             elif max_width:
                 scale_filter = f"scale={max_width}:-2"
             else:
@@ -404,9 +394,7 @@ class FFmpegTranscoder:
             else:
                 stderr_output = ""
                 if process.stderr:
-                    stderr_output = (await process.stderr.read()).decode(
-                        "utf-8", errors="ignore"
-                    )
+                    stderr_output = (await process.stderr.read()).decode("utf-8", errors="ignore")
                 await self._mark_job_failed(
                     job_id,
                     f"FFmpeg exited with code {process.returncode}: {stderr_output}",
@@ -419,9 +407,7 @@ class FFmpegTranscoder:
             # Remove from active jobs
             self._active_jobs.pop(job_id, None)
 
-    def _parse_ffmpeg_progress(
-        self, line: str, total_duration: float | None
-    ) -> dict[str, Any] | None:
+    def _parse_ffmpeg_progress(self, line: str, total_duration: float | None) -> dict[str, Any] | None:
         """Parse FFmpeg stderr output for progress information."""
 
         if "frame=" not in line or "time=" not in line:
@@ -445,9 +431,7 @@ class FFmpegTranscoder:
 
             # Calculate progress percentage
             if total_duration and total_duration > 0:
-                progress["progress_percent"] = min(
-                    100.0, (current_seconds / total_duration) * 100
-                )
+                progress["progress_percent"] = min(100.0, (current_seconds / total_duration) * 100)
 
         # Extract current bitrate
         if match := self.progress_patterns["bitrate"].search(line):
@@ -456,9 +440,7 @@ class FFmpegTranscoder:
 
         return progress if progress else None
 
-    async def _update_job_progress(
-        self, job_id: str, progress_data: dict[str, Any]
-    ) -> None:
+    async def _update_job_progress(self, job_id: str, progress_data: dict[str, Any]) -> None:
         """Update job progress in database."""
 
         async with async_session_maker() as session:
@@ -596,9 +578,7 @@ class FFmpegTranscoder:
         """Get current status of a transcoding job."""
 
         async with async_session_maker() as session:
-            result = await session.execute(
-                select(TranscodingJob).where(TranscodingJob.id == job_id)
-            )
+            result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
             return result.scalar_one_or_none()
 
     async def start_cleanup_scheduler(self) -> None:

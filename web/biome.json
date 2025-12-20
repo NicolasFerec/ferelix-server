@@ -1,55 +1,58 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
-  "vcs": {
-    "enabled": false,
-    "clientKind": "git",
-    "useIgnoreFile": true,
-    "root": "..",
-    "defaultBranch": "main"
-  },
-  "files": {
-    "includes": ["**", "!!**/dist", "!src/api/types.ts", "!src/api/openapi.json"]
-  },
-  "formatter": {
-    "enabled": true,
-    "formatWithErrors": false,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineEnding": "lf",
-    "lineWidth": 100,
-    "attributePosition": "auto",
-    "bracketSameLine": false,
-    "bracketSpacing": true,
-    "expand": "auto"
-  },
-  "linter": { "enabled": true, "rules": { "recommended": true } },
-  "assist": {
-    "enabled": true,
-    "actions": { "source": { "organizeImports": "on" } }
-  },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
-  },
-  "html": {
-    "experimentalFullSupportEnabled": true
-  },
-  "overrides": [
-    {
-      "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
-      "linter": {
-        "rules": {
-          "style": {
-            "useConst": "off",
-            "useImportType": "off"
-          },
-          "correctness": {
-            "noUnusedVariables": "off",
-            "noUnusedImports": "off"
-          }
+    "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+    "vcs": {
+        "enabled": false,
+        "clientKind": "git",
+        "useIgnoreFile": true,
+        "root": "..",
+        "defaultBranch": "main"
+    },
+    "files": {
+        "includes": ["**", "!!**/dist", "!src/api/types.ts", "!src/api/openapi.json"]
+    },
+    "formatter": {
+        "enabled": true,
+        "formatWithErrors": false,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineEnding": "lf",
+        "lineWidth": 120,
+        "attributePosition": "auto",
+        "bracketSameLine": false,
+        "bracketSpacing": true,
+        "expand": "auto"
+    },
+    "linter": {
+        "enabled": true,
+        "rules": { "recommended": true }
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": { "organizeImports": "on" }
         }
-      }
-    }
-  ]
+    },
+    "css": {
+        "parser": { "tailwindDirectives": true }
+    },
+    "html": {
+        "experimentalFullSupportEnabled": true
+    },
+    "overrides": [
+        {
+            "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "useConst": "off",
+                        "useImportType": "off"
+                    },
+                    "correctness": {
+                        "noUnusedVariables": "off",
+                        "noUnusedImports": "off"
+                    }
+                }
+            }
+        }
+    ]
 }

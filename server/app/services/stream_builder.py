@@ -39,14 +39,10 @@ class StreamBuilder:
         stream_info = StreamInfo(
             Id=str(media_file.id),
             Path=media_file.file_path,
-            Container=media_file.file_extension.lstrip(".")
-            if media_file.file_extension
-            else "unknown",
+            Container=media_file.file_extension.lstrip(".") if media_file.file_extension else "unknown",
             PlayMethod=PlayMethod.DIRECT_PLAY,
             VideoType="VideoFile",
-            RunTimeTicks=int(media_file.duration * 10_000_000)
-            if media_file.duration
-            else None,
+            RunTimeTicks=int(media_file.duration * 10_000_000) if media_file.duration else None,
             Bitrate=media_file.bitrate,
             MediaStreams=self._build_media_streams(media_file),
         )
@@ -82,9 +78,7 @@ class StreamBuilder:
                     VideoCodec="copy", AudioCodec="copy", IsRemuxOnly=True
                 )
 
-                logger.debug(
-                    f"Direct stream (remux) enabled for {media_file.file_name}"
-                )
+                logger.debug(f"Direct stream (remux) enabled for {media_file.file_name}")
                 return stream_info
 
             # Add additional reasons
@@ -94,15 +88,11 @@ class StreamBuilder:
             video_ok, audio_ok = self._needs_audio_transcode(media_file)
             if video_ok and not audio_ok:
                 stream_info.PlayMethod = PlayMethod.TRANSCODE
-                stream_info.TranscodingUrl = (
-                    f"/api/v1/hls/{media_file.id}/audio-transcode/master.m3u8"
-                )
+                stream_info.TranscodingUrl = f"/api/v1/hls/{media_file.id}/audio-transcode/master.m3u8"
                 stream_info.TranscodingContainer = "mp4"
                 stream_info.TranscodingVideoCodec = "copy"
                 stream_info.TranscodingAudioCodec = "aac"
-                stream_info.TranscodeReasons.append(
-                    TranscodeReason.AUDIO_TRANSCODE_REQUIRED
-                )
+                stream_info.TranscodeReasons.append(TranscodeReason.AUDIO_TRANSCODE_REQUIRED)
 
                 from ..models.playback import TranscodeSettings
 
@@ -113,9 +103,7 @@ class StreamBuilder:
                     IsRemuxOnly=False,
                 )
 
-                logger.debug(
-                    f"Audio-transcode (video copy) enabled for {media_file.file_name}"
-                )
+                logger.debug(f"Audio-transcode (video copy) enabled for {media_file.file_name}")
                 return stream_info
 
         # Fall back to transcoding (treat media as video files; music handling removed)
@@ -141,11 +129,7 @@ class StreamBuilder:
         reasons = []
 
         # Check container support
-        container = (
-            media_file.file_extension.lstrip(".")
-            if media_file.file_extension
-            else "unknown"
-        )
+        container = media_file.file_extension.lstrip(".") if media_file.file_extension else "unknown"
         container_supported = self._is_container_supported(container, "Video")
         if not container_supported:
             reasons.append(TranscodeReason.CONTAINER_NOT_SUPPORTED)
@@ -177,9 +161,7 @@ class StreamBuilder:
         # Check video codec support (container will be changed to HLS/fMP4)
         if media_file.video_tracks:
             video_track = media_file.video_tracks[0]
-            video_codec_result = self._check_video_codec_support(
-                video_track, target_container="mp4"
-            )
+            video_codec_result = self._check_video_codec_support(video_track, target_container="mp4")
             if not video_codec_result.can_play:
                 reasons.extend(video_codec_result.reasons)
                 return PlaybackResult(False, reasons)
@@ -187,9 +169,7 @@ class StreamBuilder:
         # Check audio codec support (container will be changed)
         if media_file.audio_tracks:
             audio_track = media_file.audio_tracks[0]
-            audio_codec_result = self._check_audio_codec_support(
-                audio_track, target_container="mp4"
-            )
+            audio_codec_result = self._check_audio_codec_support(audio_track, target_container="mp4")
             if not audio_codec_result.can_play:
                 reasons.extend(audio_codec_result.reasons)
                 return PlaybackResult(False, reasons)
@@ -203,22 +183,16 @@ class StreamBuilder:
         # Check video support for remux target (mp4)
         if media_file.video_tracks:
             video_track = media_file.video_tracks[0]
-            video_res = self._check_video_codec_support(
-                video_track, target_container="mp4"
-            )
+            video_res = self._check_video_codec_support(video_track, target_container="mp4")
             video_ok = video_res.can_play
         # Check audio support for remux target (mp4)
         if media_file.audio_tracks:
             audio_track = media_file.audio_tracks[0]
-            audio_res = self._check_audio_codec_support(
-                audio_track, target_container="mp4"
-            )
+            audio_res = self._check_audio_codec_support(audio_track, target_container="mp4")
             audio_ok = audio_res.can_play
         return video_ok, audio_ok
 
-    def _check_video_codec_support(
-        self, video_track: Any, target_container: str | None = None
-    ) -> PlaybackResult:
+    def _check_video_codec_support(self, video_track: Any, target_container: str | None = None) -> PlaybackResult:
         """Check if a video codec is supported by the client."""
 
         reasons = []
@@ -254,9 +228,7 @@ class StreamBuilder:
 
         return PlaybackResult(True, reasons)
 
-    def _check_audio_codec_support(
-        self, audio_track: Any, target_container: str | None = None
-    ) -> PlaybackResult:
+    def _check_audio_codec_support(self, audio_track: Any, target_container: str | None = None) -> PlaybackResult:
         """Check if an audio codec is supported by the client."""
 
         reasons = []
@@ -274,13 +246,7 @@ class StreamBuilder:
             if (
                 profile.AudioCodec
                 and codec in profile.AudioCodec.split(",")
-                and (
-                    profile.Type == "Audio"
-                    or (
-                        profile.Type == "Video"
-                        and container in profile.Container.split(",")
-                    )
-                )
+                and (profile.Type == "Audio" or (profile.Type == "Video" and container in profile.Container.split(",")))
             ):
                 codec_supported = True
                 break
@@ -297,25 +263,19 @@ class StreamBuilder:
 
         return PlaybackResult(True, reasons)
 
-    def _check_codec_constraints(
-        self, track: Any, codec: str, track_type: str
-    ) -> PlaybackResult:
+    def _check_codec_constraints(self, track: Any, codec: str, track_type: str) -> PlaybackResult:
         """Check codec profile constraints (level, bitrate, resolution, etc.)."""
 
         reasons = []
 
         # Find matching codec profiles
-        matching_profiles = [
-            p for p in self.codec_profiles if p.Type == track_type and p.Codec == codec
-        ]
+        matching_profiles = [p for p in self.codec_profiles if p.Type == track_type and p.Codec == codec]
 
         for profile in matching_profiles:
             for condition in profile.Conditions:
                 constraint_failed = self._evaluate_condition(track, condition)
                 if constraint_failed:
-                    reason = self._condition_to_transcode_reason(
-                        condition.Property, track_type
-                    )
+                    reason = self._condition_to_transcode_reason(condition.Property, track_type)
                     if reason:
                         reasons.append(reason)
 
@@ -325,9 +285,7 @@ class StreamBuilder:
 
         return PlaybackResult(True, reasons)
 
-    def _evaluate_condition(
-        self, track: Any, condition: DeviceProfileCondition
-    ) -> bool:
+    def _evaluate_condition(self, track: Any, condition: DeviceProfileCondition) -> bool:
         """Evaluate if a codec profile condition fails."""
 
         property_name = condition.Property
@@ -382,9 +340,7 @@ class StreamBuilder:
         else:
             return getattr(track, prop_getter, None)
 
-    def _condition_to_transcode_reason(
-        self, property_name: str, track_type: str
-    ) -> TranscodeReason | None:
+    def _condition_to_transcode_reason(self, property_name: str, track_type: str) -> TranscodeReason | None:
         """Map condition property to transcode reason."""
 
         reason_map = {
@@ -406,9 +362,7 @@ class StreamBuilder:
         """Check if container is supported for the given media type."""
 
         for profile in self.direct_play_profiles:
-            if (
-                profile.Type == media_type or media_type == "Video"
-            ) and container in profile.Container.split(","):
+            if (profile.Type == media_type or media_type == "Video") and container in profile.Container.split(","):
                 return True
 
         return False
@@ -457,9 +411,7 @@ class StreamBuilder:
         # Add subtitle streams
         for i, subtitle_track in enumerate(media_file.subtitle_tracks):
             stream = {
-                "Index": len(media_file.video_tracks)
-                + len(media_file.audio_tracks)
-                + i,
+                "Index": len(media_file.video_tracks) + len(media_file.audio_tracks) + i,
                 "Type": "Subtitle",
                 "Codec": subtitle_track.codec,
                 "IsDefault": subtitle_track.is_default,

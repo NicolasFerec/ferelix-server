@@ -17,9 +17,7 @@ security = HTTPBearer(auto_error=False)
 
 async def get_current_user(
     session: Annotated[AsyncSession, Depends(get_session)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(security)
-    ] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     api_key: Annotated[str | None, Query(alias="api_key")] = None,
 ) -> User:
     """Get the current authenticated user from JWT token.
@@ -97,9 +95,7 @@ def get_current_active_user(
 
 async def get_optional_user(
     session: Annotated[AsyncSession, Depends(get_session)],
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None, Depends(security)
-    ] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     api_key: Annotated[str | None, Query(alias="api_key")] = None,
 ) -> User | None:
     """Get the current user if authenticated, None otherwise.

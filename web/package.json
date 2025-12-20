@@ -1,44 +1,44 @@
 {
-  "name": "ferelix-web",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "clean": "rimraf dist",
-    "preview": "vite preview",
-    "lint": "biome lint --write",
-    "format": "biome format --write",
-    "check": "biome check --write",
-    "type-check": "vue-tsc",
-    "tc": "vue-tsc",
-    "generate-api-types": "openapi-typescript src/api/openapi.json -o src/api/types.ts"
-  },
-  "dependencies": {
-    "hls.js": "^1.5.12",
-    "openapi-fetch": "^0.15.0",
-    "vue": "^3.5.25",
-    "vue-i18n": "^11.2.2",
-    "vue-router": "^4.6.4"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.3.10",
-    "@j178/prek": "^0.2.22",
-    "@tailwindcss/vite": "^4.1.18",
-    "@vitejs/plugin-vue": "^6.0.3",
-    "@vue/typescript-plugin": "^3.1.8",
-    "fs-extra": "^11.2.0",
-    "openapi-typescript": "^7.10.1",
-    "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.0",
-    "vite-plugin-vue-devtools": "^8.0.5",
-    "vue-tsc": "^3.1.8"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
-  },
-  "packageManager": "pnpm@10.26.0+sha512.3b3f6c725ebe712506c0ab1ad4133cf86b1f4b687effce62a9b38b4d72e3954242e643190fc51fa1642949c735f403debd44f5cb0edd657abe63a8b6a7e1e402"
+    "name": "ferelix-web",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "clean": "rimraf dist",
+        "preview": "vite preview",
+        "lint": "biome lint --write",
+        "format": "biome format --write",
+        "check": "biome check --write",
+        "type-check": "vue-tsc",
+        "tc": "vue-tsc",
+        "generate-api-types": "openapi-typescript src/api/openapi.json -o src/api/types.ts"
+    },
+    "dependencies": {
+        "hls.js": "^1.5.12",
+        "openapi-fetch": "^0.15.0",
+        "vue": "^3.5.25",
+        "vue-i18n": "^11.2.2",
+        "vue-router": "^4.6.4"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.3.10",
+        "@j178/prek": "^0.2.22",
+        "@tailwindcss/vite": "^4.1.18",
+        "@vitejs/plugin-vue": "^6.0.3",
+        "@vue/typescript-plugin": "^3.1.8",
+        "fs-extra": "^11.2.0",
+        "openapi-typescript": "^7.10.1",
+        "tailwindcss": "^4.1.18",
+        "typescript": "^5.9.3",
+        "vite": "^7.3.0",
+        "vite-plugin-vue-devtools": "^8.0.5",
+        "vue-tsc": "^3.1.8"
+    },
+    "engines": {
+        "node": ">=18.0.0",
+        "pnpm": ">=8.0.0"
+    },
+    "packageManager": "pnpm@10.26.0+sha512.3b3f6c725ebe712506c0ab1ad4133cf86b1f4b687effce62a9b38b4d72e3954242e643190fc51fa1642949c735f403debd44f5cb0edd657abe63a8b6a7e1e402"
 }

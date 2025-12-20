@@ -14,13 +14,9 @@ class Settings(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
     # Library scanner settings
-    library_scan_interval_minutes: Mapped[int] = mapped_column(
-        Integer, default=120
-    )  # Default: 2 hours
+    library_scan_interval_minutes: Mapped[int] = mapped_column(Integer, default=120)  # Default: 2 hours
     # Cleanup job settings
-    cleanup_schedule_hour: Mapped[int] = mapped_column(
-        Integer, default=3
-    )  # Default: 3 AM
+    cleanup_schedule_hour: Mapped[int] = mapped_column(Integer, default=3)  # Default: 3 AM
     cleanup_schedule_minute: Mapped[int] = mapped_column(Integer, default=0)
     cleanup_grace_period_days: Mapped[int] = mapped_column(Integer, default=30)
 

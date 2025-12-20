@@ -26,14 +26,10 @@ class RecommendationRow(Base):
     visible_on_recommend: Mapped[bool] = mapped_column(Boolean, default=False)
     is_special: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
     # Relationship
-    library: Mapped[Library] = relationship(
-        "Library", back_populates="recommendation_rows"
-    )  # type: ignore[type-arg]
+    library: Mapped[Library] = relationship("Library", back_populates="recommendation_rows")  # type: ignore[type-arg]
 
 
 class RecommendationRowSchema(BaseModel):
@@ -66,8 +62,6 @@ class RecommendationRowUpdate(BaseModel):
     """Schema for updating a recommendation row."""
 
     name: str | None = Field(None, min_length=1)
-    filter_criteria: dict[str, Any] | None = Field(
-        None, description="Filter criteria JSON"
-    )
+    filter_criteria: dict[str, Any] | None = Field(None, description="Filter criteria JSON")
     visible_on_homepage: bool | None = None
     visible_on_recommend: bool | None = None

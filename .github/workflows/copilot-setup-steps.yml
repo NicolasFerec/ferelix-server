@@ -19,12 +19,11 @@ jobs:
       - name:  Checkout code
         uses: actions/checkout@v6
 
+      - name: Install just
+        uses: extractions/setup-just@v3
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-
-      - name: Install server dependencies
-        run: uv sync
-        working-directory: ./server
 
       - name: Install pnpm
         uses: pnpm/action-setup@v2
@@ -38,6 +37,5 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: ./web/pnpm-lock.yaml
 
-      - name: Install web dependencies
-        run: pnpm install
-        working-directory: ./web
+      - name: Install all dependencies with just
+        run: just install

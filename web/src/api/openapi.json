@@ -1028,7 +1028,7 @@
           "streaming"
         ],
         "summary": "Start Hls Remux",
-        "description": "Start HLS remuxing (container conversion only, no re-encoding).",
+        "description": "Start HLS remuxing (container conversion only, no re-encoding).\n\nFast operation that changes the container format without re-encoding.\nIdeal for MKV files with compatible codecs (H.264/AAC).\n\nArgs:\n    media_id: Media file ID\n    audio_stream_index: Specific audio stream to include (None = default)\n    start_time: Start position in seconds for seeking",
         "operationId": "start_hls_remux_api_v1_hls__media_id__remux_post",
         "security": [
           {
@@ -1044,6 +1044,42 @@
               "type": "integer",
               "title": "Media Id"
             }
+          },
+          {
+            "name": "audio_stream_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audio stream index to include",
+              "title": "Audio Stream Index"
+            },
+            "description": "Audio stream index to include"
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start time in seconds for seeking",
+              "title": "Start Time"
+            },
+            "description": "Start time in seconds for seeking"
           },
           {
             "name": "api_key",
@@ -1092,7 +1128,7 @@
           "streaming"
         ],
         "summary": "Start Hls Stream",
-        "description": "Start HLS transcoding for a media file.\n\nReturns a transcoding job that can be used to access the HLS playlist once ready.",
+        "description": "Start HLS transcoding for a media file.\n\nFull transcoding with optional re-encoding of video/audio streams.\n\nArgs:\n    media_id: Media file ID\n    video_codec: Target video codec (h264, hevc, copy)\n    audio_codec: Target audio codec (aac, mp3, copy)\n    video_bitrate: Target video bitrate\n    audio_bitrate: Target audio bitrate\n    max_width: Maximum video width for scaling\n    max_height: Maximum video height for scaling\n    audio_stream_index: Specific audio stream to include (None = default)\n    subtitle_stream_index: Subtitle stream to burn into video (None = no subtitles)\n    start_time: Start position in seconds for seeking\n\nReturns:\n    Transcoding job that can be used to access the HLS playlist once ready.",
         "operationId": "start_hls_stream_api_v1_hls__media_id__start_post",
         "security": [
           {
@@ -1115,9 +1151,11 @@
             "required": false,
             "schema": {
               "type": "string",
+              "description": "Target video codec",
               "default": "h264",
               "title": "Video Codec"
-            }
+            },
+            "description": "Target video codec"
           },
           {
             "name": "audio_codec",
@@ -1125,9 +1163,11 @@
             "required": false,
             "schema": {
               "type": "string",
+              "description": "Target audio codec",
               "default": "aac",
               "title": "Audio Codec"
-            }
+            },
+            "description": "Target audio codec"
           },
           {
             "name": "video_bitrate",
@@ -1142,8 +1182,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Target video bitrate",
               "title": "Video Bitrate"
-            }
+            },
+            "description": "Target video bitrate"
           },
           {
             "name": "audio_bitrate",
@@ -1158,8 +1200,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Target audio bitrate",
               "title": "Audio Bitrate"
-            }
+            },
+            "description": "Target audio bitrate"
           },
           {
             "name": "max_width",
@@ -1174,8 +1218,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Maximum video width",
               "title": "Max Width"
-            }
+            },
+            "description": "Maximum video width"
           },
           {
             "name": "max_height",
@@ -1190,8 +1236,64 @@
                   "type": "null"
                 }
               ],
+              "description": "Maximum video height",
               "title": "Max Height"
-            }
+            },
+            "description": "Maximum video height"
+          },
+          {
+            "name": "audio_stream_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audio stream index to include",
+              "title": "Audio Stream Index"
+            },
+            "description": "Audio stream index to include"
+          },
+          {
+            "name": "subtitle_stream_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Subtitle stream index to burn",
+              "title": "Subtitle Stream Index"
+            },
+            "description": "Subtitle stream index to burn"
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start time in seconds for seeking",
+              "title": "Start Time"
+            },
+            "description": "Start time in seconds for seeking"
           },
           {
             "name": "api_key",
@@ -1240,7 +1342,7 @@
           "streaming"
         ],
         "summary": "Start Hls Audio Transcode",
-        "description": "Start HLS audio-transcode: copy video streams and transcode only the audio track.",
+        "description": "Start HLS audio-transcode: copy video streams and transcode only the audio track.\n\nThis is faster than full transcoding when only the audio codec is incompatible.\n\nArgs:\n    media_id: Media file ID\n    audio_codec: Target audio codec (aac, mp3)\n    audio_bitrate: Target audio bitrate\n    audio_stream_index: Specific audio stream to include (None = default)\n    start_time: Start position in seconds for seeking",
         "operationId": "start_hls_audio_transcode_api_v1_hls__media_id__audio_transcode_post",
         "security": [
           {
@@ -1263,9 +1365,11 @@
             "required": false,
             "schema": {
               "type": "string",
+              "description": "Target audio codec",
               "default": "aac",
               "title": "Audio Codec"
-            }
+            },
+            "description": "Target audio codec"
           },
           {
             "name": "audio_bitrate",
@@ -1280,12 +1384,14 @@
                   "type": "null"
                 }
               ],
+              "description": "Target audio bitrate",
               "default": 128000,
               "title": "Audio Bitrate"
-            }
+            },
+            "description": "Target audio bitrate"
           },
           {
-            "name": "max_width",
+            "name": "audio_stream_index",
             "in": "query",
             "required": false,
             "schema": {
@@ -1297,24 +1403,28 @@
                   "type": "null"
                 }
               ],
-              "title": "Max Width"
-            }
+              "description": "Audio stream index to include",
+              "title": "Audio Stream Index"
+            },
+            "description": "Audio stream index to include"
           },
           {
-            "name": "max_height",
+            "name": "start_time",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "number"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Max Height"
-            }
+              "description": "Start time in seconds for seeking",
+              "title": "Start Time"
+            },
+            "description": "Start time in seconds for seeking"
           },
           {
             "name": "api_key",
@@ -1358,6 +1468,66 @@
       }
     },
     "/api/v1/hls/{job_id}/playlist.m3u8": {
+      "head": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Hls Playlist",
+        "description": "Get HLS playlist file for a transcoding job.",
+        "operationId": "get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_head",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "streaming"
@@ -1606,6 +1776,77 @@
                   },
                   "title": "Response Stop Hls Stream Api V1 Hls  Job Id  Stop Delete"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/subtitle/{media_id}/{stream_index}": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Subtitle",
+        "description": "Extract and serve a subtitle track as WebVTT.\n\nOnly works with text-based subtitle codecs (SRT, ASS, WebVTT, etc.).\nImage-based subtitles (PGS, VOBSUB) must be burned into the video.\n\nArgs:\n    media_id: Media file ID\n    stream_index: Subtitle stream index within the media file\n\nReturns:\n    WebVTT formatted subtitle content",
+        "operationId": "get_subtitle_api_v1_subtitle__media_id___stream_index__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "stream_index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Stream Index"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -4198,6 +4439,18 @@
             "type": "boolean",
             "title": "Isplayback",
             "default": true
+          },
+          "RequestedResolution": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requestedresolution"
           }
         },
         "type": "object",
@@ -4537,6 +4790,15 @@
             "title": "Isremuxonly",
             "default": false
           },
+          "AvailableResolutions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Availableresolutions",
+            "default": []
+          },
           "DirectStreamUrl": {
             "anyOf": [
               {
@@ -4622,6 +4884,17 @@
               }
             ],
             "title": "Transcodingaudiocodec"
+          },
+          "TranscodingType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcodingtype"
           },
           "TranscodeSettings": {
             "title": "Transcodesettings"

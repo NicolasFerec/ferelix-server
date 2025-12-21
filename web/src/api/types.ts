@@ -502,6 +502,14 @@ export interface paths {
         /**
          * Start Hls Remux
          * @description Start HLS remuxing (container conversion only, no re-encoding).
+         *
+         *     Fast operation that changes the container format without re-encoding.
+         *     Ideal for MKV files with compatible codecs (H.264/AAC).
+         *
+         *     Args:
+         *         media_id: Media file ID
+         *         audio_stream_index: Specific audio stream to include (None = default)
+         *         start_time: Start position in seconds for seeking
          */
         post: operations["start_hls_remux_api_v1_hls__media_id__remux_post"];
         delete?: never;
@@ -523,7 +531,22 @@ export interface paths {
          * Start Hls Stream
          * @description Start HLS transcoding for a media file.
          *
-         *     Returns a transcoding job that can be used to access the HLS playlist once ready.
+         *     Full transcoding with optional re-encoding of video/audio streams.
+         *
+         *     Args:
+         *         media_id: Media file ID
+         *         video_codec: Target video codec (h264, hevc, copy)
+         *         audio_codec: Target audio codec (aac, mp3, copy)
+         *         video_bitrate: Target video bitrate
+         *         audio_bitrate: Target audio bitrate
+         *         max_width: Maximum video width for scaling
+         *         max_height: Maximum video height for scaling
+         *         audio_stream_index: Specific audio stream to include (None = default)
+         *         subtitle_stream_index: Subtitle stream to burn into video (None = no subtitles)
+         *         start_time: Start position in seconds for seeking
+         *
+         *     Returns:
+         *         Transcoding job that can be used to access the HLS playlist once ready.
          */
         post: operations["start_hls_stream_api_v1_hls__media_id__start_post"];
         delete?: never;
@@ -544,6 +567,15 @@ export interface paths {
         /**
          * Start Hls Audio Transcode
          * @description Start HLS audio-transcode: copy video streams and transcode only the audio track.
+         *
+         *     This is faster than full transcoding when only the audio codec is incompatible.
+         *
+         *     Args:
+         *         media_id: Media file ID
+         *         audio_codec: Target audio codec (aac, mp3)
+         *         audio_bitrate: Target audio bitrate
+         *         audio_stream_index: Specific audio stream to include (None = default)
+         *         start_time: Start position in seconds for seeking
          */
         post: operations["start_hls_audio_transcode_api_v1_hls__media_id__audio_transcode_post"];
         delete?: never;
@@ -568,7 +600,11 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Get Hls Playlist
+         * @description Get HLS playlist file for a transcoding job.
+         */
+        head: operations["get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_head"];
         patch?: never;
         trace?: never;
     };
@@ -627,6 +663,36 @@ export interface paths {
          * @description Stop HLS transcoding job.
          */
         delete: operations["stop_hls_stream_api_v1_hls__job_id__stop_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subtitle/{media_id}/{stream_index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Subtitle
+         * @description Extract and serve a subtitle track as WebVTT.
+         *
+         *     Only works with text-based subtitle codecs (SRT, ASS, WebVTT, etc.).
+         *     Image-based subtitles (PGS, VOBSUB) must be burned into the video.
+         *
+         *     Args:
+         *         media_id: Media file ID
+         *         stream_index: Subtitle stream index within the media file
+         *
+         *     Returns:
+         *         WebVTT formatted subtitle content
+         */
+        get: operations["get_subtitle_api_v1_subtitle__media_id___stream_index__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1604,6 +1670,10 @@ export interface components {
              * @default true
              */
             IsPlayback: boolean;
+            /** Requestedresolution */
+            RequestedResolution?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * PlaybackInfoResponse
@@ -1767,6 +1837,13 @@ export interface components {
              * @default false
              */
             IsRemuxOnly: boolean;
+            /**
+             * Availableresolutions
+             * @default []
+             */
+            AvailableResolutions: {
+                [key: string]: unknown;
+            }[];
             /** Directstreamurl */
             DirectStreamUrl?: string | null;
             /** Transcodingurl */
@@ -1788,6 +1865,8 @@ export interface components {
             TranscodingVideoCodec?: string | null;
             /** Transcodingaudiocodec */
             TranscodingAudioCodec?: string | null;
+            /** Transcodingtype */
+            TranscodingType?: string | null;
             /** Transcodesettings */
             TranscodeSettings?: unknown;
             /** Runtimeticks */
@@ -2674,6 +2753,10 @@ export interface operations {
     start_hls_remux_api_v1_hls__media_id__remux_post: {
         parameters: {
             query?: {
+                /** @description Audio stream index to include */
+                audio_stream_index?: number | null;
+                /** @description Start time in seconds for seeking */
+                start_time?: number | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -2707,12 +2790,24 @@ export interface operations {
     start_hls_stream_api_v1_hls__media_id__start_post: {
         parameters: {
             query?: {
+                /** @description Target video codec */
                 video_codec?: string;
+                /** @description Target audio codec */
                 audio_codec?: string;
+                /** @description Target video bitrate */
                 video_bitrate?: number | null;
+                /** @description Target audio bitrate */
                 audio_bitrate?: number | null;
+                /** @description Maximum video width */
                 max_width?: number | null;
+                /** @description Maximum video height */
                 max_height?: number | null;
+                /** @description Audio stream index to include */
+                audio_stream_index?: number | null;
+                /** @description Subtitle stream index to burn */
+                subtitle_stream_index?: number | null;
+                /** @description Start time in seconds for seeking */
+                start_time?: number | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -2746,10 +2841,14 @@ export interface operations {
     start_hls_audio_transcode_api_v1_hls__media_id__audio_transcode_post: {
         parameters: {
             query?: {
+                /** @description Target audio codec */
                 audio_codec?: string;
+                /** @description Target audio bitrate */
                 audio_bitrate?: number | null;
-                max_width?: number | null;
-                max_height?: number | null;
+                /** @description Audio stream index to include */
+                audio_stream_index?: number | null;
+                /** @description Start time in seconds for seeking */
+                start_time?: number | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -2781,6 +2880,39 @@ export interface operations {
         };
     };
     get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_head: {
         parameters: {
             query?: {
                 api_key?: string | null;
@@ -2902,6 +3034,40 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_subtitle_api_v1_subtitle__media_id___stream_index__get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+                stream_index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

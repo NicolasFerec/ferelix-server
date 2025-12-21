@@ -1,8 +1,10 @@
 """FFmpeg transcoding service for HLS streaming."""
 
 import asyncio
+import logging
 import re
 import shutil
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,153 @@ from ..models import (
 )
 from ..models.transcoding import TranscodingJobStatus
 
+logger = logging.getLogger(__name__)
+
+# Text-based subtitle codecs that can be extracted to WebVTT
+TEXT_SUBTITLE_CODECS = {"subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text"}
+
+# Image-based subtitle codecs that must be burned into video
+IMAGE_SUBTITLE_CODECS = {"hdmv_pgs_subtitle", "pgssub", "dvd_subtitle", "dvdsub", "dvb_subtitle", "xsub", "vobsub"}
+
+
+class HardwareAcceleration:
+    """Hardware acceleration capabilities detection."""
+
+    def __init__(self):
+        self.nvenc_available = False
+        self.qsv_available = False
+        self.vaapi_available = False
+        self.vaapi_device: str | None = None
+        self._detected = False
+
+    def detect(self) -> None:
+        """Detect available hardware encoders."""
+        if self._detected:
+            return
+
+        self._detected = True
+
+        # Check for available encoders
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-encoders"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            encoders_output = result.stdout
+
+            # Check NVENC (Nvidia)
+            if "h264_nvenc" in encoders_output and self._test_encoder("h264_nvenc"):
+                self.nvenc_available = True
+                logger.info("NVENC hardware acceleration available")
+
+            # Check Intel Quick Sync
+            if "h264_qsv" in encoders_output and self._test_encoder("h264_qsv"):
+                self.qsv_available = True
+                logger.info("Intel Quick Sync hardware acceleration available")
+
+            # Check VAAPI (Linux)
+            if "h264_vaapi" in encoders_output:
+                # Find VAAPI device
+                vaapi_devices = ["/dev/dri/renderD128", "/dev/dri/renderD129"]
+                for device in vaapi_devices:
+                    if Path(device).exists():
+                        self.vaapi_device = device
+                        if self._test_vaapi_encoder(device):
+                            self.vaapi_available = True
+                            logger.info(f"VAAPI hardware acceleration available on {device}")
+                            break
+
+        except Exception as e:
+            logger.warning(f"Hardware acceleration detection failed: {e}")
+
+        if not any([self.nvenc_available, self.qsv_available, self.vaapi_available]):
+            logger.info("No hardware acceleration available, using software encoding")
+
+    def _test_encoder(self, encoder: str) -> bool:
+        """Test if an encoder actually works."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=black:s=64x64:d=0.1",
+                    "-c:v",
+                    encoder,
+                    "-f",
+                    "null",
+                    "-",
+                ],
+                capture_output=True,
+                timeout=10,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def _test_vaapi_encoder(self, device: str) -> bool:
+        """Test if VAAPI encoder works with specific device."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-vaapi_device",
+                    device,
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "color=black:s=64x64:d=0.1",
+                    "-vf",
+                    "format=nv12,hwupload",
+                    "-c:v",
+                    "h264_vaapi",
+                    "-f",
+                    "null",
+                    "-",
+                ],
+                capture_output=True,
+                timeout=10,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def get_video_encoder(self, codec: str = "h264") -> tuple[str, list[str]]:
+        """Get the best available encoder for the codec.
+
+        Returns:
+            Tuple of (encoder_name, extra_args)
+        """
+        if codec == "copy":
+            return "copy", []
+
+        if codec in ("h264", "libx264"):
+            if self.nvenc_available:
+                return "h264_nvenc", ["-preset", "p4", "-tune", "ll"]
+            if self.qsv_available:
+                return "h264_qsv", ["-preset", "faster"]
+            if self.vaapi_available and self.vaapi_device:
+                return "h264_vaapi", []
+            # Software fallback
+            return "libx264", ["-preset", "veryfast", "-profile:v", "high", "-level", "4.1"]
+
+        if codec in ("hevc", "h265", "libx265"):
+            if self.nvenc_available:
+                return "hevc_nvenc", ["-preset", "p4", "-tune", "ll"]
+            if self.qsv_available:
+                return "hevc_qsv", ["-preset", "faster"]
+            if self.vaapi_available and self.vaapi_device:
+                return "hevc_vaapi", []
+            # Software fallback
+            return "libx265", ["-preset", "veryfast"]
+
+        return codec, []
+
 
 class FFmpegTranscoder:
     """FFmpeg transcoding service with HLS support."""
@@ -26,6 +175,10 @@ class FFmpegTranscoder:
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         self._active_jobs: dict[str, Any] = {}
         self._cleanup_task: asyncio.Task | None = None
+
+        # Hardware acceleration
+        self.hw_accel = HardwareAcceleration()
+        self.hw_accel.detect()
 
         # FFmpeg progress regex patterns
         self.progress_patterns = {
@@ -50,8 +203,29 @@ class FFmpegTranscoder:
         session_id: str | None = None,
         client_ip: str | None = None,
         user_agent: str | None = None,
+        audio_stream_index: int | None = None,
+        subtitle_stream_index: int | None = None,
+        start_time: float | None = None,
     ) -> str:
-        """Start HLS transcoding job for a media file."""
+        """Start HLS transcoding job for a media file.
+
+        Args:
+            job_id: Unique job identifier
+            media_file: Media file to transcode
+            video_codec: Target video codec (h264, hevc, copy)
+            audio_codec: Target audio codec (aac, mp3, copy)
+            video_bitrate: Target video bitrate
+            audio_bitrate: Target audio bitrate
+            max_width: Maximum width for scaling
+            max_height: Maximum height for scaling
+            segment_duration: HLS segment duration in seconds
+            session_id: Streaming session ID
+            client_ip: Client IP address
+            user_agent: Client user agent
+            audio_stream_index: Specific audio stream to include (None = default)
+            subtitle_stream_index: Subtitle stream to burn (None = no subtitles)
+            start_time: Start time in seconds for seeking
+        """
 
         # Create job directory
         job_dir = self.temp_dir / job_id
@@ -59,6 +233,17 @@ class FFmpegTranscoder:
 
         playlist_path = job_dir / "playlist.m3u8"
         segment_pattern = str(job_dir / "segment_%03d.ts")
+
+        # Check if subtitle needs burning (image-based)
+        burn_subtitle = False
+        subtitle_codec = None
+        if subtitle_stream_index is not None and media_file.subtitle_tracks:
+            for track in media_file.subtitle_tracks:
+                if track.stream_index == subtitle_stream_index:
+                    subtitle_codec = track.codec
+                    if subtitle_codec and subtitle_codec.lower() in IMAGE_SUBTITLE_CODECS:
+                        burn_subtitle = True
+                    break
 
         # Build FFmpeg command
         cmd = self._build_hls_command(
@@ -72,6 +257,9 @@ class FFmpegTranscoder:
             max_width=max_width,
             max_height=max_height,
             segment_duration=segment_duration,
+            audio_stream_index=audio_stream_index,
+            subtitle_stream_index=subtitle_stream_index if burn_subtitle else None,
+            start_time=start_time,
         )
 
         # Update job record
@@ -125,6 +313,12 @@ class FFmpegTranscoder:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
+            # Wait for playlist to be created (max 30 seconds for transcode)
+            for _ in range(60):
+                if playlist_path.exists():
+                    break
+                await asyncio.sleep(0.5)
+
             return str(playlist_path)
 
         except Exception as e:
@@ -139,8 +333,21 @@ class FFmpegTranscoder:
         session_id: str | None = None,
         client_ip: str | None = None,
         user_agent: str | None = None,
+        audio_stream_index: int | None = None,
+        start_time: float | None = None,
     ) -> str:
-        """Start HLS remuxing (container conversion only, no re-encoding)."""
+        """Start HLS remuxing (container conversion only, no re-encoding).
+
+        Args:
+            job_id: Unique job identifier
+            media_file: Media file to remux
+            segment_duration: HLS segment duration in seconds
+            session_id: Streaming session ID
+            client_ip: Client IP address
+            user_agent: Client user agent
+            audio_stream_index: Specific audio stream to include (None = all)
+            start_time: Start time in seconds for seeking
+        """
 
         # Create job directory
         job_dir = self.temp_dir / job_id
@@ -155,6 +362,8 @@ class FFmpegTranscoder:
             playlist_path=str(playlist_path),
             segment_pattern=segment_pattern,
             segment_duration=segment_duration,
+            audio_stream_index=audio_stream_index,
+            start_time=start_time,
         )
 
         # Update job record
@@ -204,6 +413,12 @@ class FFmpegTranscoder:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
+            # Wait for playlist to be created (max 15 seconds for remux)
+            for _ in range(30):
+                if playlist_path.exists():
+                    break
+                await asyncio.sleep(0.5)
+
             return str(playlist_path)
 
         except Exception as e:
@@ -216,19 +431,41 @@ class FFmpegTranscoder:
         playlist_path: str,
         segment_pattern: str,
         segment_duration: int = 6,
+        audio_stream_index: int | None = None,
+        start_time: float | None = None,
     ) -> list[str]:
-        """Build FFmpeg command for HLS remuxing (no re-encoding)."""
+        """Build FFmpeg command for HLS remuxing (no re-encoding).
 
-        cmd = [
-            "ffmpeg",
-            "-y",  # Overwrite output files
-            "-i",
-            input_path,
-            "-c",
-            "copy",  # Copy all streams without re-encoding
-            "-avoid_negative_ts",
-            "make_zero",  # Fix timestamp issues
-        ]
+        Args:
+            input_path: Path to input media file
+            playlist_path: Path for HLS playlist
+            segment_pattern: Pattern for HLS segments
+            segment_duration: Segment duration in seconds
+            audio_stream_index: Specific audio stream index (None = default)
+            start_time: Seek position in seconds
+        """
+
+        cmd = ["ffmpeg", "-y"]
+
+        # Fast seek (before input for speed)
+        if start_time and start_time > 0:
+            cmd.extend(["-ss", str(start_time)])
+
+        cmd.extend(["-i", input_path])
+
+        # Stream mapping (using absolute stream indices from database)
+        if audio_stream_index is not None:
+            # Map specific video and audio streams
+            cmd.extend(["-map", "0:v:0", "-map", f"0:{audio_stream_index}"])
+        else:
+            # Map first video and all audio by default
+            cmd.extend(["-map", "0:v:0", "-map", "0:a?"])
+
+        # Copy codecs (no re-encoding)
+        cmd.extend(["-c", "copy"])
+
+        # Fix timestamp issues
+        cmd.extend(["-avoid_negative_ts", "make_zero"])
 
         # HLS specific settings optimized for remux
         cmd.extend([
@@ -237,7 +474,7 @@ class FFmpegTranscoder:
             "-hls_time",
             str(segment_duration),
             "-hls_playlist_type",
-            "event",  # Allow seeking
+            "event",
             "-hls_segment_filename",
             segment_pattern,
             "-start_number",
@@ -245,13 +482,13 @@ class FFmpegTranscoder:
             "-hls_allow_cache",
             "1",
             "-hls_flags",
-            "delete_segments+append_list",  # Auto cleanup
+            "delete_segments+append_list",
             playlist_path,
         ])
 
         return cmd
 
-    def _build_hls_command(
+    def _build_hls_command(  # noqa: C901
         self,
         input_path: str,
         playlist_path: str,
@@ -263,79 +500,130 @@ class FFmpegTranscoder:
         max_width: int | None = None,
         max_height: int | None = None,
         segment_duration: int = 6,
+        audio_stream_index: int | None = None,
+        subtitle_stream_index: int | None = None,
+        start_time: float | None = None,
     ) -> list[str]:
-        """Build FFmpeg command for HLS transcoding."""
+        """Build FFmpeg command for HLS transcoding.
 
-        cmd = [
-            "ffmpeg",
-            "-y",  # Overwrite output files
-            "-i",
-            input_path,
-            "-c:v",
-            video_codec,
-            "-c:a",
-            audio_codec,
-        ]
+        Args:
+            input_path: Path to input media file
+            playlist_path: Path for HLS playlist
+            segment_pattern: Pattern for HLS segments
+            video_codec: Target video codec (h264, hevc, copy)
+            audio_codec: Target audio codec (aac, mp3, copy)
+            video_bitrate: Target video bitrate
+            audio_bitrate: Target audio bitrate
+            max_width: Maximum width for scaling
+            max_height: Maximum height for scaling
+            segment_duration: Segment duration in seconds
+            audio_stream_index: Specific audio stream index (None = default)
+            subtitle_stream_index: Subtitle stream to burn (None = no burn)
+            start_time: Seek position in seconds
+        """
+
+        cmd = ["ffmpeg", "-y"]
+
+        # Hardware acceleration initialization for VAAPI
+        if self.hw_accel.vaapi_available and self.hw_accel.vaapi_device and video_codec != "copy":
+            cmd.extend(["-vaapi_device", self.hw_accel.vaapi_device])
+
+        # Fast seek (before input for speed)
+        if start_time and start_time > 0:
+            cmd.extend(["-ss", str(start_time)])
+
+        cmd.extend(["-i", input_path])
+
+        # Stream mapping (using absolute stream indices from database)
+        if audio_stream_index is not None:
+            cmd.extend(["-map", "0:v:0", "-map", f"0:{audio_stream_index}"])
+        else:
+            cmd.extend(["-map", "0:v:0", "-map", "0:a:0?"])
+
+        # Get the best encoder for video
+        encoder, encoder_args = self.hw_accel.get_video_encoder(video_codec)
+        cmd.extend(["-c:v", encoder])
 
         # Video encoding settings
-        if video_codec == "h264":
+        if encoder != "copy":
+            cmd.extend(encoder_args)
+
+            # Add pixel format for compatibility
+            if "vaapi" in encoder:
+                # VAAPI needs format conversion
+                pass  # Will be handled in filter
+            else:
+                cmd.extend(["-pix_fmt", "yuv420p"])
+
+        # Audio codec
+        cmd.extend(["-c:a", audio_codec])
+
+        # Audio encoding settings
+        if audio_codec == "aac":
             cmd.extend([
-                "-preset",
-                "veryfast",  # Fast encoding for live streaming
-                "-profile:v",
-                "high",
-                "-level",
-                "4.1",
-                "-pix_fmt",
-                "yuv420p",  # Compatibility
+                "-profile:a",
+                "aac_low",
+                "-ar",
+                "48000",  # Sample rate for better HLS compatibility
+                "-ac",
+                "2",  # Stereo output for compatibility
             ])
-        elif video_codec == "hevc":
-            cmd.extend([
-                "-preset",
-                "veryfast",
-                "-profile:v",
-                "main",
-                "-level",
-                "4.1",
-                "-pix_fmt",
-                "yuv420p",
-            ])
-        elif video_codec != "copy":
-            # Hardware acceleration attempts
-            cmd.extend(["-preset", "veryfast"])
+        if audio_bitrate and audio_codec != "copy":
+            cmd.extend(["-b:a", str(audio_bitrate)])
 
         # Video bitrate
-        if video_bitrate and video_codec != "copy":
+        if video_bitrate and encoder != "copy":
             cmd.extend([
                 "-b:v",
-                f"{video_bitrate}",
+                str(video_bitrate),
                 "-maxrate",
-                f"{int(video_bitrate * 1.2)}",
+                str(int(video_bitrate * 1.2)),
                 "-bufsize",
-                f"{video_bitrate * 2}",
+                str(video_bitrate * 2),
             ])
 
-        # Audio encoding
-        if audio_codec == "aac":
-            cmd.extend(["-profile:a", "aac_low"])
+        # Build video filter chain
+        vf_filters = []
 
-        # Audio bitrate
-        if audio_bitrate and audio_codec != "copy":
-            cmd.extend(["-b:a", f"{audio_bitrate}"])
+        # VAAPI upload filter
+        if "vaapi" in encoder:
+            vf_filters.append("format=nv12")
+            vf_filters.append("hwupload")
 
         # Resolution scaling
-        if max_width or max_height:
-            if max_width and max_height:
-                scale_filter = (
-                    f"scale='min({max_width},iw)':'min({max_height},ih)':force_original_aspect_ratio=decrease"
-                )
-            elif max_width:
-                scale_filter = f"scale={max_width}:-2"
+        if (max_width or max_height) and encoder != "copy":
+            if "vaapi" in encoder:
+                if max_width and max_height:
+                    vf_filters.append(
+                        f"scale_vaapi=w='min({max_width},iw)':h='min({max_height},ih)':force_original_aspect_ratio=decrease"
+                    )
+                elif max_width:
+                    vf_filters.append(f"scale_vaapi=w={max_width}:h=-2")
+                else:
+                    vf_filters.append(f"scale_vaapi=w=-2:h={max_height}")
             else:
-                scale_filter = f"scale=-2:{max_height}"
+                if max_width and max_height:
+                    vf_filters.append(
+                        f"scale='min({max_width},iw)':'min({max_height},ih)':force_original_aspect_ratio=decrease"
+                    )
+                elif max_width:
+                    vf_filters.append(f"scale={max_width}:-2")
+                else:
+                    vf_filters.append(f"scale=-2:{max_height}")
 
-            if video_codec != "copy":
-                cmd.extend(["-vf", scale_filter])
+        # Subtitle burning (for image-based subtitles)
+        if subtitle_stream_index is not None and encoder != "copy":
+            # Use subtitles filter for burning
+            # Note: For VAAPI, we need to download, burn, and re-upload
+            if "vaapi" in encoder:
+                # Insert before hwupload
+                vf_filters.insert(0, f"subtitles='{input_path}':stream_index={subtitle_stream_index}")
+            else:
+                vf_filters.append(f"subtitles='{input_path}':stream_index={subtitle_stream_index}")
+
+        # Apply video filters
+        if vf_filters and encoder != "copy":
+            cmd.extend(["-vf", ",".join(vf_filters)])
 
         # HLS specific settings
         cmd.extend([
@@ -344,7 +632,9 @@ class FFmpegTranscoder:
             "-hls_time",
             str(segment_duration),
             "-hls_playlist_type",
-            "event",  # Allow seeking in live streams
+            "event",
+            "-hls_segment_type",
+            "mpegts",  # Explicit TS segments for better compatibility
             "-hls_segment_filename",
             segment_pattern,
             "-start_number",
@@ -352,7 +642,7 @@ class FFmpegTranscoder:
             "-hls_allow_cache",
             "1",
             "-hls_flags",
-            "delete_segments+append_list",  # Auto cleanup old segments
+            "delete_segments+append_list",
             playlist_path,
         ])
 
@@ -597,9 +887,67 @@ class FFmpegTranscoder:
                 await asyncio.sleep(3600)  # 1 hour
                 cleaned = await self.cleanup_old_jobs()
                 if cleaned > 0:
-                    print(f"Cleaned up {cleaned} old transcoding jobs")
+                    logger.info(f"Cleaned up {cleaned} old transcoding jobs")
             except Exception as e:
-                print(f"Cleanup scheduler error: {e}")
+                logger.error(f"Cleanup scheduler error: {e}")
+
+    async def extract_subtitle_to_webvtt(
+        self,
+        media_file_path: str,
+        subtitle_stream_index: int,
+        output_path: str,
+    ) -> bool:
+        """Extract a subtitle stream to WebVTT format.
+
+        Args:
+            media_file_path: Path to the media file
+            subtitle_stream_index: Absolute stream index of the subtitle to extract
+            output_path: Path for the output WebVTT file
+
+        Returns:
+            True if extraction succeeded, False otherwise
+        """
+        # Use absolute stream index (0:{index}) not relative (0:s:{index})
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            media_file_path,
+            "-map",
+            f"0:{subtitle_stream_index}",
+            "-c:s",
+            "webvtt",
+            output_path,
+        ]
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+
+            if process.returncode != 0:
+                logger.error(f"Subtitle extraction failed: {stderr.decode()}")
+                return False
+
+            return Path(output_path).exists()
+
+        except TimeoutError:
+            logger.error("Subtitle extraction timed out")
+            return False
+        except Exception as e:
+            logger.error(f"Subtitle extraction error: {e}")
+            return False
+
+    def is_text_subtitle(self, codec: str) -> bool:
+        """Check if a subtitle codec is text-based (can be extracted to WebVTT)."""
+        return codec.lower() in TEXT_SUBTITLE_CODECS
+
+    def is_image_subtitle(self, codec: str) -> bool:
+        """Check if a subtitle codec is image-based (must be burned)."""
+        return codec.lower() in IMAGE_SUBTITLE_CODECS
 
 
 # Global transcoder instance

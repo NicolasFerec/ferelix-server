@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.dependencies import get_optional_user
@@ -19,7 +20,7 @@ from app.models import (
     User,
 )
 from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
-from app.services.transcoder import get_transcoder
+from app.services.transcoder import TEXT_SUBTITLE_CODECS, get_transcoder
 
 router = APIRouter(prefix="/api/v1", tags=["streaming"])
 
@@ -152,8 +153,19 @@ async def start_hls_remux(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User | None, Depends(get_optional_user)] = None,
+    audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
+    start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
 ) -> TranscodingJobSchema:
-    """Start HLS remuxing (container conversion only, no re-encoding)."""
+    """Start HLS remuxing (container conversion only, no re-encoding).
+
+    Fast operation that changes the container format without re-encoding.
+    Ideal for MKV files with compatible codecs (H.264/AAC).
+
+    Args:
+        media_id: Media file ID
+        audio_stream_index: Specific audio stream to include (None = default)
+        start_time: Start position in seconds for seeking
+    """
 
     # Fetch media file
     media_file = await session.get(MediaFile, media_id)
@@ -192,6 +204,8 @@ async def start_hls_remux(
             session_id=session_id,
             client_ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
+            audio_stream_index=audio_stream_index,
+            start_time=start_time,
         )
 
         # Refresh job to get updated status
@@ -211,19 +225,44 @@ async def start_hls_stream(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User | None, Depends(get_optional_user)] = None,
-    video_codec: Annotated[str, Query()] = "h264",
-    audio_codec: Annotated[str, Query()] = "aac",
-    video_bitrate: Annotated[int | None, Query()] = None,
-    audio_bitrate: Annotated[int | None, Query()] = None,
-    max_width: Annotated[int | None, Query()] = None,
-    max_height: Annotated[int | None, Query()] = None,
+    video_codec: Annotated[str, Query(description="Target video codec")] = "h264",
+    audio_codec: Annotated[str, Query(description="Target audio codec")] = "aac",
+    video_bitrate: Annotated[int | None, Query(description="Target video bitrate")] = None,
+    audio_bitrate: Annotated[int | None, Query(description="Target audio bitrate")] = None,
+    max_width: Annotated[int | None, Query(description="Maximum video width")] = None,
+    max_height: Annotated[int | None, Query(description="Maximum video height")] = None,
+    audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
+    subtitle_stream_index: Annotated[int | None, Query(description="Subtitle stream index to burn")] = None,
+    start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
 ) -> TranscodingJobSchema:
     """Start HLS transcoding for a media file.
 
-    Returns a transcoding job that can be used to access the HLS playlist once ready.
+    Full transcoding with optional re-encoding of video/audio streams.
+
+    Args:
+        media_id: Media file ID
+        video_codec: Target video codec (h264, hevc, copy)
+        audio_codec: Target audio codec (aac, mp3, copy)
+        video_bitrate: Target video bitrate
+        audio_bitrate: Target audio bitrate
+        max_width: Maximum video width for scaling
+        max_height: Maximum video height for scaling
+        audio_stream_index: Specific audio stream to include (None = default)
+        subtitle_stream_index: Subtitle stream to burn into video (None = no subtitles)
+        start_time: Start position in seconds for seeking
+
+    Returns:
+        Transcoding job that can be used to access the HLS playlist once ready.
     """
-    # Fetch media file
-    media_file = await session.get(MediaFile, media_id)
+    # Fetch media file with tracks
+    result = await session.execute(
+        select(MediaFile)
+        .options(
+            selectinload(MediaFile.subtitle_tracks),
+        )
+        .where(MediaFile.id == media_id)
+    )
+    media_file = result.scalar_one_or_none()
     if not media_file:
         raise HTTPException(status_code=404, detail="Media file not found")
 
@@ -265,6 +304,9 @@ async def start_hls_stream(
             session_id=session_id,
             client_ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
+            audio_stream_index=audio_stream_index,
+            subtitle_stream_index=subtitle_stream_index,
+            start_time=start_time,
         )
 
         # Refresh job to get updated status
@@ -284,15 +326,32 @@ async def start_hls_audio_transcode(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User | None, Depends(get_optional_user)] = None,
-    audio_codec: Annotated[str, Query()] = "aac",
-    audio_bitrate: Annotated[int | None, Query()] = 128000,
-    max_width: Annotated[int | None, Query()] = None,
-    max_height: Annotated[int | None, Query()] = None,
+    audio_codec: Annotated[str, Query(description="Target audio codec")] = "aac",
+    audio_bitrate: Annotated[int | None, Query(description="Target audio bitrate")] = 128000,
+    audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
+    start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
 ) -> TranscodingJobSchema:
-    """Start HLS audio-transcode: copy video streams and transcode only the audio track."""
+    """Start HLS audio-transcode: copy video streams and transcode only the audio track.
 
-    # Fetch media file
-    media_file = await session.get(MediaFile, media_id)
+    This is faster than full transcoding when only the audio codec is incompatible.
+
+    Args:
+        media_id: Media file ID
+        audio_codec: Target audio codec (aac, mp3)
+        audio_bitrate: Target audio bitrate
+        audio_stream_index: Specific audio stream to include (None = default)
+        start_time: Start position in seconds for seeking
+    """
+
+    # Fetch media file with tracks
+    result = await session.execute(
+        select(MediaFile)
+        .options(
+            selectinload(MediaFile.subtitle_tracks),
+        )
+        .where(MediaFile.id == media_id)
+    )
+    media_file = result.scalar_one_or_none()
     if not media_file:
         raise HTTPException(status_code=404, detail="Media file not found")
 
@@ -332,11 +391,11 @@ async def start_hls_audio_transcode(
             audio_codec=audio_codec,
             video_bitrate=None,
             audio_bitrate=audio_bitrate,
-            max_width=max_width,
-            max_height=max_height,
             session_id=session_id,
             client_ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
+            audio_stream_index=audio_stream_index,
+            start_time=start_time,
         )
 
         # Refresh job to get updated status
@@ -351,8 +410,10 @@ async def start_hls_audio_transcode(
 
 
 @router.get("/hls/{job_id}/playlist.m3u8")
+@router.head("/hls/{job_id}/playlist.m3u8")
 async def get_hls_playlist(
     job_id: str,
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User | None, Depends(get_optional_user)] = None,
 ) -> PlainTextResponse:
@@ -365,7 +426,12 @@ async def get_hls_playlist(
     if not job:
         raise HTTPException(status_code=404, detail="Transcoding job not found")
 
-    if job.status != TranscodingJobStatus.RUNNING and job.status != TranscodingJobStatus.COMPLETED:
+    if job.status == TranscodingJobStatus.CANCELLED:
+        raise HTTPException(status_code=410, detail="Transcoding job was cancelled")
+    elif job.status == TranscodingJobStatus.FAILED:
+        error_detail = f"Transcoding failed: {job.error_message}" if job.error_message else "Transcoding failed"
+        raise HTTPException(status_code=500, detail=error_detail)
+    elif job.status != TranscodingJobStatus.RUNNING and job.status != TranscodingJobStatus.COMPLETED:
         raise HTTPException(status_code=404, detail="Playlist not ready yet")
 
     if not job.playlist_path:
@@ -374,6 +440,18 @@ async def get_hls_playlist(
     playlist_path = Path(job.playlist_path)
     if not playlist_path.exists():
         raise HTTPException(status_code=404, detail="Playlist file not found")
+
+    # For HEAD requests, just return empty response with proper headers
+    if request.method == "HEAD":
+        return PlainTextResponse(
+            content="",
+            media_type="application/vnd.apple.mpegurl",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Cache-Control": "no-cache",
+            },
+        )
 
     # Update last accessed time - will be set by database default
     await session.commit()
@@ -476,3 +554,89 @@ async def stop_hls_stream(
         return {"message": "Transcoding job stopped"}
     else:
         return {"message": "Job was not running or could not be stopped"}
+
+
+@router.get("/subtitle/{media_id}/{stream_index}")
+async def get_subtitle(
+    media_id: int,
+    stream_index: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user: Annotated[User | None, Depends(get_optional_user)] = None,
+) -> PlainTextResponse:
+    """Extract and serve a subtitle track as WebVTT.
+
+    Only works with text-based subtitle codecs (SRT, ASS, WebVTT, etc.).
+    Image-based subtitles (PGS, VOBSUB) must be burned into the video.
+
+    Args:
+        media_id: Media file ID
+        stream_index: Subtitle stream index within the media file
+
+    Returns:
+        WebVTT formatted subtitle content
+    """
+    # Fetch media file with subtitle tracks
+    result = await session.execute(
+        select(MediaFile).options(selectinload(MediaFile.subtitle_tracks)).where(MediaFile.id == media_id)
+    )
+    media_file = result.scalar_one_or_none()
+
+    if not media_file:
+        raise HTTPException(status_code=404, detail="Media file not found")
+
+    file_path = Path(media_file.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Media file not found on disk")
+
+    # Find the subtitle track
+    subtitle_track = None
+    for track in media_file.subtitle_tracks:
+        if track.stream_index == stream_index:
+            subtitle_track = track
+            break
+
+    if not subtitle_track:
+        raise HTTPException(status_code=404, detail="Subtitle track not found")
+
+    # Check if it's a text-based subtitle
+    if subtitle_track.codec.lower() not in TEXT_SUBTITLE_CODECS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Subtitle codec '{subtitle_track.codec}' cannot be extracted to WebVTT. "
+            "Image-based subtitles must be burned into the video.",
+        )
+
+    # Create temp directory for extracted subtitles
+    transcoder = get_transcoder()
+    subtitle_cache_dir = transcoder.temp_dir / "subtitles"
+    subtitle_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if already extracted (cache)
+    output_file = subtitle_cache_dir / f"{media_id}_{stream_index}.vtt"
+
+    if not output_file.exists():
+        # Extract subtitle to WebVTT
+        success = await transcoder.extract_subtitle_to_webvtt(
+            media_file_path=str(file_path),
+            subtitle_stream_index=stream_index,
+            output_path=str(output_file),
+        )
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to extract subtitle")
+
+    # Read and return the WebVTT content
+    try:
+        async with aiofiles.open(output_file) as f:
+            content = await f.read()
+
+        return PlainTextResponse(
+            content,
+            media_type="text/vtt",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read subtitle: {e}")

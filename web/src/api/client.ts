@@ -25,6 +25,10 @@ export type Settings = components["schemas"]["SettingsSchema"];
 export type SettingsUpdate = components["schemas"]["SettingsUpdate"];
 export type DirectoryItem = components["schemas"]["DirectoryItem"];
 export type HomepageRow = components["schemas"]["HomepageRow"];
+export type DeviceProfile = components["schemas"]["DeviceProfile"];
+export type PlaybackInfoResponse = components["schemas"]["PlaybackInfoResponse"];
+export type StreamInfo = components["schemas"]["StreamInfo"];
+export type TranscodingJob = components["schemas"]["TranscodingJobSchema"];
 
 /**
  * Get access token from localStorage
@@ -276,6 +280,184 @@ export const media = {
             throw new Error("Failed to get media file");
         }
         return data;
+    },
+
+    /**
+     * Get playback info for a media file
+     * Returns recommended playback method (DirectPlay, DirectStream, Transcode)
+     */
+    async getPlaybackInfo(
+        mediaId: number,
+        deviceProfile: components["schemas"]["DeviceProfile"],
+        options?: {
+            enableDirectPlay?: boolean;
+            enableDirectStream?: boolean;
+            enableTranscoding?: boolean;
+            requestedResolution?: { width: number; height: number } | null;
+        },
+    ): Promise<components["schemas"]["PlaybackInfoResponse"]> {
+        const { data, error } = await client.POST("/api/v1/playback-info/{media_id}", {
+            params: { path: { media_id: mediaId } },
+            body: {
+                DeviceProfile: deviceProfile,
+                EnableDirectPlay: options?.enableDirectPlay ?? true,
+                EnableDirectStream: options?.enableDirectStream ?? true,
+                EnableTranscoding: options?.enableTranscoding ?? true,
+                AllowVideoStreamCopy: true,
+                AllowAudioStreamCopy: true,
+                IsPlayback: true,
+                RequestedResolution: options?.requestedResolution,
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to get playback info");
+        }
+        return data;
+    },
+
+    /**
+     * Start HLS remux (container conversion only, fast)
+     */
+    async startRemux(
+        mediaId: number,
+        options?: {
+            audioStreamIndex?: number;
+            startTime?: number;
+        },
+    ): Promise<components["schemas"]["TranscodingJobSchema"]> {
+        const { data, error } = await client.POST("/api/v1/hls/{media_id}/remux", {
+            params: {
+                path: { media_id: mediaId },
+                query: {
+                    audio_stream_index: options?.audioStreamIndex,
+                    start_time: options?.startTime,
+                },
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to start remux");
+        }
+        return data;
+    },
+
+    /**
+     * Start HLS transcoding
+     */
+    async startTranscode(
+        mediaId: number,
+        options?: {
+            videoCodec?: string;
+            audioCodec?: string;
+            videoBitrate?: number;
+            audioBitrate?: number;
+            maxWidth?: number;
+            maxHeight?: number;
+            audioStreamIndex?: number;
+            subtitleStreamIndex?: number;
+            startTime?: number;
+        },
+    ): Promise<components["schemas"]["TranscodingJobSchema"]> {
+        const { data, error } = await client.POST("/api/v1/hls/{media_id}/start", {
+            params: {
+                path: { media_id: mediaId },
+                query: {
+                    video_codec: options?.videoCodec ?? "h264",
+                    audio_codec: options?.audioCodec ?? "aac",
+                    video_bitrate: options?.videoBitrate,
+                    audio_bitrate: options?.audioBitrate,
+                    max_width: options?.maxWidth,
+                    max_height: options?.maxHeight,
+                    audio_stream_index: options?.audioStreamIndex,
+                    subtitle_stream_index: options?.subtitleStreamIndex,
+                    start_time: options?.startTime,
+                },
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to start transcode");
+        }
+        return data;
+    },
+
+    /**
+     * Start HLS audio-only transcode (video copy)
+     */
+    async startAudioTranscode(
+        mediaId: number,
+        options?: {
+            audioCodec?: string;
+            audioBitrate?: number;
+            audioStreamIndex?: number;
+            startTime?: number;
+        },
+    ): Promise<components["schemas"]["TranscodingJobSchema"]> {
+        const { data, error } = await client.POST("/api/v1/hls/{media_id}/audio-transcode", {
+            params: {
+                path: { media_id: mediaId },
+                query: {
+                    audio_codec: options?.audioCodec ?? "aac",
+                    audio_bitrate: options?.audioBitrate ?? 128000,
+                    audio_stream_index: options?.audioStreamIndex,
+                    start_time: options?.startTime,
+                },
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to start audio transcode");
+        }
+        return data;
+    },
+
+    /**
+     * Get HLS job status
+     */
+    async getHlsStatus(jobId: string): Promise<components["schemas"]["TranscodingJobSchema"]> {
+        const { data, error } = await client.GET("/api/v1/hls/{job_id}/status", {
+            params: { path: { job_id: jobId } },
+        });
+        if (error || !data) {
+            throw new Error("Failed to get HLS status");
+        }
+        return data;
+    },
+
+    /**
+     * Stop HLS transcoding job
+     */
+    async stopHls(jobId: string): Promise<void> {
+        const { error } = await client.DELETE("/api/v1/hls/{job_id}/stop", {
+            params: { path: { job_id: jobId } },
+        });
+        if (error) {
+            throw new Error("Failed to stop HLS job");
+        }
+    },
+
+    /**
+     * Get subtitle URL for external WebVTT
+     */
+    getSubtitleUrl(mediaId: number, streamIndex: number): string {
+        const token = getAccessToken();
+        const baseUrl = `/api/v1/subtitle/${mediaId}/${streamIndex}`;
+        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
+    },
+
+    /**
+     * Get direct stream URL
+     */
+    getDirectStreamUrl(mediaId: number): string {
+        const token = getAccessToken();
+        const baseUrl = `/api/v1/stream/${mediaId}`;
+        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
+    },
+
+    /**
+     * Get HLS playlist URL
+     */
+    getHlsPlaylistUrl(jobId: string): string {
+        const token = getAccessToken();
+        const baseUrl = `/api/v1/hls/${jobId}/playlist.m3u8`;
+        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
     },
 };
 

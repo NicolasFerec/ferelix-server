@@ -4,6 +4,8 @@ Ferelix is a personal media server designed to organize, stream, and manage your
 
 We're using [Just](https://github.com/casey/just) as a command runner to simplify common tasks across the monorepo. Run `just --list` to see all available commands. Mainly, you'll use `just dev` to start both the backend and frontend development servers.
 
+When you're having port conflict, that means servers are already running (e.g., from a previous `just dev` session). If you just wanted the user to test, don't insist, the servers beiing already running is fine. If you wanted to start them yourself to see logs, then kill them. But never changes app port in config files, never.
+
 ## [Backend](./server)
 
 The backend is a FastAPI server that handles API requests, database interactions, and media scanning. It handles transcoding when needed and serves media files to clients.
@@ -35,6 +37,9 @@ Notes:
 - Prefer `session.get()`, `session.scalar()` and `session.scalars()` for queries — see examples in this repo.
 - Use `fastapi` CLI for local development (`uv run fastapi dev`) for convenient defaults and autoreload.
 
+Notes:
+- Import should always be on top of the file, never inside functions or conditionals.
+
 ### Migrations and code hygiene
 - Always use `uv run alembic` for revisions and `uv run alembic upgrade head` for applying migrations.
 - After generating a migration, review `alembic/versions/*` and run `uv run alembic upgrade head` to validate.
@@ -48,13 +53,20 @@ Notes:
 - There are no tests currently committed. When adding tests, use `uv run pytest` and `uv run pytest --cov`.
 - `.pytest_cache/` and `pytest.ini` are ignored in Docker and `.gitignore`/`.dockerignore`.
 
+### OpenAPI exports
+After editing an enpoint, regenerate OpenAPI specs with:
+```bash
+uv run python -m scripts.export_openapi
+```
+Notes:
+- This export is trigger when running pre-commit hooks, along with frontend API types regeneration.
+
 ___
 ## [Frontend](./web)
 
 The frontend consists of an admin interface (dashboard) and a web app to browse and play media.
 
 ### Quick facts
-
 - Package manager: **pnpm** (project has a pinned `packageManager` version in `package.json`).
 - Node: **>= 18** (see `engines`).
 - Language: **TypeScript** (Vue 3 + TypeScript).
@@ -71,11 +83,9 @@ The frontend consists of an admin interface (dashboard) and a web app to browse 
 Note: `scripts/generate-version.js` must run before dev/build; it's included in `dev` and `build` scripts.
 
 ### CI / Release
-
 - GitHub Actions workflow `.github/workflows/build-and-release.yml` caches pnpm and runs `pnpm install` then `pnpm build`.
 
 ### Development conventions (for agents)
-
 - Components: `src/components/` (PascalCase, single-file `.vue`).
 - Views: `src/views/` and routing in `src/router/`.
 - API: centralized in `src/api/client.js` (token refresh + concurrency handling). Update here for new endpoints.
@@ -83,11 +93,17 @@ Note: `scripts/generate-version.js` must run before dev/build; it's included in 
 - Styling: Tailwind CSS (`tailwind.config.js`) and `src/style.css`.
 
 ### Proxy & runtime
-
 - Dev proxy: Vite proxies `/api` → `http://localhost:8000` (configured in `vite.config.js`) to avoid CORS during development.
 - Path alias: `@` resolves to `src/` (used throughout the codebase).
 
 ### Helpful tips
-
 - When adding UI, wire up translations in both locales and add simple unit/e2e tests where appropriate (no tests are present yet).
 - For streaming, `hls.js` is used in `VideoPlayer.vue` to handle HLS gracefully (native HLS supported on Safari).
+
+### API type generation
+When openapi specs are updated, regenerate TypeScript types with:
+```bash
+pnpm generate-api-types
+```
+Notes:
+- This export is trigger when running pre-commit hooks, along with bakcend openapi export.

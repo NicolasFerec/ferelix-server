@@ -74,6 +74,7 @@ async def get_playback_info(
         enable_direct_play=playback_request.EnableDirectPlay,
         enable_direct_stream=playback_request.EnableDirectStream,
         enable_transcoding=playback_request.EnableTranscoding,
+        requested_resolution=playback_request.RequestedResolution,
     )
 
     return PlaybackInfoResponse(MediaSources=[stream_info])

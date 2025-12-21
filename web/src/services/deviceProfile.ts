@@ -116,7 +116,7 @@ function probeCodecSupport(): CodecSupport {
 
     // Test video containers and codecs
     const videoTests = [
-        // MP4 container
+        // MP4 container and variants
         { container: "mp4", codec: "h264", mime: 'video/mp4; codecs="avc1.42E01E"' }, // H.264 Baseline
         { container: "mp4", codec: "h264", mime: 'video/mp4; codecs="avc1.4D401F"' }, // H.264 Main
         { container: "mp4", codec: "h264", mime: 'video/mp4; codecs="avc1.64001F"' }, // H.264 High
@@ -126,6 +126,15 @@ function probeCodecSupport(): CodecSupport {
         { container: "mp4", codec: "hevc", mime: 'video/mp4; codecs="hev1.1.6.L93.90"' }, // HEVC Main (hev1)
         { container: "mp4", codec: "av1", mime: 'video/mp4; codecs="av01.0.04M.08"' }, // AV1
         { container: "mp4", codec: "vp9", mime: 'video/mp4; codecs="vp09.00.10.08"' }, // VP9
+
+        // M4V (iTunes/Apple variant of MP4)
+        { container: "m4v", codec: "h264", mime: 'video/mp4; codecs="avc1.42E01E"' },
+        { container: "m4v", codec: "h264", mime: 'video/mp4; codecs="avc1.64001F"' },
+
+        // MOV (QuickTime) - browsers treat as MP4
+        { container: "mov", codec: "h264", mime: 'video/mp4; codecs="avc1.42E01E"' },
+        { container: "mov", codec: "h264", mime: 'video/mp4; codecs="avc1.64001F"' },
+        { container: "mov", codec: "hevc", mime: 'video/mp4; codecs="hvc1.1.6.L93.90"' },
 
         // WebM container
         { container: "webm", codec: "vp8", mime: 'video/webm; codecs="vp8"' },
@@ -140,11 +149,18 @@ function probeCodecSupport(): CodecSupport {
 
     // Test audio codecs
     const audioTests = [
-        // MP4 container
+        // MP4 container and variants
         { container: "mp4", codec: "aac", mime: 'audio/mp4; codecs="mp4a.40.2"' }, // AAC-LC
         { container: "mp4", codec: "aac", mime: 'audio/mp4; codecs="mp4a.40.5"' }, // HE-AAC
         { container: "mp4", codec: "ac3", mime: 'audio/mp4; codecs="ac-3"' }, // AC-3
         { container: "mp4", codec: "eac3", mime: 'audio/mp4; codecs="ec-3"' }, // E-AC-3
+
+        // M4V container (treat as MP4 for audio)
+        { container: "m4v", codec: "aac", mime: 'audio/mp4; codecs="mp4a.40.2"' },
+
+        // MOV container (treat as MP4 for audio)
+        { container: "mov", codec: "aac", mime: 'audio/mp4; codecs="mp4a.40.2"' },
+        { container: "mov", codec: "ac3", mime: 'audio/mp4; codecs="ac-3"' },
 
         // WebM container
         { container: "webm", codec: "opus", mime: 'audio/webm; codecs="opus"' },
@@ -215,13 +231,24 @@ function probeHDRSupport(): HDRSupport {
     if (gl) {
         const extensions = gl.getSupportedExtensions() || [];
 
-        // Check for texture formats that indicate 10-bit support
-        hdrSupport.bitDepth10 = extensions.some(
-            (ext) =>
-                ext.includes("texture_norm16") ||
-                ext.includes("texture_float") ||
-                ext.includes("EXT_color_buffer_half_float"),
+        // Most modern browsers support 10-bit decoding even if WebGL extensions don't indicate it
+        // Check for texture formats that indicate 10-bit support or assume support for modern browsers
+        hdrSupport.bitDepth10 =
+            extensions.some(
+                (ext) =>
+                    ext.includes("texture_norm16") ||
+                    ext.includes("texture_float") ||
+                    ext.includes("EXT_color_buffer_half_float"),
+            ) || true; // Default to true for modern browsers - most support 10-bit decoding
+
+        // 12-bit is less common, be more conservative
+        hdrSupport.bitDepth12 = extensions.some(
+            (ext) => ext.includes("texture_norm16") || ext.includes("texture_float"),
         );
+    } else {
+        // If no WebGL, assume 10-bit support for modern browsers
+        hdrSupport.bitDepth10 = true;
+        hdrSupport.bitDepth12 = false;
     }
 
     // Check CSS color-gamut support for wide color
@@ -307,13 +334,13 @@ function buildCodecProfiles(hdrSupport: HDRSupport, displayCaps: DisplayCapabili
             Condition: "LessThanEqual",
             Property: "Width",
             Value: displayCaps.estimatedMaxWidth.toString(),
-            IsRequired: true,
+            IsRequired: false,
         },
         {
             Condition: "LessThanEqual",
             Property: "Height",
             Value: displayCaps.estimatedMaxHeight.toString(),
-            IsRequired: true,
+            IsRequired: false,
         },
     ];
 
@@ -344,13 +371,13 @@ function buildCodecProfiles(hdrSupport: HDRSupport, displayCaps: DisplayCapabili
             Condition: "LessThanEqual",
             Property: "Width",
             Value: displayCaps.estimatedMaxWidth.toString(),
-            IsRequired: true,
+            IsRequired: false,
         },
         {
             Condition: "LessThanEqual",
             Property: "Height",
             Value: displayCaps.estimatedMaxHeight.toString(),
-            IsRequired: true,
+            IsRequired: false,
         },
     ];
 
@@ -371,24 +398,10 @@ function buildCodecProfiles(hdrSupport: HDRSupport, displayCaps: DisplayCapabili
         Conditions: hevcConditions,
     });
 
-    // HDR constraints
-    if (!hdrSupport.hdr10) {
-        // No HDR support - reject HDR content
-        profiles.push({
-            Type: "Video",
-            Codec: "hevc",
-            Conditions: [
-                {
-                    Condition: "Equals",
-                    Property: "VideoRange",
-                    Value: "SDR",
-                    IsRequired: true,
-                },
-            ],
-        });
-    }
+    // Remove aggressive HDR constraints - let the browser handle HDR gracefully
+    // Most browsers will fallback to SDR automatically if HDR isn't supported
 
-    // 10-bit constraints
+    // Only add 10-bit constraints if 10-bit really isn't supported (which is rare)
     if (!hdrSupport.bitDepth10) {
         ["h264", "hevc", "vp9", "av1"].forEach((codec) => {
             profiles.push({
@@ -399,7 +412,7 @@ function buildCodecProfiles(hdrSupport: HDRSupport, displayCaps: DisplayCapabili
                         Condition: "LessThanEqual",
                         Property: "VideoBitDepth",
                         Value: "8",
-                        IsRequired: true,
+                        IsRequired: false, // Make this advisory, not blocking
                     },
                 ],
             });
@@ -451,6 +464,12 @@ export function buildDeviceProfile(): DeviceProfile {
     const codecSupport = probeCodecSupport();
     const hdrSupport = probeHDRSupport();
     const displayCaps = probeDisplayCapabilities();
+
+    console.log("Device capabilities:", {
+        codecSupport,
+        hdrSupport,
+        displayCaps,
+    });
 
     const profile: DeviceProfile = {
         Name: "Ferelix Web Client",

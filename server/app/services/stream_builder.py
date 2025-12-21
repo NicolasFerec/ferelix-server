@@ -30,6 +30,7 @@ class StreamBuilder:
         enable_direct_play: bool = True,
         enable_direct_stream: bool = True,
         enable_transcoding: bool = True,
+        requested_resolution: dict | None = None,
     ) -> StreamInfo:
         """Build stream info for a media file based on device capabilities."""
 
@@ -46,6 +47,32 @@ class StreamBuilder:
             Bitrate=media_file.bitrate,
             MediaStreams=self._build_media_streams(media_file),
         )
+
+        # Calculate available resolution options
+        stream_info.AvailableResolutions = self._calculate_available_resolutions(media_file)
+
+        # Check for manual resolution override
+        if requested_resolution:
+            logger.debug(f"Manual resolution override requested: {requested_resolution}")
+            # Force transcoding with the requested resolution
+            stream_info.PlayMethod = PlayMethod.TRANSCODE
+            stream_info.TranscodingUrl = f"/api/v1/stream/{media_file.id}/master.m3u8"
+            stream_info.TranscodingContainer = "mp4"
+            stream_info.TranscodingVideoCodec = "h264"
+            stream_info.TranscodingAudioCodec = "aac"
+            stream_info.TranscodingType = "full"  # Resolution override requires full transcode
+
+            from ..models.playback import TranscodeSettings
+
+            stream_info.TranscodeSettings = TranscodeSettings(
+                VideoCodec="h264",
+                AudioCodec="aac",
+                MaxWidth=requested_resolution.get("width"),
+                MaxHeight=requested_resolution.get("height"),
+                IsRemuxOnly=False,
+            )
+            logger.debug(f"Forced transcode for resolution {requested_resolution}")
+            return stream_info
 
         # Try direct play first
         if enable_direct_play:
@@ -67,6 +94,7 @@ class StreamBuilder:
                 stream_info.PlayMethod = PlayMethod.DIRECT_STREAM
                 stream_info.TranscodingUrl = f"/api/v1/hls/{media_file.id}/remux"
                 stream_info.TranscodingContainer = "ts"  # HLS segments
+                stream_info.TranscodingType = "remux"  # Flag for frontend
 
                 # Mark as remux-only for fast container conversion
                 stream_info.IsRemuxOnly = True
@@ -88,10 +116,11 @@ class StreamBuilder:
             video_ok, audio_ok = self._needs_audio_transcode(media_file)
             if video_ok and not audio_ok:
                 stream_info.PlayMethod = PlayMethod.TRANSCODE
-                stream_info.TranscodingUrl = f"/api/v1/hls/{media_file.id}/audio-transcode/master.m3u8"
-                stream_info.TranscodingContainer = "mp4"
+                stream_info.TranscodingUrl = f"/api/v1/stream/{media_file.id}/master.m3u8"
+                stream_info.TranscodingContainer = "ts"  # HLS uses TS segments
                 stream_info.TranscodingVideoCodec = "copy"
                 stream_info.TranscodingAudioCodec = "aac"
+                stream_info.TranscodingType = "audio-only"  # Flag for frontend
                 stream_info.TranscodeReasons.append(TranscodeReason.AUDIO_TRANSCODE_REQUIRED)
 
                 from ..models.playback import TranscodeSettings
@@ -114,11 +143,13 @@ class StreamBuilder:
             stream_info.TranscodingContainer = "mp4"
             stream_info.TranscodingVideoCodec = "h264"
             stream_info.TranscodingAudioCodec = "aac"
+            stream_info.TranscodingType = "full"  # Flag for frontend
             logger.debug(f"Transcoding required for {media_file.file_name}")
         else:
             # No playback method available
             logger.warning(f"No playback method available for {media_file.file_name}")
             stream_info.PlayMethod = PlayMethod.TRANSCODE
+            stream_info.TranscodingType = "full"  # Fallback to full transcode
             stream_info.TranscodeReasons.append(TranscodeReason.DIRECT_PLAY_ERROR)
 
         return stream_info
@@ -130,27 +161,37 @@ class StreamBuilder:
 
         # Check container support
         container = media_file.file_extension.lstrip(".") if media_file.file_extension else "unknown"
+        logger.debug(f"Checking direct play for file: {media_file.file_name} (container: {container})")
+
         container_supported = self._is_container_supported(container, "Video")
         if not container_supported:
             reasons.append(TranscodeReason.CONTAINER_NOT_SUPPORTED)
+            logger.debug(f"Container {container} not supported, direct play failed")
             return PlaybackResult(False, reasons)
 
         # Check video codec support
         if media_file.video_tracks:
             video_track = media_file.video_tracks[0]  # Use first video track
+            logger.debug(
+                f"Checking video codec: {video_track.codec}, resolution: {video_track.width}x{video_track.height}, bit_depth: {video_track.bit_depth}"
+            )
             video_codec_result = self._check_video_codec_support(video_track)
             if not video_codec_result.can_play:
                 reasons.extend(video_codec_result.reasons)
+                logger.debug(f"Video codec check failed, reasons: {video_codec_result.reasons}")
                 return PlaybackResult(False, reasons)
 
         # Check audio codec support
         if media_file.audio_tracks:
             audio_track = media_file.audio_tracks[0]  # Use first audio track
+            logger.debug(f"Checking audio codec: {audio_track.codec}")
             audio_codec_result = self._check_audio_codec_support(audio_track)
             if not audio_codec_result.can_play:
                 reasons.extend(audio_codec_result.reasons)
+                logger.debug(f"Audio codec check failed, reasons: {audio_codec_result.reasons}")
                 return PlaybackResult(False, reasons)
 
+        logger.debug("Direct play check passed!")
         return PlaybackResult(True, reasons)
 
     def _check_direct_stream(self, media_file: MediaFile) -> PlaybackResult:
@@ -277,10 +318,15 @@ class StreamBuilder:
                 if constraint_failed:
                     reason = self._condition_to_transcode_reason(condition.Property, track_type)
                     if reason:
+                        actual_value = self._get_track_property_value(track, condition.Property)
+                        logger.debug(
+                            f"Constraint failed: {condition.Property} {condition.Condition} {condition.Value} (actual: {actual_value}, IsRequired: {condition.IsRequired})"
+                        )
                         reasons.append(reason)
 
                     # Required constraints must pass
                     if condition.IsRequired:
+                        logger.debug(f"Required constraint failed: {condition.Property}, blocking direct play")
                         return PlaybackResult(False, reasons)
 
         return PlaybackResult(True, reasons)
@@ -324,7 +370,7 @@ class StreamBuilder:
             "VideoBitrate": "bitrate",
             "VideoBitDepth": "bit_depth",
             "VideoProfile": "profile",
-            "VideoRange": lambda t: "HDR" if getattr(t, "bit_depth", 8) > 8 else "SDR",
+            "VideoRange": self._get_video_range,
             # Audio properties
             "AudioChannels": "channels",
             "AudioSampleRate": "sample_rate",
@@ -339,6 +385,22 @@ class StreamBuilder:
             return prop_getter(track)
         else:
             return getattr(track, prop_getter, None)
+
+    def _get_video_range(self, track: Any) -> str:
+        """Determine if track is HDR or SDR based on color metadata."""
+        color_space = getattr(track, "color_space", "").lower()
+        color_primaries = getattr(track, "color_primaries", "").lower()
+        transfer_characteristics = getattr(track, "transfer_characteristics", "").lower()
+
+        hdr_indicators = ["bt2020", "rec2020", "smpte2084", "hlg", "arib-std-b67"]
+
+        is_hdr = (
+            any(indicator in color_space for indicator in hdr_indicators)
+            or any(indicator in color_primaries for indicator in ["bt2020", "rec2020"])
+            or any(indicator in transfer_characteristics for indicator in ["smpte2084", "arib-std-b67", "hlg"])
+        )
+
+        return "HDR" if is_hdr else "SDR"
 
     def _condition_to_transcode_reason(self, property_name: str, track_type: str) -> TranscodeReason | None:
         """Map condition property to transcode reason."""
@@ -361,10 +423,20 @@ class StreamBuilder:
     def _is_container_supported(self, container: str, media_type: str) -> bool:
         """Check if container is supported for the given media type."""
 
-        for profile in self.direct_play_profiles:
-            if (profile.Type == media_type or media_type == "Video") and container in profile.Container.split(","):
-                return True
+        logger.debug(f"Checking container support for: {container} (type: {media_type})")
+        logger.debug(f"Available direct play profiles: {[(p.Type, p.Container) for p in self.direct_play_profiles]}")
 
+        for profile in self.direct_play_profiles:
+            if profile.Type == media_type or media_type == "Video":
+                # Split containers and normalize
+                supported_containers = [c.strip().lower() for c in profile.Container.split(",")]
+                logger.debug(f"Profile {profile.Type} supports containers: {supported_containers}")
+
+                if container.lower() in supported_containers:
+                    logger.debug(f"Container {container} is supported via profile: {profile.Container}")
+                    return True
+
+        logger.debug(f"Container {container} is NOT supported")
         return False
 
     def _build_media_streams(self, media_file: MediaFile) -> list[dict]:
@@ -422,6 +494,50 @@ class StreamBuilder:
             streams.append({k: v for k, v in stream.items() if v is not None})
 
         return streams
+
+    def _calculate_available_resolutions(self, media_file: MediaFile) -> list[dict]:
+        """Calculate available resolution options for manual selection."""
+        available_resolutions = []
+
+        # Get original resolution from first video track
+        if not media_file.video_tracks:
+            return available_resolutions
+
+        video_track = media_file.video_tracks[0]
+        original_width = video_track.width or 1920
+        original_height = video_track.height or 1080
+
+        # Add original resolution
+        available_resolutions.append({
+            "width": original_width,
+            "height": original_height,
+            "label": f"{original_width}x{original_height} (Original)",
+            "is_original": True,
+        })
+
+        # Common transcode targets (snap to standard resolutions)
+        standard_resolutions = [
+            {"width": 3840, "height": 2160, "label": "4K (3840x2160)"},
+            {"width": 2560, "height": 1440, "label": "1440p (2560x1440)"},
+            {"width": 1920, "height": 1080, "label": "1080p (1920x1080)"},
+            {"width": 1280, "height": 720, "label": "720p (1280x720)"},
+            {"width": 854, "height": 480, "label": "480p (854x480)"},
+            {"width": 640, "height": 360, "label": "360p (640x360)"},
+        ]
+
+        # Only include resolutions smaller than original
+        for resolution in standard_resolutions:
+            if resolution["width"] < original_width or (
+                resolution["width"] == original_width and resolution["height"] < original_height
+            ):
+                available_resolutions.append({
+                    "width": resolution["width"],
+                    "height": resolution["height"],
+                    "label": resolution["label"],
+                    "is_original": False,
+                })
+
+        return available_resolutions
 
 
 class PlaybackResult:

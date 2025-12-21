@@ -124,6 +124,7 @@ class PlaybackInfoRequest(BaseModel):
     AllowVideoStreamCopy: bool = True
     AllowAudioStreamCopy: bool = True
     IsPlayback: bool = True
+    RequestedResolution: dict | None = None  # Manual resolution override {"width": 1920, "height": 1080}
 
 
 class TranscodeSettings(BaseModel):
@@ -152,6 +153,7 @@ class StreamInfo(BaseModel):
     PlayMethod: PlayMethod
     TranscodeReasons: list[TranscodeReason] = []
     IsRemuxOnly: bool = False  # True if only container conversion needed (fast DirectStream)
+    AvailableResolutions: list[dict] = []  # Available resolution options for manual selection
 
     # Stream URLs
     DirectStreamUrl: str | None = None
@@ -168,6 +170,7 @@ class StreamInfo(BaseModel):
     TranscodingContainer: str | None = None
     TranscodingVideoCodec: str | None = None
     TranscodingAudioCodec: str | None = None
+    TranscodingType: str | None = None  # "audio-only", "video-only", "full", "remux"
     TranscodeSettings: Any = None
 
     # Runtime info

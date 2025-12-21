@@ -16,6 +16,7 @@ dev-server:
 
 # Start development web client (frontend Vite)
 dev-web:
+    sleep 1
     cd web && pnpm dev
 
 # Start both server and web client in parallel

@@ -609,7 +609,8 @@ async def get_subtitle(
     # Create temp directory for extracted subtitles
     transcoder = get_transcoder()
     subtitle_cache_dir = transcoder.temp_dir / "subtitles"
-    subtitle_cache_dir.mkdir(parents=True, exist_ok=True)
+    subtitle_cache_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+    subtitle_cache_dir.chmod(0o755)
 
     # Check if already extracted (cache)
     output_file = subtitle_cache_dir / f"{media_id}_{stream_index}.vtt"

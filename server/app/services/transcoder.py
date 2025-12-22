@@ -172,7 +172,8 @@ class FFmpegTranscoder:
 
     def __init__(self, temp_dir: str = "/tmp/ferelix-transcode"):
         self.temp_dir = Path(temp_dir)
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+        self.temp_dir.chmod(0o755)
         self._active_jobs: dict[str, Any] = {}
         self._cleanup_task: asyncio.Task | None = None
 
@@ -229,7 +230,8 @@ class FFmpegTranscoder:
 
         # Create job directory
         job_dir = self.temp_dir / job_id
-        job_dir.mkdir(parents=True, exist_ok=True)
+        job_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+        job_dir.chmod(0o755)
 
         playlist_path = job_dir / "playlist.m3u8"
         segment_pattern = str(job_dir / "segment_%03d.ts")
@@ -351,7 +353,8 @@ class FFmpegTranscoder:
 
         # Create job directory
         job_dir = self.temp_dir / job_id
-        job_dir.mkdir(parents=True, exist_ok=True)
+        job_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+        job_dir.chmod(0o755)
 
         playlist_path = job_dir / "playlist.m3u8"
         segment_pattern = str(job_dir / "segment_%03d.ts")
@@ -464,8 +467,8 @@ class FFmpegTranscoder:
         # Copy codecs (no re-encoding)
         cmd.extend(["-c", "copy"])
 
-        # Fix timestamp issues
-        cmd.extend(["-avoid_negative_ts", "make_zero"])
+        # Fix timestamp issues and preserve duration metadata
+        cmd.extend(["-copyts", "-start_at_zero", "-avoid_negative_ts", "make_zero"])
 
         # HLS specific settings optimized for remux
         cmd.extend([
@@ -482,7 +485,7 @@ class FFmpegTranscoder:
             "-hls_allow_cache",
             "1",
             "-hls_flags",
-            "delete_segments+append_list",
+            "delete_segments+append_list+program_date_time",
             playlist_path,
         ])
 
@@ -625,6 +628,9 @@ class FFmpegTranscoder:
         if vf_filters and encoder != "copy":
             cmd.extend(["-vf", ",".join(vf_filters)])
 
+        # Preserve timestamps for accurate duration
+        cmd.extend(["-copyts", "-start_at_zero"])
+
         # HLS specific settings
         cmd.extend([
             "-f",
@@ -642,7 +648,7 @@ class FFmpegTranscoder:
             "-hls_allow_cache",
             "1",
             "-hls_flags",
-            "delete_segments+append_list",
+            "delete_segments+append_list+program_date_time",
             playlist_path,
         ])
 

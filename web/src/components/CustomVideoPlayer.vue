@@ -70,6 +70,8 @@ const isHlsPlayback = ref(false);
 const isInitializing = ref(true); // Flag to prevent error handler during init
 const hasSourceSet = ref(false); // Flag to track if a source was ever set
 const transcodeReasons = ref<string[]>([]);
+const retryCount = ref(0);
+const maxRetries = 3;
 // Types
 interface StreamSource {
   PlayMethod?: string;
@@ -177,6 +179,11 @@ onMounted(async () => {
     showInfoPanel.value = savedInfoPanelState === "true";
   }
 
+  // Initialize duration from media file metadata
+  if (props.mediaFile?.duration) {
+    duration.value = props.mediaFile.duration;
+  }
+
   // Ensure controls are visible initially
   controlsVisible.value = true;
 
@@ -213,6 +220,7 @@ async function initializePlayback() {
   isLoading.value = true;
   loadingMessage.value = "Analyzing media...";
   errorMessage.value = "";
+  retryCount.value = 0;
 
   try {
     // Build device profile if not ready
@@ -463,9 +471,16 @@ async function setupHlsPlayer(playlistUrl: string) {
             console.log("Network error, trying to recover...");
             // Check if it's a 410 (cancelled job) or empty playlist
             if (data.response?.code === 410 || data.reason === "no EXTM3U delimiter") {
-              console.log("Job cancelled or empty playlist, restarting transcoding...");
-              // Trigger a retry by reinitializing playback
-              setTimeout(() => initializePlayback(), 1000);
+              if (retryCount.value < maxRetries) {
+                retryCount.value++;
+                const backoffDelay = Math.min(1000 * 2 ** (retryCount.value - 1), 8000);
+                console.log(`Job cancelled or empty playlist, retry ${retryCount.value}/${maxRetries} in ${backoffDelay}ms...`);
+                setTimeout(() => initializePlayback(), backoffDelay);
+              } else {
+                console.error("Max retries reached, giving up");
+                errorMessage.value = "Playback failed after multiple retries. Please try again later.";
+                cleanup();
+              }
             } else {
               hls.startLoad();
             }
@@ -845,7 +860,11 @@ function handleKeyDown(e: KeyboardEvent) {
 // Video event handlers
 function onLoadedMetadata() {
   if (videoElement.value) {
-    duration.value = videoElement.value.duration;
+    // For HLS playback, use media file duration instead of videoElement.duration
+    // because event playlists only report duration of transcoded segments so far
+    if (!isHlsPlayback.value || !props.mediaFile?.duration) {
+      duration.value = videoElement.value.duration;
+    }
     videoElement.value.muted = false;
     isMuted.value = false;
 

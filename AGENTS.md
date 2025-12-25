@@ -92,6 +92,24 @@ pnpm generate-api-types             # Regenerate TypeScript types from OpenAPI
 
 ---
 
+## API Synchronization Workflow
+
+**When modifying backend endpoints or encountering frontend typing issues:**
+
+1. In `./server` folder, regenerate OpenAPI specs:
+   ```bash
+   uv run python -m scripts.export_openapi
+   ```
+
+2. In `./web` folder, update TypeScript types from the new spec:
+   ```bash
+   pnpm generate-api-types
+   ```
+
+This ensures the frontend's TypeScript types stay in sync with your backend API changes, preventing type mismatches and improving IDE autocomplete accuracy.
+
+---
+
 ## Workflow Integration
 
 **Pre-commit hooks** auto-trigger:

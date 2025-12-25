@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - .github/workflows/copilot-setup-steps. yml
+      - .github/workflows/copilot-setup-steps.yml
   pull_request:
     paths:
       - .github/workflows/copilot-setup-steps.yml
@@ -16,7 +16,7 @@ jobs:
       contents: read
 
     steps:
-      - name:  Checkout code
+      - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Install just

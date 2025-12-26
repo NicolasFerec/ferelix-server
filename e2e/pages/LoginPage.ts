@@ -12,10 +12,11 @@ export class LoginPage {
 
     constructor(page: Page) {
         this.page = page;
-        this.usernameInput = page.getByLabel(/username/i);
-        this.passwordInput = page.getByLabel(/password/i);
-        this.loginButton = page.getByRole("button", { name: /login|sign in/i });
-        this.errorMessage = page.locator("[role=alert], .error-message, .text-red-500");
+        // Use id selectors which are more reliable
+        this.usernameInput = page.locator("#username");
+        this.passwordInput = page.locator("#password");
+        this.loginButton = page.locator("button[type='submit']");
+        this.errorMessage = page.locator(".bg-red-900, [role=alert], .error-message");
     }
 
     /**

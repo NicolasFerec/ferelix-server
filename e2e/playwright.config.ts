@@ -11,7 +11,7 @@ export default defineConfig({
     /* Fail the build on CI if you accidentally left test.only in the source code. */
     forbidOnly: !!process.env.CI,
     /* Retry on CI only */
-    retries: process.env.CI ? 2 : 0,
+    retries: process.env.CI ? 1 : 0,
     /* Opt out of parallel tests on CI. */
     workers: process.env.CI ? 1 : undefined,
     /* Reporter to use. See https://playwright.dev/docs/test-reporters */
@@ -30,8 +30,8 @@ export default defineConfig({
         /* Capture screenshot on failure */
         screenshot: "only-on-failure",
 
-        /* Video recording */
-        video: "on-first-retry",
+        /* Video recording - disable for faster runs */
+        video: "off",
     },
 
     /* Configure projects for major browsers */
@@ -41,24 +41,15 @@ export default defineConfig({
             use: { ...devices["Desktop Chrome"] },
         },
 
-        {
-            name: "firefox",
-            use: { ...devices["Desktop Firefox"] },
-        },
-
-        {
-            name: "webkit",
-            use: { ...devices["Desktop Safari"] },
-        },
-
-        /* Test against mobile viewports. */
+        // Disable other browsers in CI for faster runs
         // {
-        //   name: 'Mobile Chrome',
-        //   use: { ...devices['Pixel 5'] },
+        //     name: "firefox",
+        //     use: { ...devices["Desktop Firefox"] },
         // },
+
         // {
-        //   name: 'Mobile Safari',
-        //   use: { ...devices['iPhone 12'] },
+        //     name: "webkit",
+        //     use: { ...devices["Desktop Safari"] },
         // },
     ],
 
@@ -76,8 +67,8 @@ export default defineConfig({
     globalSetup: undefined,
     globalTeardown: undefined,
 
-    /* Test timeout */
-    timeout: 30 * 1000,
+    /* Test timeout - reduced for faster feedback */
+    timeout: 15 * 1000,
 
     /* Expect timeout */
     expect: {

@@ -1,122 +1,155 @@
-# Agent Technical Documentation
+# Ferelix - AI Coding Agent Guide
 
-**Ferelix** is a media server with FastAPI backend and Vue 3 frontend, featuring transcoding and HLS streaming.
+Ferelix is a media server with FastAPI backend and Vue 3 frontend, featuring transcoding and HLS streaming.
 
-## Quick Start
+## Architecture Overview
 
-**Command Runner**: [Just](https://github.com/casey/just) - Run `just --list` for all commands.
-- **Start development**: `just dev` (starts both backend and frontend)
-- **Port conflicts**: Servers may already be running from previous sessions, do nothing.
+**Monorepo Structure**: `./server` (Python backend) + `./web` (Vue 3 frontend)
 
----
+**Backend Stack** (`./server`):
+- FastAPI + Python 3.14+ + SQLAlchemy (async) + Alembic migrations
+- Media processing: FFmpeg/ffprobe for metadata extraction and HLS transcoding
+- Streaming strategies: DirectPlay → DirectStream/Remux → Full Transcode
+- Key services: `StreamBuilder` (playback decisions), `FFmpegTranscoder` (HLS), `Scanner` (library indexing)
 
-## Backend (`./server`)
+**Frontend Stack** (`./web`):
+- Vue 3 + TypeScript + Vite + Tailwind CSS 4 + HLS.js
+- API client: openapi-fetch with auto-generated types from backend OpenAPI schema
+- Dev server proxies `/api` → `http://localhost:8000`
 
-**Stack**: FastAPI + Python 3.14+ + SQLAlchemy + Alembic + FFmpeg
+## Critical Workflows
 
-### Essential Commands
+### Command Runner: Just
+All dev commands use [Just](https://github.com/casey/just). Run `just --list` to see all commands.
+- **Start development**: `just dev` (runs both server and frontend in parallel)
+- **Servers may already be running** from previous sessions - check before starting
+
+### API Type Synchronization (CRITICAL)
+When backend routes change, **always** regenerate types:
 ```bash
-# Dependencies & Development
+# In ./server - export OpenAPI schema
+uv run python -m scripts.export_openapi
+
+# In ./web - regenerate TypeScript types
+pnpm generate-api-types
+```
+
+**Pre-commit hooks auto-run these**, ensuring types stay synced. If frontend shows type errors after backend changes, regenerate types first.
+
+### Backend Development
+```bash
+# Package manager: uv (NOT pip)
 uv sync                              # Install dependencies
-uv run fastapi dev                   # Start dev server
+uv run fastapi dev                   # Start dev server (hot reload)
 uv run --no-sync fastapi run         # Production server
 
-# Database
-uv run alembic revision --autogenerate -m "description"  # Create migration
-uv run alembic upgrade head          # Apply migrations
+# Database migrations
+uv run alembic revision --autogenerate -m "description"
+uv run alembic upgrade head
 
-# Exports
-uv run python -m scripts.export_openapi  # Regenerate OpenAPI specs
+# Code quality (pre-commit runs automatically)
+uv run ruff check --fix
+uv run ruff format
 ```
 
-### Tech Stack
-- **Package Manager**: uv (see `pyproject.toml`, `uv.lock`)
-- **Web Framework**: FastAPI (`fastapi[standard]`)
-- **Database**: SQLAlchemy ORM + Alembic migrations
-- **Media Processing**: FFmpeg/ffprobe for metadata and transcoding
-
-### Development Guidelines
-
-**Code Structure**:
-- Models: `app/models/` (SQLAlchemy declarative)
-- Services: `app/services/` (business logic)
-- Routes: `app/routers/v1/` (API endpoints)
-
-**Database Patterns**:
-- Use `Annotated[AsyncSession, Depends(get_session)]` for dependency injection
-- Background tasks: `async_session_maker()` helper
-- Queries: prefer `session.get()`, `session.scalar()`, `session.scalars()`
-- Always import at top of file
-
-**Docker/CI**:
-- Dockerfile installs `ffmpeg` + embeds `uv`
-- Entrypoint auto-runs migrations: `uv run --no-sync alembic upgrade head`
-- Images: use `uv sync --locked --no-default-groups`
-
----
-
-## Frontend (`./web`)
-
-**Stack**: Vue 3 + TypeScript + Vite + Tailwind CSS 4 + HLS.js
-
-### Essential Commands
+### Frontend Development
 ```bash
-# Development
+# Package manager: pnpm (version pinned in package.json)
 pnpm install                         # Install dependencies
-pnpm dev                            # Start dev server (port 5173)
+pnpm dev                            # Dev server on port 5173
 pnpm build                          # Production build
-pnpm check --fix                    # Format & lint (Biome)
-
-# API Integration
-pnpm generate-api-types             # Regenerate TypeScript types from OpenAPI
+pnpm check --fix                    # Format + lint (Biome)
 ```
 
-### Tech Stack
-- **Package Manager**: pnpm (version pinned in `package.json`)
-- **Build Tool**: Vite with dev proxy: `/api` → `http://localhost:8000`
-- **Styling**: Tailwind CSS 4 + custom styles in `src/style.css`
-- **Video**: HLS.js for streaming, native HLS on Safari
+## Code Patterns & Conventions
 
-### Development Guidelines
+### Backend: Database Access
+**Always use dependency injection** for database sessions:
+```python
+from typing import Annotated
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_session
 
-**Code Organization**:
-- Components: `src/components/` (PascalCase `.vue` files)
-- Views: `src/views/` + routing in `src/router/`
-- API: centralized in `src/api/client.ts`
-- i18n: `src/i18n/locales/en.json` + `fr.json`
+async def my_route(session: Annotated[AsyncSession, Depends(get_session)]):
+    # Use session.get(), session.scalar(), session.scalars()
+```
 
-**Key Conventions**:
-- Path alias: `@` → `src/`
-- API changes → regenerate types with `pnpm generate-api-types`
-- All UI text needs translations in both locales
+**Background tasks** need their own session:
+```python
+from app.database import async_session_maker
 
----
+async def background_job():
+    async with async_session_maker() as session:
+        # Your code
+```
 
-## API Synchronization Workflow
+### Backend: Route Organization
+- Models: `app/models/` (SQLAlchemy declarative)
+- Services: `app/services/` (business logic - transcoder, scanner, stream_builder)
+- Routes: `app/routers/v1/` (API endpoints grouped by domain)
 
-**When modifying backend endpoints or encountering frontend typing issues:**
+### Frontend: API Integration
+**Centralized API client** (`src/api/client.ts`):
+- All API calls go through this module
+- Token refresh handled automatically
+- Types auto-generated from OpenAPI schema
 
-1. In `./server` folder, regenerate OpenAPI specs:
-   ```bash
-   uv run python -m scripts.export_openapi
-   ```
+**Path alias**: Use `@/` → `src/` for imports
+```typescript
+import { media } from "@/api/client";
+import type { MediaFile } from "@/api/types";
+```
 
-2. In `./web` folder, update TypeScript types from the new spec:
-   ```bash
-   pnpm generate-api-types
-   ```
+### Frontend: Internationalization
+**All UI text requires translations** in both `src/i18n/locales/en.json` and `fr.json`:
+```typescript
+const { t } = useI18n();
+// Use: {{ t('key.path') }}
+```
 
-This ensures the frontend's TypeScript types stay in sync with your backend API changes, preventing type mismatches and improving IDE autocomplete accuracy.
+### Streaming Strategy Pattern
+`StreamBuilder` service (`app/services/stream_builder.py`) determines playback method:
+1. **DirectPlay**: Native file serving (no processing)
+2. **DirectStream/Remux**: Container conversion only (fast, no re-encoding)
+3. **Transcode**: Full video+audio re-encoding (fallback)
 
----
+Decision logic compares `DeviceProfile` capabilities against media file metadata (codecs, resolution, bitrate).
 
-## Workflow Integration
+## Docker & CI
 
-**Pre-commit hooks** auto-trigger:
-- Backend: OpenAPI spec export
-- Frontend: API type regeneration
+**Dockerfile** (`docker/Dockerfile`):
+- Multi-stage build: frontend → backend
+- Embeds `uv` package manager
+- Installs FFmpeg for media processing
+- Entrypoint runs migrations automatically: `uv run --no-sync alembic upgrade head`
 
-**Media Processing**:
-- Scanner: `app/services/scanner.py` uses ffprobe for metadata
-- Transcoder: `app/services/transcoder.py` handles HLS streaming
-- Requires FFmpeg installed in environment
+**Production installs**: `uv sync --locked --no-default-groups` (excludes dev dependencies)
+
+## Code Review Guidelines
+
+When reviewing code, **focus on real bugs only** - not style preferences or minor improvements:
+- Logic errors (null checks, off-by-one, race conditions)
+- Type safety violations
+- Security issues (auth bypass, injection vulnerabilities)
+- Performance problems (N+1 queries, memory leaks)
+- Breaking changes to APIs
+
+**Do NOT nitpick**: formatting, naming conventions, code organization - linters and pre-commit hooks handle these automatically.
+
+## Common Pitfalls
+
+1. **Frontend type errors after backend changes**: Run API type regeneration workflow
+2. **Database queries**: Import models at top of file, not inside functions
+3. **Sessions in background tasks**: Must create new session with `async_session_maker()`
+4. **Frontend API paths**: Dev proxy handles `/api`, don't hardcode backend URL
+5. **Subtitle handling**: Text codecs (SRT, ASS) extract to WebVTT; image codecs (PGS, VOBSUB) burn into video
+
+## Key Files
+
+- `server/app/main.py` - FastAPI app entry, scheduler setup
+- `server/app/services/transcoder.py` - FFmpeg HLS transcoding (1000+ lines)
+- `server/app/services/stream_builder.py` - Playback decision logic
+- `web/src/api/client.ts` - Centralized API client with token refresh
+- `web/src/components/CustomVideoPlayer.vue` - HLS player with transcode management
+- `justfile` - All development commands

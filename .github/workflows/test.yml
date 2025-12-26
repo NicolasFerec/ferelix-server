@@ -1,0 +1,223 @@
+name: Test Suite
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "server/uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        working-directory: server
+        run: uv sync --all-groups
+
+      - name: Run unit tests
+        working-directory: server
+        run: uv run pytest tests/unit -v --tb=short
+
+      - name: Run API tests
+        working-directory: server
+        run: uv run pytest tests/api -v --tb=short
+
+      - name: Run tests with coverage
+        working-directory: server
+        run: uv run pytest tests/ -v --cov=app --cov-report=xml --cov-report=term-missing
+        continue-on-error: true
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: server/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: "web/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install
+
+      - name: Run type check
+        working-directory: web
+        run: pnpm type-check
+
+      - name: Run unit tests
+        working-directory: web
+        run: pnpm test
+
+      - name: Run tests with coverage
+        working-directory: web
+        run: pnpm test:coverage
+        continue-on-error: true
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: web/coverage/coverage-final.json
+          flags: frontend
+          fail_ci_if_error: false
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "server/uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install backend dependencies
+        working-directory: server
+        run: uv sync --all-groups
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Run integration tests
+        working-directory: server
+        run: uv run pytest tests/integration -v --tb=short
+        continue-on-error: true
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "server/uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.14
+
+      - name: Install backend dependencies
+        working-directory: server
+        run: uv sync --all-groups
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: "web/pnpm-lock.yaml"
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: pnpm install
+
+      - name: Build frontend
+        working-directory: web
+        run: pnpm build
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Start backend server
+        working-directory: server
+        run: |
+          uv run alembic upgrade head
+          uv run fastapi run --port 8000 &
+        env:
+          DATABASE_URL: "sqlite+aiosqlite:///./test.db"
+          SECRET_KEY: "test-secret-key"
+
+      - name: Start frontend server
+        working-directory: web
+        run: pnpm preview --port 5173 &
+
+      - name: Wait for servers
+        run: |
+          timeout 60 bash -c 'until curl -s http://localhost:8000/api/v1/setup/status; do sleep 1; done'
+          timeout 60 bash -c 'until curl -s http://localhost:5173; do sleep 1; done'
+
+      - name: Run E2E tests
+        working-directory: e2e
+        run: npx playwright test --project=chromium
+        env:
+          BASE_URL: "http://localhost:5173"
+          CI: "true"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Upload test screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-screenshots
+          path: e2e/test-results/
+          retention-days: 7

@@ -5170,6 +5170,17 @@
             ],
             "title": "Current Bitrate"
           },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
           "error_message": {
             "anyOf": [
               {

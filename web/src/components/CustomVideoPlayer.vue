@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { getAccessToken, media } from "@/api/client";
+import type { components } from "@/api/types";
 import { useDeviceProfile } from "@/composables/useDeviceProfile";
 import PlayerInfoPanel from "./PlayerInfoPanel.vue";
 
@@ -39,6 +40,8 @@ const videoElement = ref<HTMLVideoElement | null>(null);
 const progressBar = ref<HTMLDivElement | null>(null);
 const hlsInstance = ref<Hls | null>(null);
 const currentJobId = ref<string | null>(null);
+const jobStartOffset = ref<number>(0); // Absolute time offset that the current job starts at
+const pendingSeek = ref<number | null>(null); // Seek requested while job is starting
 
 // Playback state
 const videoSrc = ref("");
@@ -73,6 +76,11 @@ const transcodeReasons = ref<string[]>([]);
 const retryCount = ref(0);
 const maxRetries = 3;
 // Types
+interface TranscodeSettings {
+  MaxWidth?: number;
+  MaxHeight?: number;
+}
+
 interface StreamSource {
   PlayMethod?: string;
   TranscodingUrl?: string;
@@ -81,6 +89,7 @@ interface StreamSource {
   TranscodingType?: string;
   TranscodeReasons?: string[];
   AvailableResolutions?: Array<Record<string, unknown>>;
+  TranscodeSettings?: TranscodeSettings;
   [key: string]: unknown; // For other dynamic properties
 }
 
@@ -99,7 +108,13 @@ const subtitleTracks = computed(() => {
 
 const progressPercent = computed(() => {
   if (duration.value === 0) return 0;
-  return (currentTime.value / duration.value) * 100;
+  // For HLS playback, video currentTime is relative to job start, so convert to absolute
+  const absoluteCurrent = isHlsPlayback.value ? (jobStartOffset.value ?? 0) + currentTime.value : currentTime.value;
+  return (absoluteCurrent / duration.value) * 100;
+});
+
+const displayCurrentTime = computed(() => {
+  return isHlsPlayback.value ? (jobStartOffset.value ?? 0) + currentTime.value : currentTime.value;
 });
 
 const hoverPercent = computed(() => {
@@ -308,7 +323,7 @@ async function setupDirectPlay(url: string) {
 }
 
 async function setupHlsPlayback(source: StreamSource) {
-  if (!source.TranscodingUrl) return;
+  if (!source.TranscodingUrl) return null;
 
   isHlsPlayback.value = true;
   loadingMessage.value = source.IsRemuxOnly ? "Starting remux..." : "Starting transcode...";
@@ -321,36 +336,71 @@ async function setupHlsPlayback(source: StreamSource) {
     // Use TranscodingType to determine which endpoint to call
     const transcodingType = source.TranscodingType || "full";
 
+    // Use absolute current time as startTime if user has already progressed
+    const desiredStart = currentTime.value > 0 ? (isHlsPlayback.value ? (jobStartOffset.value ?? 0) + currentTime.value : currentTime.value) : 0;
+
     if (transcodingType === "remux" || source.IsRemuxOnly) {
       job = await media.startRemux(props.mediaFile.id, {
         audioStreamIndex: defaultAudioIndex,
+        startTime: desiredStart || undefined,
       });
     } else if (transcodingType === "audio-only") {
       job = await media.startAudioTranscode(props.mediaFile.id, {
         audioStreamIndex: defaultAudioIndex,
+        startTime: desiredStart || undefined,
       });
     } else {
       // Full transcoding (video + audio)
+      // Extract resolution settings from TranscodeSettings if available
+      const transcodeSettings = source.TranscodeSettings;
+
+      // Preserve subtitle selection if user has selected an image-based subtitle
+      let subtitleIndex: number | undefined ;
+      if (selectedSubtitleTrack.value && selectedSubtitleTrack.value.stream_index !== undefined) {
+        const isTextBased = TEXT_SUBTITLE_CODECS.has(selectedSubtitleTrack.value.codec?.toLowerCase() || "");
+        // Only pass subtitle index for image-based subtitles (they need burning)
+        if (!isTextBased) {
+          subtitleIndex = selectedSubtitleTrack.value.stream_index;
+        }
+      }
+
       job = await media.startTranscode(props.mediaFile.id, {
         audioStreamIndex: defaultAudioIndex,
+        startTime: desiredStart || undefined,
+        maxWidth: transcodeSettings?.MaxWidth,
+        maxHeight: transcodeSettings?.MaxHeight,
+        subtitleStreamIndex: subtitleIndex,
       });
     }
 
     currentJobId.value = job.id;
 
-    // Wait for transcoding to be ready
-    await waitForHlsReady(job.id);
+    // Wait for transcoding to be ready and get job status
+    const status = await waitForHlsReady(job.id);
+
+    // Track where the job starts in the full timeline
+    jobStartOffset.value = status.start_time ?? 0;
 
     // Setup HLS.js player
     const playlistUrl = media.getHlsPlaylistUrl(job.id);
     await setupHlsPlayer(playlistUrl);
+
+    // If there was a pending seek requested while the job was starting, handle it now
+    if (pendingSeek.value !== null) {
+      handleSeekForHls(pendingSeek.value);
+      pendingSeek.value = null;
+    }
+
+    return status;
   } catch (error) {
     console.error("HLS setup failed:", error);
     throw error;
   }
 }
 
-async function waitForHlsReady(jobId: string, maxWait = 30000): Promise<void> {
+type TranscodingJobSchema = components["schemas"]["TranscodingJobSchema"];
+
+async function waitForHlsReady(jobId: string, maxWait = 30000): Promise<TranscodingJobSchema> {
   const startTime = Date.now();
   const pollInterval = 500;
 
@@ -385,7 +435,7 @@ async function waitForHlsReady(jobId: string, maxWait = 30000): Promise<void> {
       }
 
       if (playlistReady) {
-        return;
+        return status;
       }
       // Continue waiting if playlist not ready yet
     }
@@ -404,7 +454,7 @@ async function waitForHlsReady(jobId: string, maxWait = 30000): Promise<void> {
   throw new Error("Timeout waiting for transcode");
 }
 
-async function setupHlsPlayer(playlistUrl: string) {
+async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
   // Cleanup existing HLS instance
   if (hlsInstance.value) {
     hlsInstance.value.destroy();
@@ -447,10 +497,31 @@ async function setupHlsPlayer(playlistUrl: string) {
 
     hlsInstance.value = hls;
 
+    // Track if we should seek when buffer is ready
+    let pendingStartPosition = startPosition;
+
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       console.log("HLS manifest parsed");
       isLoading.value = false;
-      videoElement.value?.play().catch((e) => console.warn("Autoplay blocked:", e));
+    });
+
+    // Wait for buffer to have data before seeking
+    hls.on(Hls.Events.BUFFER_APPENDED, () => {
+      if (pendingStartPosition !== undefined && videoElement.value) {
+        console.log("Buffer ready, seeking to", pendingStartPosition);
+        const seekPos = pendingStartPosition;
+        pendingStartPosition = undefined; // Clear pending seek
+
+        videoElement.value.currentTime = seekPos;
+        // Use one-time event listener for seeked
+        videoElement.value.addEventListener('seeked', () => {
+          console.log("Seek completed, starting playback");
+          videoElement.value?.play().catch((e) => console.warn("Autoplay blocked:", e));
+        }, { once: true });
+      } else if (pendingStartPosition === undefined && !videoElement.value?.currentTime) {
+        // No pending seek, just play
+        videoElement.value?.play().catch((e) => console.warn("Autoplay blocked:", e));
+      }
     });
 
     hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -537,11 +608,18 @@ function cleanup() {
     currentJobId.value = null;
   }
 
+  // Reset job start offset
+  jobStartOffset.value = 0;
+
   // Destroy HLS instance
   if (hlsInstance.value) {
     hlsInstance.value.destroy();
     hlsInstance.value = null;
   }
+
+  // Clear HLS playback flag
+  isHlsPlayback.value = false;
+  isLoading.value = false;
 
   // Remove subtitle tracks
   if (videoElement.value) {
@@ -568,6 +646,9 @@ async function selectAudioTrack(track: { id: number; stream_index: number }) {
   isLoading.value = true;
   loadingMessage.value = "Switching audio track...";
 
+  // Convert relative savedTime to absolute startTime when HLS playback is active
+  const absoluteStartTime = isHlsPlayback.value ? (jobStartOffset.value ?? 0) + savedTime : savedTime;
+
   try {
     // Stop current job
     if (currentJobId.value) {
@@ -578,11 +659,11 @@ async function selectAudioTrack(track: { id: number; stream_index: number }) {
     const job = playMethod.value === "DirectStream"
       ? await media.startRemux(props.mediaFile.id, {
           audioStreamIndex: track.stream_index,
-          startTime: savedTime,
+          startTime: absoluteStartTime,
         })
       : await media.startAudioTranscode(props.mediaFile.id, {
           audioStreamIndex: track.stream_index,
-          startTime: savedTime,
+          startTime: absoluteStartTime,
         });
 
     currentJobId.value = job.id;
@@ -592,7 +673,7 @@ async function selectAudioTrack(track: { id: number; stream_index: number }) {
     const playlistUrl = media.getHlsPlaylistUrl(job.id);
     await setupHlsPlayer(playlistUrl);
 
-    // Note: startTime is handled by the transcode, so playback starts from the right position
+    // Note: Backend handles startTime, so playback starts from the right position
   } catch (error) {
     console.error("Audio track switch failed:", error);
     errorMessage.value = "Failed to switch audio track";
@@ -694,8 +775,17 @@ async function restartWithBurnedSubtitle(track: SubtitleTrack) {
   }
 
   const savedTime = currentTime.value;
+
+  // Pause playback immediately
+  if (videoElement.value) {
+    videoElement.value.pause();
+  }
+
   isLoading.value = true;
   loadingMessage.value = "Burning subtitles...";
+
+  // Convert relative savedTime to absolute startTime when HLS playback is active
+  const absoluteStartTime = isHlsPlayback.value ? (jobStartOffset.value ?? 0) + savedTime : savedTime;
 
   try {
     if (currentJobId.value) {
@@ -706,15 +796,20 @@ async function restartWithBurnedSubtitle(track: SubtitleTrack) {
     const job = await media.startTranscode(props.mediaFile.id, {
       audioStreamIndex: selectedAudioTrack.value?.stream_index,
       subtitleStreamIndex: track.stream_index,
-      startTime: savedTime,
+      startTime: absoluteStartTime,
     });
 
     currentJobId.value = job.id;
 
-    await waitForHlsReady(job.id);
+    const status = await waitForHlsReady(job.id);
+
+    // Update job start offset
+    jobStartOffset.value = status.start_time ?? absoluteStartTime;
 
     const playlistUrl = media.getHlsPlaylistUrl(job.id);
-    await setupHlsPlayer(playlistUrl);
+    // Calculate relative position within the new job
+    const relativePosition = Math.max(0, absoluteStartTime - jobStartOffset.value);
+    await setupHlsPlayer(playlistUrl, relativePosition);
   } catch (error) {
     console.error("Subtitle burn failed:", error);
     errorMessage.value = "Failed to burn subtitles";
@@ -760,7 +855,153 @@ function seek(e: MouseEvent) {
   if (!videoElement.value || !progressBar.value) return;
   const rect = progressBar.value.getBoundingClientRect();
   const percent = (e.clientX - rect.left) / rect.width;
-  videoElement.value.currentTime = percent * duration.value;
+  const absoluteSeek = percent * duration.value;
+
+  if (isHlsPlayback.value && !currentJobId.value) {
+    // Job hasn't started yet - remember the desired seek and handle it when the job is ready
+    pendingSeek.value = absoluteSeek;
+    loadingMessage.value = t("player.seeking_to", { time: formatTime(absoluteSeek) });
+    isLoading.value = true;
+    return;
+  }
+
+  if (!isHlsPlayback.value || !currentJobId.value) {
+    // Regular direct play seek
+    videoElement.value.currentTime = absoluteSeek;
+    return;
+  }
+
+  // HLS playback - handle via helper that may restart transcode if needed
+  handleSeekForHls(absoluteSeek);
+}
+
+/**
+ * Handle seeks for HLS playback.
+ * - If seek is within current job's transcoded range, seek within the media element
+ * - If seek is beyond the transcoded range, stop the current job and start a new one with startTime
+ */
+async function handleSeekForHls(absoluteSeek: number) {
+  if (!currentJobId.value) return;
+
+  // Get job status to assess transcoded_duration
+  let status: TranscodingJobSchema | null;
+  try {
+    status = await media.getHlsStatus(currentJobId.value);
+  } catch (err) {
+    console.warn("Failed to get hls status for seek, will attempt to start new job", err);
+    status = null;
+  }
+
+  const jobStart = status?.start_time ?? jobStartOffset.value ?? 0;
+  const transcoded = status?.transcoded_duration ?? 0;
+  const jobEnd = jobStart + (transcoded || 0);
+  const safetyMargin = 2; // seconds
+
+  // If seek is before job start, start a new job from absoluteSeek
+  if (absoluteSeek < jobStart + 0.5) {
+    // Start a new job at absoluteSeek
+    await restartHlsAt(absoluteSeek);
+    return;
+  }
+
+  // If seek falls within current transcoded range (with margin), just set media time
+  if (absoluteSeek <= jobEnd - safetyMargin) {
+    // Translate to job-relative time for the media element
+    const relativeTime = Math.max(0, absoluteSeek - jobStart);
+    if (videoElement.value) {
+      videoElement.value.currentTime = relativeTime;
+    }
+    return;
+  }
+
+  // Otherwise, it's beyond what's currently transcoded - restart job from absoluteSeek
+  await restartHlsAt(absoluteSeek);
+}
+
+
+async function restartHlsAt(absoluteStart: number) {
+  isLoading.value = true;
+  loadingMessage.value = t("player.seeking_to", { time: formatTime(absoluteStart) });
+  const savedTime = absoluteStart;
+
+  try {
+    // Stop current job if any
+    if (currentJobId.value) {
+      await media.stopHls(currentJobId.value);
+    }
+
+    // Decide which transcode endpoint to call based on currentSource
+    const source = currentSource.value as StreamSource;
+    // Use currently selected audio track, fallback to default
+    const audioIndex = selectedAudioTrack.value?.stream_index ??
+      audioTracks.value.find((t: { is_default: boolean }) => t.is_default)?.stream_index ?? 0;
+
+    // Check if we need to burn subtitles (image-based only)
+    let needsSubtitleBurning = false;
+    let subtitleIndex: number | undefined ;
+    if (selectedSubtitleTrack.value && selectedSubtitleTrack.value.stream_index !== undefined) {
+      const isTextBased = TEXT_SUBTITLE_CODECS.has(selectedSubtitleTrack.value.codec?.toLowerCase() || "");
+      if (!isTextBased) {
+        needsSubtitleBurning = true;
+        subtitleIndex = selectedSubtitleTrack.value.stream_index;
+        console.log("Seek - Need to burn subtitle at stream index:", subtitleIndex);
+      }
+    }
+
+    let job: TranscodingJobSchema;
+    // If subtitle burning is needed, force full transcode
+    if (needsSubtitleBurning) {
+      const transcodeSettings = source.TranscodeSettings;
+      console.log("Seek - Using full transcode due to burned subtitles");
+      job = await media.startTranscode(props.mediaFile.id, {
+        audioStreamIndex: audioIndex,
+        subtitleStreamIndex: subtitleIndex,
+        startTime: savedTime,
+        maxWidth: transcodeSettings?.MaxWidth,
+        maxHeight: transcodeSettings?.MaxHeight,
+      });
+    } else if (source.IsRemuxOnly || source.TranscodingType === 'remux') {
+      job = await media.startRemux(props.mediaFile.id, {
+        audioStreamIndex: audioIndex,
+        startTime: savedTime
+      });
+    } else if (source.TranscodingType === 'audio-only') {
+      job = await media.startAudioTranscode(props.mediaFile.id, {
+        audioStreamIndex: audioIndex,
+        startTime: savedTime
+      });
+    } else {
+      // For full transcode without subtitles, preserve resolution settings
+      const transcodeSettings = source.TranscodeSettings;
+      console.log("Seek - Using full transcode");
+      job = await media.startTranscode(props.mediaFile.id, {
+        audioStreamIndex: audioIndex,
+        subtitleStreamIndex: undefined,
+        startTime: savedTime,
+        maxWidth: transcodeSettings?.MaxWidth,
+        maxHeight: transcodeSettings?.MaxHeight,
+      });
+    }
+
+    currentJobId.value = job.id;
+
+    // Wait for playlist and status
+    const status = await waitForHlsReady(job.id);
+
+    // Update job-start offset
+    jobStartOffset.value = status.start_time ?? savedTime;
+
+    // Setup player with the relative position to avoid seek glitch
+    const playlistUrl = media.getHlsPlaylistUrl(job.id);
+    const relative = Math.max(0, savedTime - jobStartOffset.value);
+    await setupHlsPlayer(playlistUrl, relative);
+
+  } catch (error) {
+    console.error("Failed to restart HLS at seek", error);
+    errorMessage.value = t("player.seek_failed");
+  } finally {
+    isLoading.value = false;
+  }
 }
 
 function onProgressHover(e: MouseEvent) {
@@ -828,11 +1069,19 @@ function handleKeyDown(e: KeyboardEvent) {
       break;
     case "ArrowLeft":
       e.preventDefault();
-      videoElement.value.currentTime = Math.max(0, videoElement.value.currentTime - 10);
+      if (isHlsPlayback.value) {
+        handleSeekForHls(Math.max(0, (jobStartOffset.value ?? 0) + (videoElement.value?.currentTime ?? 0) - 10));
+      } else {
+        videoElement.value.currentTime = Math.max(0, videoElement.value.currentTime - 10);
+      }
       break;
     case "ArrowRight":
       e.preventDefault();
-      videoElement.value.currentTime = Math.min(duration.value, videoElement.value.currentTime + 10);
+      if (isHlsPlayback.value) {
+        handleSeekForHls(Math.min(duration.value, (jobStartOffset.value ?? 0) + (videoElement.value?.currentTime ?? 0) + 10));
+      } else {
+        videoElement.value.currentTime = Math.min(duration.value, videoElement.value.currentTime + 10);
+      }
       break;
     case "ArrowUp":
       e.preventDefault();
@@ -1056,6 +1305,12 @@ async function selectResolution(resolution: { width: number; height: number; lab
 
 async function restartPlaybackWithResolution(requestedResolution: { width: number; height: number } | null) {
   const savedTime = currentTime.value;
+
+  // Pause playback immediately
+  if (videoElement.value) {
+    videoElement.value.pause();
+  }
+
   isLoading.value = true;
   loadingMessage.value = requestedResolution ?
     `Switching to ${requestedResolution.width}x${requestedResolution.height}...` :
@@ -1090,12 +1345,14 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
     if (source.PlayMethod === "DirectPlay" && source.DirectStreamUrl) {
       await setupDirectPlay(source.DirectStreamUrl);
     } else if (source.TranscodingUrl) {
-      await setupHlsPlayback(source as StreamSource);
-      // Seek to saved position after HLS is ready
+      const status = await setupHlsPlayback(source as StreamSource);
+      // If we started the transcode at a specific offset, seek to the right relative time
       if (savedTime > 0) {
+        // If setup returned a job status, it includes start_time
+        const jobStart = (status?.start_time) ?? jobStartOffset.value ?? 0;
         setTimeout(() => {
           if (videoElement.value) {
-            videoElement.value.currentTime = savedTime;
+            videoElement.value.currentTime = Math.max(0, savedTime - jobStart);
           }
         }, 1000);
       }
@@ -1214,7 +1471,7 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
 
         <!-- Time Display -->
         <div class="text-white text-sm">
-          {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+          {{ formatTime(displayCurrentTime) }} / {{ formatTime(duration) }}
         </div>
 
         <!-- Volume Control -->

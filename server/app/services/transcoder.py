@@ -227,6 +227,12 @@ class FFmpegTranscoder:
             subtitle_stream_index: Subtitle stream to burn (None = no subtitles)
             start_time: Start time in seconds for seeking
         """
+        logger.info(
+            f"Starting HLS transcode for job {job_id}: "
+            f"video_codec={video_codec}, audio_codec={audio_codec}, "
+            f"max_width={max_width}, max_height={max_height}, "
+            f"video_bitrate={video_bitrate}, audio_bitrate={audio_bitrate}"
+        )
 
         # Create job directory
         job_dir = self.temp_dir / job_id
@@ -236,15 +242,26 @@ class FFmpegTranscoder:
         playlist_path = job_dir / "playlist.m3u8"
         segment_pattern = str(job_dir / "segment_%03d.ts")
 
-        # Check if subtitle needs burning (image-based)
+        # Check if subtitle needs burning
         burn_subtitle = False
         subtitle_codec = None
+        is_image_subtitle = False
         if subtitle_stream_index is not None and media_file.subtitle_tracks:
             for track in media_file.subtitle_tracks:
                 if track.stream_index == subtitle_stream_index:
                     subtitle_codec = track.codec
                     if subtitle_codec and subtitle_codec.lower() in IMAGE_SUBTITLE_CODECS:
                         burn_subtitle = True
+                        is_image_subtitle = True
+                        logger.info(
+                            f"Will burn image-based subtitle (codec: {subtitle_codec}) from stream {subtitle_stream_index}"
+                        )
+                    elif subtitle_codec and subtitle_codec.lower() in TEXT_SUBTITLE_CODECS:
+                        burn_subtitle = True
+                        is_image_subtitle = False
+                        logger.info(
+                            f"Will burn text subtitle (codec: {subtitle_codec}) from stream {subtitle_stream_index}"
+                        )
                     break
 
         # Build FFmpeg command
@@ -261,8 +278,11 @@ class FFmpegTranscoder:
             segment_duration=segment_duration,
             audio_stream_index=audio_stream_index,
             subtitle_stream_index=subtitle_stream_index if burn_subtitle else None,
+            is_image_subtitle=is_image_subtitle,
             start_time=start_time,
         )
+
+        logger.info(f"FFmpeg command for job {job_id}: {' '.join(cmd)}")
 
         # Update job record
         async with async_session_maker() as session:
@@ -284,18 +304,32 @@ class FFmpegTranscoder:
                     session_id=session_id,
                     client_ip=client_ip,
                     user_agent=user_agent,
+                    start_time=start_time,
                 )
             )
             await session.commit()
 
         # Start FFmpeg process
         try:
+            logger.info(f"Starting FFmpeg process for job {job_id}")
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 stdin=asyncio.subprocess.PIPE,
             )
+
+            # Check if process started successfully (wait briefly to catch immediate failures)
+            try:
+                await asyncio.wait_for(asyncio.shield(asyncio.create_task(process.wait())), timeout=0.1)
+                # Process exited immediately - this is an error
+                stderr = await process.stderr.read() if process.stderr else b""
+                error_msg = f"FFmpeg failed to start: exit code {process.returncode}, stderr: {stderr.decode('utf-8', errors='ignore')}"
+                logger.error(f"Job {job_id} - {error_msg}")
+                raise Exception(error_msg)
+            except TimeoutError:
+                # Process is still running - this is expected
+                logger.info(f"FFmpeg process {process.pid} started successfully for job {job_id}")
 
             # Store process for job management
             self._active_jobs[job_id] = process
@@ -324,8 +358,10 @@ class FFmpegTranscoder:
             return str(playlist_path)
 
         except Exception as e:
+            error_msg = f"Failed to start transcoding: {e}"
+            logger.error(f"Job {job_id} failed: {error_msg}", exc_info=True)
             await self._mark_job_failed(job_id, str(e))
-            raise HTTPException(status_code=500, detail=f"Failed to start transcoding: {e}")
+            raise HTTPException(status_code=500, detail=error_msg)
 
     async def start_remux_hls(
         self,
@@ -385,6 +421,7 @@ class FFmpegTranscoder:
                     session_id=session_id,
                     client_ip=client_ip,
                     user_agent=user_agent,
+                    start_time=start_time,
                 )
             )
             await session.commit()
@@ -505,6 +542,7 @@ class FFmpegTranscoder:
         segment_duration: int = 6,
         audio_stream_index: int | None = None,
         subtitle_stream_index: int | None = None,
+        is_image_subtitle: bool = False,
         start_time: float | None = None,
     ) -> list[str]:
         """Build FFmpeg command for HLS transcoding.
@@ -537,11 +575,7 @@ class FFmpegTranscoder:
 
         cmd.extend(["-i", input_path])
 
-        # Stream mapping (using absolute stream indices from database)
-        if audio_stream_index is not None:
-            cmd.extend(["-map", "0:v:0", "-map", f"0:{audio_stream_index}"])
-        else:
-            cmd.extend(["-map", "0:v:0", "-map", "0:a:0?"])
+        # Note: Stream mapping will be done later, after we know if we need filter_complex
 
         # Get the best encoder for video
         encoder, encoder_args = self.hw_accel.get_video_encoder(video_codec)
@@ -587,6 +621,7 @@ class FFmpegTranscoder:
 
         # Build video filter chain
         vf_filters = []
+        use_filter_complex = False
 
         # VAAPI upload filter
         if "vaapi" in encoder:
@@ -598,7 +633,7 @@ class FFmpegTranscoder:
             if "vaapi" in encoder:
                 if max_width and max_height:
                     vf_filters.append(
-                        f"scale_vaapi=w='min({max_width},iw)':h='min({max_height},ih)':force_original_aspect_ratio=decrease"
+                        f"scale_vaapi=w={max_width}:h={max_height}:force_original_aspect_ratio=decrease:force_divisible_by=2"
                     )
                 elif max_width:
                     vf_filters.append(f"scale_vaapi=w={max_width}:h=-2")
@@ -607,26 +642,71 @@ class FFmpegTranscoder:
             else:
                 if max_width and max_height:
                     vf_filters.append(
-                        f"scale='min({max_width},iw)':'min({max_height},ih)':force_original_aspect_ratio=decrease"
+                        f"scale={max_width}:{max_height}:force_original_aspect_ratio=decrease:force_divisible_by=2"
                     )
                 elif max_width:
                     vf_filters.append(f"scale={max_width}:-2")
                 else:
                     vf_filters.append(f"scale=-2:{max_height}")
 
-        # Subtitle burning (for image-based subtitles)
+        # Subtitle burning
         if subtitle_stream_index is not None and encoder != "copy":
-            # Use subtitles filter for burning
-            # Note: For VAAPI, we need to download, burn, and re-upload
-            if "vaapi" in encoder:
-                # Insert before hwupload
-                vf_filters.insert(0, f"subtitles='{input_path}':stream_index={subtitle_stream_index}")
+            if is_image_subtitle:
+                # Image-based subtitles (PGS, VobSub) require filter_complex with overlay
+                # This is complex, so for now just use subtitles filter which will fail gracefully
+                # TODO: Implement proper PGS burning with filter_complex
+                logger.warning(
+                    f"Image-based subtitle burning (PGS/VobSub) is experimental. "
+                    f"Attempting to burn stream {subtitle_stream_index}..."
+                )
+                # Try overlay - requires mapping the subtitle stream
+                use_filter_complex = True
             else:
-                vf_filters.append(f"subtitles='{input_path}':stream_index={subtitle_stream_index}")
+                # Text-based subtitles (SRT, ASS) - use subtitles filter
+                if "vaapi" in encoder:
+                    # Insert before hwupload for VAAPI
+                    vf_filters.insert(0, f"subtitles='{input_path}':stream_index={subtitle_stream_index}")
+                else:
+                    vf_filters.append(f"subtitles='{input_path}':stream_index={subtitle_stream_index}")
 
         # Apply video filters
-        if vf_filters and encoder != "copy":
-            cmd.extend(["-vf", ",".join(vf_filters)])
+        if use_filter_complex and subtitle_stream_index is not None:
+            # For image-based subtitles, use filter_complex with overlay
+            filter_complex_parts = []
+
+            # Scale video first if needed
+            if vf_filters:
+                # Remove VAAPI filters if present (overlay doesn't work with hw accel)
+                sw_filters = [
+                    f for f in vf_filters if "vaapi" not in f and "hwupload" not in f and "format=nv12" not in f
+                ]
+                if sw_filters:
+                    filter_complex_parts.append(f"[0:v]{','.join(sw_filters)}[v]")
+                else:
+                    filter_complex_parts.append("[0:v]null[v]")
+            else:
+                filter_complex_parts.append("[0:v]null[v]")
+
+            # Overlay subtitle
+            filter_complex_parts.append(f"[v][0:{subtitle_stream_index}]overlay[vout]")
+
+            cmd.extend(["-filter_complex", ";".join(filter_complex_parts)])
+            cmd.extend(["-map", "[vout]"])
+
+            # Map audio
+            if audio_stream_index is not None:
+                cmd.extend(["-map", f"0:{audio_stream_index}"])
+            else:
+                cmd.extend(["-map", "0:a:0?"])
+        else:
+            # Normal stream mapping
+            if audio_stream_index is not None:
+                cmd.extend(["-map", "0:v:0", "-map", f"0:{audio_stream_index}"])
+            else:
+                cmd.extend(["-map", "0:v:0", "-map", "0:a:0?"])
+
+            if vf_filters and encoder != "copy":
+                cmd.extend(["-vf", ",".join(vf_filters)])
 
         # Preserve timestamps for accurate duration
         cmd.extend(["-copyts", "-start_at_zero"])
@@ -662,7 +742,19 @@ class FFmpegTranscoder:
     ) -> None:
         """Monitor FFmpeg process and update job progress."""
 
+        # Accumulate all stderr output for debugging
+        stderr_lines = []
+
         try:
+            # Fetch job start_time to convert absolute ffmpeg time to job-relative transcoded duration
+            job_start_time: float | None = None
+            try:
+                async with async_session_maker() as session:
+                    result = await session.execute(select(TranscodingJob.start_time).where(TranscodingJob.id == job_id))
+                    job_start_time = result.scalar_one_or_none()
+            except Exception:
+                job_start_time = None
+
             while True:
                 if process.stderr is None:
                     break
@@ -676,9 +768,18 @@ class FFmpegTranscoder:
                 if not line:
                     continue
 
+                # Store all stderr for debugging
+                stderr_lines.append(line)
+
                 # Parse progress from FFmpeg output
                 progress_data = self._parse_ffmpeg_progress(line, total_duration)
                 if progress_data:
+                    # FFmpeg 'time' is absolute timestamp within input; convert to job-relative duration
+                    if job_start_time is not None and progress_data.get("transcoded_duration") is not None:
+                        abs_time = float(progress_data.get("transcoded_duration") or 0.0)
+                        rel_time = max(0.0, abs_time - float(job_start_time))
+                        progress_data["transcoded_duration"] = rel_time
+
                     await self._update_job_progress(job_id, progress_data)
 
             # Wait for process to complete
@@ -688,13 +789,31 @@ class FFmpegTranscoder:
             if process.returncode == 0:
                 await self._mark_job_completed(job_id)
             else:
-                stderr_output = ""
-                if process.stderr:
-                    stderr_output = (await process.stderr.read()).decode("utf-8", errors="ignore")
-                await self._mark_job_failed(
-                    job_id,
-                    f"FFmpeg exited with code {process.returncode}: {stderr_output}",
-                )
+                # Use accumulated stderr lines - extract only the most relevant error info
+                if stderr_lines:
+                    # Find the actual error messages (skip metadata/info)
+                    error_lines = []
+                    capture_errors = False
+                    for line in stderr_lines:
+                        # Start capturing from errors or warnings
+                        if any(
+                            marker in line.lower()
+                            for marker in ["error", "failed", "invalid", "unable", "could not", "cannot"]
+                        ):
+                            capture_errors = True
+
+                        if capture_errors:
+                            error_lines.append(line)
+
+                    # Use error lines if found, otherwise use last 20 lines
+                    relevant_output = "\n".join(error_lines[-30:]) if error_lines else "\n".join(stderr_lines[-20:])
+                    stderr_output = relevant_output or "No error output captured"
+                else:
+                    stderr_output = "No error output captured"
+
+                error_msg = f"FFmpeg exited with code {process.returncode}: {stderr_output}"
+                logger.error(f"Job {job_id} failed: {error_msg}")
+                await self._mark_job_failed(job_id, error_msg)
 
         except Exception as e:
             await self._mark_job_failed(job_id, f"Progress monitoring failed: {e}")

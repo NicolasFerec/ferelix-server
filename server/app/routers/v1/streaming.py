@@ -189,6 +189,7 @@ async def start_hls_remux(
         session_id=session_id,
         client_ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
+        start_time=start_time,
     )
 
     session.add(job)
@@ -283,6 +284,7 @@ async def start_hls_stream(
         session_id=session_id,
         client_ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
+        start_time=start_time,
     )
 
     session.add(job)
@@ -375,6 +377,7 @@ async def start_hls_audio_transcode(
         audio_codec=audio_codec,
         audio_bitrate=audio_bitrate,
         video_codec="copy",
+        start_time=start_time,
     )
 
     session.add(job)

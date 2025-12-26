@@ -1950,6 +1950,8 @@ export interface components {
             current_fps?: number | null;
             /** Current Bitrate */
             current_bitrate?: number | null;
+            /** Start Time */
+            start_time?: number | null;
             /** Error Message */
             error_message?: string | null;
             /**

@@ -234,6 +234,8 @@
         "unmute": "Activer le son",
         "loading": "Chargement de la vidéo...",
         "error": "Échec du chargement de la vidéo",
-        "retry": "Réessayer"
+        "retry": "Réessayer",
+        "seeking_to": "Recherche à {time}...",
+        "seek_failed": "Échec de la recherche pendant le transcodage"
     }
 }

@@ -52,6 +52,9 @@ class TranscodingJob(Base):
     max_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Seek/offset info
+    start_time: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Output info
     output_path: Mapped[str | None] = mapped_column(String, nullable=True)
     playlist_path: Mapped[str | None] = mapped_column(String, nullable=True)  # For HLS
@@ -109,6 +112,7 @@ class TranscodingJobSchema(BaseModel):
     transcoded_duration: float | None = None
     current_fps: float | None = None
     current_bitrate: int | None = None
+    start_time: float | None = None
 
     # Error info
     error_message: str | None = None

@@ -234,6 +234,8 @@
         "unmute": "Unmute",
         "loading": "Loading video...",
         "error": "Failed to load video",
-        "retry": "Retry"
+        "retry": "Retry",
+        "seeking_to": "Seeking to {time}...",
+        "seek_failed": "Failed to seek while transcoding"
     }
 }

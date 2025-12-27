@@ -13,6 +13,12 @@ repos:
     language: system
     types: [python]
 
+  - id: pyright
+    name: pyright type check
+    entry: uv run basedpyright
+    language: system
+    types: [python]
+
   - id: openapi-export
     name: export openapi
     entry: uv run python -m scripts.export_openapi

@@ -13,3 +13,9 @@ repos:
       entry: pnpm biome check --write --files-ignore-unknown=true --no-errors-on-unmatched
       language: system
       types: [text]
+
+    - id: vue-tsc
+      name: vue-tsc type check
+      entry: pnpm vue-tsc --noEmit
+      language: system
+      pass_filenames: false

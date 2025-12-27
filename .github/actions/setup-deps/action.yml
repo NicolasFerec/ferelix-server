@@ -65,15 +65,6 @@ runs:
       working-directory: web
       run: pnpm install
 
-    # E2E setup
-    - name: Install E2E dependencies
-      if: inputs.install-e2e == 'true'
-      shell: bash
-      working-directory: e2e
-      run: |
-        npm install
-        npx playwright install --with-deps chromium
-
     # FFmpeg setup
     - name: Install FFmpeg
       if: inputs.install-ffmpeg == 'true'

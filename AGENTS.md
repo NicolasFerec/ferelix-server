@@ -59,7 +59,49 @@ pnpm install                         # Install dependencies
 pnpm dev                            # Dev server on port 5173
 pnpm build                          # Production build
 pnpm check --fix                    # Format + lint (Biome)
+pnpm test                           # Run Vitest unit tests
+pnpm test:watch                     # Run Vitest in watch mode
+pnpm test:coverage                  # Generate test coverage report
 ```
+
+### Backend Testing
+```bash
+# Package manager: uv (NOT pip)
+uv run pytest                       # Run all tests
+uv run pytest tests/unit/           # Run unit tests only
+uv run pytest tests/integration/    # Run integration tests only
+uv run pytest --cov                 # Run with coverage report
+```
+
+## Testing Strategy
+
+**Test Maintenance is CRITICAL**: Tests must be updated alongside code changes to maintain reliability.
+
+### When to Update Tests
+- **After adding new features**: Write tests for new functionality
+- **After modifying existing code**: Update affected tests to reflect changes
+- **After fixing bugs**: Add regression tests to prevent re-occurrence
+- **After refactoring**: Ensure tests still pass and update if behavior changed
+
+### Backend Tests (`server/tests/`)
+- **Unit tests** (`tests/unit/`): Test individual services, utilities, and business logic in isolation
+- **Integration tests** (`tests/integration/`): Test API endpoints and database interactions
+- **API tests** (`tests/api/`): Test complete request/response cycles
+- Run tests locally before committing: `uv run pytest`
+
+### Frontend Tests (`web/tests/`)
+- **Unit tests** (`tests/unit/`): Test individual components, composables, and utility functions
+- Use Vitest + Vue Testing Library for component testing
+- Run tests locally before committing: `pnpm test`
+
+### Test Coverage Goals
+- Aim for >80% coverage on critical paths (auth, streaming, transcoding)
+- Don't sacrifice test quality for coverage metrics
+- Integration tests are more valuable than unit tests for catching real issues
+
+**IMPORTANT**: When modifying code, always check if related tests exist and need updates. Broken tests indicate either:
+1. The change broke existing functionality (fix the code)
+2. The test expectations are outdated (update the test)
 
 ## Code Patterns & Conventions
 

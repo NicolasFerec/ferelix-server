@@ -56,11 +56,6 @@ htmlcov/
 .pytest_cache/
 coverage/
 
-# Playwright
-playwright-report/
-test-results/
-web/e2e/.test-state.json
-
 # mypy
 .mypy_cache/
 .dmypy.json

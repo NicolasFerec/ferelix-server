@@ -16,7 +16,13 @@
         "generate-api-types": "openapi-typescript src/api/openapi.json -o src/api/types.ts",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:coverage": "vitest run --coverage"
+        "test:coverage": "vitest run --coverage",
+        "test:e2e": "playwright test",
+        "test:e2e:ui": "playwright test --ui",
+        "test:e2e:headed": "playwright test --headed",
+        "test:e2e:debug": "playwright test --debug",
+        "test:e2e:report": "playwright show-report",
+        "test:e2e:codegen": "playwright codegen"
     },
     "dependencies": {
         "hls.js": "^1.5.12",
@@ -27,7 +33,7 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.3.10",
-        "@j178/prek": "^0.2.22",
+        "@playwright/test": "^1.49.0",
         "@tailwindcss/vite": "^4.1.18",
         "@testing-library/vue": "^8.1.0",
         "@vitejs/plugin-vue": "^6.0.3",

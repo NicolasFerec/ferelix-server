@@ -106,10 +106,7 @@ const originalConsoleError = console.error;
 console.error = (...args: any[]) => {
     // Filter out Vue warnings that are expected in tests
     const message = args[0]?.toString?.() || "";
-    if (
-        message.includes("[Vue warn]") ||
-        message.includes("Failed to resolve component")
-    ) {
+    if (message.includes("[Vue warn]") || message.includes("Failed to resolve component")) {
         return;
     }
     originalConsoleError.apply(console, args);

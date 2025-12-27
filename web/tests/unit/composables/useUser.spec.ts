@@ -1,9 +1,9 @@
 /**
  * Unit tests for useUser composable
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useUser } from "@/composables/useUser";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as apiClient from "@/api/client";
+import { useUser } from "@/composables/useUser";
 
 // Mock the API client module
 vi.mock("@/api/client", () => ({
@@ -84,9 +84,7 @@ describe("useUser", () => {
 
         it("should handle error when loading user fails", async () => {
             vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
-            vi.mocked(apiClient.auth.getCurrentUser).mockRejectedValue(
-                new Error("Network error"),
-            );
+            vi.mocked(apiClient.auth.getCurrentUser).mockRejectedValue(new Error("Network error"));
 
             const { loadUser, user } = useUser();
             const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});

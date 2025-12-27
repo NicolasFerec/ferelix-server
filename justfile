@@ -22,3 +22,27 @@ dev-web:
 # Start both server and web client in parallel
 [parallel]
 dev: dev-server dev-web
+
+# Run e2e tests
+test-e2e:
+    cd web && pnpm test:e2e
+
+# Run e2e tests in UI mode
+test-e2e-ui:
+    cd web && pnpm test:e2e:ui
+
+# Run e2e tests in headed mode (visible browser)
+test-e2e-headed:
+    cd web && pnpm test:e2e:headed
+
+# Debug e2e tests
+test-e2e-debug:
+    cd web && pnpm test:e2e:debug
+
+# Show e2e test report
+test-e2e-report:
+    cd web && pnpm test:e2e:report
+
+# Install Playwright browsers for e2e tests
+test-e2e-install:
+    cd web && npx playwright install --with-deps chromium

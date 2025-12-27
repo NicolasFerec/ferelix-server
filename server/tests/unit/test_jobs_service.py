@@ -1,11 +1,10 @@
 """Unit tests for the jobs service."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
-
-import pytest
 
 from app.services.jobs import (
+    _JOB_EXECUTION_HISTORY,
+    _JOB_STATES,
     JobExecutionRecord,
     JobMeta,
     JobState,
@@ -16,8 +15,6 @@ from app.services.jobs import (
     mark_manual_run,
     request_job_cancellation,
     update_job_progress,
-    _JOB_STATES,
-    _JOB_EXECUTION_HISTORY,
 )
 
 

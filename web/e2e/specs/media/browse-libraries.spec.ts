@@ -10,16 +10,19 @@ test.describe("Browse Libraries", () => {
     });
 
     test("homepage loads successfully", async ({ authenticatedPage }) => {
-        await homePage.expectToBeOnHomePage();
+        // Should be on home page
+        const url = new URL(authenticatedPage.url());
+        expect(url.pathname).toMatch(/^\/$|^\/home$/);
     });
 
     test("homepage displays recommendation rows", async ({ authenticatedPage }) => {
         await homePage.waitForContentLoad();
 
-        // Should see media rows or empty state
+        // Should see empty state if no libraries configured
         const hasContent =
             (await homePage.mediaRows.count()) > 0 ||
-            (await authenticatedPage.locator(".empty-state, .no-content").isVisible().catch(() => false));
+            (await authenticatedPage.locator(".empty-state, .no-content").isVisible().catch(() => false)) ||
+            (await authenticatedPage.getByText(/no (libraries|media|content)/i).isVisible().catch(() => false));
 
         expect(hasContent).toBeTruthy();
     });

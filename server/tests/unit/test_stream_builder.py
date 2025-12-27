@@ -1,29 +1,31 @@
 """Unit tests for the StreamBuilder service."""
 
 from datetime import UTC, datetime
-from typing import Any
-from unittest.mock import MagicMock
-
-import pytest
 
 from app.models.media_file import AudioTrack, MediaFile, SubtitleTrack, VideoTrack
-from app.models.playback import DeviceProfile, PlayMethod, TranscodeReason
+from app.models.playback import (
+    CodecProfile,
+    DeviceProfile,
+    DirectPlayProfile,
+    PlayMethod,
+    TranscodeReason,
+)
 from app.services.stream_builder import PlaybackResult, StreamBuilder
 
 
 def create_device_profile(
-    direct_play_profiles: list[dict[str, Any]] | None = None,
-    codec_profiles: list[dict[str, Any]] | None = None,
+    direct_play_profiles: list[DirectPlayProfile] | None = None,
+    codec_profiles: list[CodecProfile] | None = None,
 ) -> DeviceProfile:
     """Create a DeviceProfile for testing."""
     if direct_play_profiles is None:
         direct_play_profiles = [
-            {
-                "Type": "Video",
-                "Container": "mp4,mkv,webm",
-                "VideoCodec": "h264,hevc,vp9",
-                "AudioCodec": "aac,mp3,opus",
-            },
+            DirectPlayProfile(
+                Type="Video",
+                Container="mp4,mkv,webm",
+                VideoCodec="h264,hevc,vp9",
+                AudioCodec="aac,mp3,opus",
+            ),
         ]
     if codec_profiles is None:
         codec_profiles = []

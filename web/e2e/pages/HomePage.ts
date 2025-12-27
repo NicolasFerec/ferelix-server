@@ -35,7 +35,8 @@ export class HomePage {
      * Assert home page is displayed
      */
     async expectToBeOnHomePage() {
-        await expect(this.page).toHaveURL(/^\/$|^\/home/);
+        // Match against full URL or just path
+        await expect(this.page).toHaveURL(/^(https?:\/\/[^\/]+)?\/(home)?$/);
     }
 
     /**

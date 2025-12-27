@@ -6,9 +6,12 @@ test.describe("Login Flow", () => {
 
     test.beforeEach(async ({ page }) => {
         loginPage = new LoginPage(page);
-        // Clear auth state
+        // Clear auth state (localStorage might not be accessible before page loads)
+        await page.goto("/login");
         await page.context().clearCookies();
-        await page.evaluate(() => localStorage.clear());
+        await page.evaluate(() => localStorage.clear()).catch(() => {
+            // Ignore if localStorage is not accessible
+        });
     });
 
     test("displays login form", async ({ page }) => {
@@ -20,25 +23,12 @@ test.describe("Login Flow", () => {
     });
 
     test("login with valid credentials redirects to home", async ({ page }) => {
-        // First ensure setup is complete
-        const statusResponse = await page.request.get("/api/v1/setup/status");
-        const statusData = await statusResponse.json();
-
-        if (!statusData.setup_complete) {
-            // Create admin via API
-            await page.request.post("/api/v1/setup/admin", {
-                data: {
-                    username: "admin",
-                    password: "adminpassword123",
-                },
-            });
-        }
-
+        // Admin is created in setup project
         await loginPage.goto();
         await loginPage.login("admin", "adminpassword123");
 
-        // Should redirect to home
-        await page.waitForURL(/^\/$|^\/home/);
+        // Should redirect to home (root path)
+        await page.waitForURL((url) => url.pathname === "/" || url.pathname === "/home");
         await expect(page).not.toHaveURL(/\/login/);
     });
 
@@ -54,19 +44,7 @@ test.describe("Login Flow", () => {
     });
 
     test("login with incorrect password shows error", async ({ page }) => {
-        // Ensure admin exists
-        const statusResponse = await page.request.get("/api/v1/setup/status");
-        const statusData = await statusResponse.json();
-
-        if (!statusData.setup_complete) {
-            await page.request.post("/api/v1/setup/admin", {
-                data: {
-                    username: "admin",
-                    password: "adminpassword123",
-                },
-            });
-        }
-
+        // Admin is created in setup project
         await loginPage.goto();
         await loginPage.login("admin", "wrongpassword");
 
@@ -103,20 +81,13 @@ test.describe("Login Flow", () => {
         // Should redirect to login
         await expect(page).toHaveURL(/\/login/);
 
-        // Login
-        const statusResponse = await page.request.get("/api/v1/setup/status");
-        const statusData = await statusResponse.json();
-
-        if (!statusData.setup_complete) {
-            await page.request.post("/api/v1/setup/admin", {
-                data: { username: "admin", password: "adminpassword123" },
-            });
-        }
-
+        // Login (admin already created in global setup)
         await loginPage.login("admin", "adminpassword123");
 
         // Should redirect back to original destination or home
-        await page.waitForURL(/^\/$|\/home|\/dashboard/);
+        await page.waitForURL((url) =>
+            url.pathname === "/" || url.pathname === "/home" || url.pathname === "/dashboard"
+        );
     });
 
     test("unauthenticated access redirects to login", async ({ page }) => {

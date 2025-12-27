@@ -153,15 +153,12 @@ class TestRefresh:
     """Tests for POST /api/v1/auth/refresh."""
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="JWT token uniqueness depends on timing; can fail in fast test execution")
     async def test_refresh_success(
         self,
         client: AsyncClient,
         test_user: User,
     ) -> None:
         """Test successful token refresh."""
-        import asyncio
-
         # First login to get tokens
         login_response = await client.post(
             "/api/v1/auth/login",
@@ -171,9 +168,6 @@ class TestRefresh:
             },
         )
         refresh_token = login_response.json()["refresh_token"]
-
-        # Wait a bit to ensure token expiry is different
-        await asyncio.sleep(0.1)
 
         # Then refresh
         response = await client.post(

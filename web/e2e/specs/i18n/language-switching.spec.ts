@@ -61,7 +61,7 @@ test.describe("Language Switching", () => {
             // Page content should change
             if (isEnglish) {
                 // Should now have French text
-                const hasFrench = updatedText.includes("Paramètres") || 
+                const hasFrench = updatedText.includes("Paramètres") ||
                                   updatedText.includes("Langue") ||
                                   !updatedText.includes("Settings");
                 expect(hasFrench).toBeTruthy();

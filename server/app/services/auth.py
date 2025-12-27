@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
@@ -50,7 +51,8 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> 
     else:
         expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
-    to_encode.update({"exp": expire, "type": "refresh"})
+    # Add unique jti (JWT ID) to ensure token uniqueness
+    to_encode.update({"exp": expire, "type": "refresh", "jti": str(uuid.uuid4())})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

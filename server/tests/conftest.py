@@ -32,7 +32,7 @@ test_session_maker = async_sessionmaker(
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+def event_loop() -> Generator[asyncio.AbstractEventLoop]:
     """Create event loop for async tests."""
     loop = asyncio.new_event_loop()
     yield loop
@@ -40,7 +40,7 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 
 
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession]:
     """Create a fresh database session for each test."""
     # Create all tables
     async with test_engine.begin() as conn:
@@ -56,7 +56,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
     """Create test client with database session override."""
     from unittest.mock import MagicMock
 
@@ -83,7 +83,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     setup_module.async_session_maker = test_session_maker
 
     # Override database session dependency
-    async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
+    def override_get_session() -> Generator[AsyncSession]:
         yield db_session
 
     # Override scheduler dependency
@@ -190,7 +190,7 @@ def admin_auth_headers(admin_user: User) -> dict[str, str]:
 
 # FFmpeg mocking fixtures
 @pytest.fixture
-def mock_ffprobe() -> Generator[MagicMock, None, None]:
+def mock_ffprobe() -> Generator[MagicMock]:
     """Mock ffprobe subprocess call."""
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -230,7 +230,7 @@ def mock_ffprobe() -> Generator[MagicMock, None, None]:
 
 
 @pytest.fixture
-def mock_ffmpeg_transcode() -> Generator[AsyncMock, None, None]:
+def mock_ffmpeg_transcode() -> Generator[AsyncMock]:
     """Mock FFmpeg transcoding process."""
     mock_process = AsyncMock()
     mock_process.returncode = 0

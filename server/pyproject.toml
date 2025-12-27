@@ -23,6 +23,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ruff",
+    "basedpyright",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
@@ -42,6 +43,18 @@ filterwarnings = [
     "ignore::DeprecationWarning",
 ]
 
+[tool.alembic]
+file_template = "%%(epoch)s_%%(rev)s"
+prepend_sys_path = "."
+script_location = "alembic"
+version_path_separator = "os"
+
+[tool.pyright]
+typeCheckingMode = "standard"
+reportDeprecated = "warning"
+venvPath = "."
+venv = ".venv"
+
 [tool.ruff]
 target-version = "py314"
 unsafe-fixes = true
@@ -50,12 +63,6 @@ line-length = 120
 lint.extend-select = ["I", "C", "SIM", "TCH", "UP", "RUF"]
 lint.mccabe.max-complexity = 15
 lint.ignore = ["TC001", "TC002", "TC003"]
-
-[tool.alembic]
-file_template = "%%(epoch)s_%%(rev)s"
-prepend_sys_path = "."
-script_location = "alembic"
-version_path_separator = "os"
 
 [[tool.alembic.post_write_hooks]]
 entrypoint = "ruff_format"

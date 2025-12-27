@@ -229,7 +229,7 @@ export class PlayerPage {
         } catch {
             // Info panel might need to be opened
         }
-        
+
         const text = await this.infoPanel.textContent();
         if (text?.includes("DirectPlay")) return "DirectPlay";
         if (text?.includes("DirectStream") || text?.includes("Remux")) return "DirectStream";

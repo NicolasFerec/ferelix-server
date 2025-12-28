@@ -227,6 +227,7 @@ class FFmpegTranscoder:
             subtitle_stream_index: Subtitle stream to burn (None = no subtitles)
             start_time: Start time in seconds for seeking
         """
+        window_size = 10
         logger.info(
             f"Starting HLS transcode for job {job_id}: "
             f"video_codec={video_codec}, audio_codec={audio_codec}, "
@@ -280,6 +281,7 @@ class FFmpegTranscoder:
             subtitle_stream_index=subtitle_stream_index if burn_subtitle else None,
             is_image_subtitle=is_image_subtitle,
             start_time=start_time,
+            window_size=window_size,
         )
 
         logger.info(f"FFmpeg command for job {job_id}: {' '.join(cmd)}")
@@ -386,6 +388,7 @@ class FFmpegTranscoder:
             audio_stream_index: Specific audio stream to include (None = all)
             start_time: Start time in seconds for seeking
         """
+        window_size = 10
 
         # Create job directory
         job_dir = self.temp_dir / job_id
@@ -403,6 +406,7 @@ class FFmpegTranscoder:
             segment_duration=segment_duration,
             audio_stream_index=audio_stream_index,
             start_time=start_time,
+            window_size=window_size,
         )
 
         # Update job record
@@ -473,6 +477,7 @@ class FFmpegTranscoder:
         segment_duration: int = 6,
         audio_stream_index: int | None = None,
         start_time: float | None = None,
+        window_size: int = 10,
     ) -> list[str]:
         """Build FFmpeg command for HLS remuxing (no re-encoding).
 
@@ -483,6 +488,7 @@ class FFmpegTranscoder:
             segment_duration: Segment duration in seconds
             audio_stream_index: Specific audio stream index (None = default)
             start_time: Seek position in seconds
+            window_size: Number of segments to keep in playlist (sliding window)
         """
 
         cmd = ["ffmpeg", "-y"]
@@ -513,14 +519,16 @@ class FFmpegTranscoder:
             "hls",
             "-hls_time",
             str(segment_duration),
-            "-hls_playlist_type",
-            "event",
             "-hls_segment_filename",
             segment_pattern,
             "-start_number",
             "0",
             "-hls_allow_cache",
             "1",
+            "-hls_list_size",
+            str(window_size),
+            "-hls_delete_threshold",
+            str(window_size + 5),
             "-hls_flags",
             "delete_segments+append_list+program_date_time",
             playlist_path,
@@ -544,6 +552,7 @@ class FFmpegTranscoder:
         subtitle_stream_index: int | None = None,
         is_image_subtitle: bool = False,
         start_time: float | None = None,
+        window_size: int = 10,
     ) -> list[str]:
         """Build FFmpeg command for HLS transcoding.
 
@@ -561,6 +570,7 @@ class FFmpegTranscoder:
             audio_stream_index: Specific audio stream index (None = default)
             subtitle_stream_index: Subtitle stream to burn (None = no burn)
             start_time: Seek position in seconds
+            window_size: Number of segments to keep in playlist (sliding window)
         """
 
         cmd = ["ffmpeg", "-y"]
@@ -717,8 +727,6 @@ class FFmpegTranscoder:
             "hls",
             "-hls_time",
             str(segment_duration),
-            "-hls_playlist_type",
-            "event",
             "-hls_segment_type",
             "mpegts",  # Explicit TS segments for better compatibility
             "-hls_segment_filename",
@@ -727,6 +735,10 @@ class FFmpegTranscoder:
             "0",
             "-hls_allow_cache",
             "1",
+            "-hls_list_size",
+            str(window_size),
+            "-hls_delete_threshold",
+            str(window_size + 5),
             "-hls_flags",
             "delete_segments+append_list+program_date_time",
             playlist_path,

@@ -33,38 +33,40 @@ _FFMPEG_PATH_CACHE: str | None = None
 _FFPROBE_PATH_CACHE: str | None = None
 
 
+def _get_ffmpeg_ffprobe_paths() -> tuple[str, str]:
+    """Get paths to both ffmpeg and ffprobe binaries from static-ffmpeg.
+    
+    Returns:
+        Tuple of (ffmpeg_path, ffprobe_path)
+    """
+    global _FFMPEG_PATH_CACHE, _FFPROBE_PATH_CACHE
+    
+    # Return cached paths if available
+    if _FFMPEG_PATH_CACHE is not None and _FFPROBE_PATH_CACHE is not None:
+        return (_FFMPEG_PATH_CACHE, _FFPROBE_PATH_CACHE)
+    
+    try:
+        # Get both paths in a single call
+        ffmpeg_path, ffprobe_path = run.get_or_fetch_platform_executables_else_raise()
+        _FFMPEG_PATH_CACHE = ffmpeg_path
+        _FFPROBE_PATH_CACHE = ffprobe_path
+        return (ffmpeg_path, ffprobe_path)
+    except (ImportError, RuntimeError, OSError) as e:
+        logger.error(f"Failed to get ffmpeg/ffprobe from static-ffmpeg: {e}")
+        # Fallback to system binaries (for backwards compatibility during transition)
+        return ("ffmpeg", "ffprobe")
+
+
 def _get_ffmpeg_path() -> str:
     """Get the path to the ffmpeg binary from static-ffmpeg."""
-    global _FFMPEG_PATH_CACHE
-    if _FFMPEG_PATH_CACHE is not None:
-        return _FFMPEG_PATH_CACHE
-
-    try:
-        # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
-        ffmpeg_path, _ = run.get_or_fetch_platform_executables_else_raise()
-        _FFMPEG_PATH_CACHE = ffmpeg_path
-        return ffmpeg_path
-    except (ImportError, RuntimeError, OSError) as e:
-        logger.error(f"Failed to get ffmpeg from static-ffmpeg: {e}")
-        # Fallback to system ffmpeg (for backwards compatibility during transition)
-        return "ffmpeg"
+    ffmpeg_path, _ = _get_ffmpeg_ffprobe_paths()
+    return ffmpeg_path
 
 
 def _get_ffprobe_path() -> str:
     """Get the path to the ffprobe binary from static-ffmpeg."""
-    global _FFPROBE_PATH_CACHE
-    if _FFPROBE_PATH_CACHE is not None:
-        return _FFPROBE_PATH_CACHE
-
-    try:
-        # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
-        _, ffprobe_path = run.get_or_fetch_platform_executables_else_raise()
-        _FFPROBE_PATH_CACHE = ffprobe_path
-        return ffprobe_path
-    except (ImportError, RuntimeError, OSError) as e:
-        logger.error(f"Failed to get ffprobe from static-ffmpeg: {e}")
-        # Fallback to system ffprobe (for backwards compatibility during transition)
-        return "ffprobe"
+    _, ffprobe_path = _get_ffmpeg_ffprobe_paths()
+    return ffprobe_path
 
 
 class HardwareAcceleration:

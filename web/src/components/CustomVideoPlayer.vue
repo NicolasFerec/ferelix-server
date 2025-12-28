@@ -54,6 +54,7 @@ const volume = ref(1);
 const isMuted = ref(false);
 const isFullscreen = ref(false);
 const hoverTime = ref<number | null>(null);
+const bufferedRanges = ref<{ start: number; end: number }[]>([]);
 const isLoading = ref(true);
 const loadingMessage = ref("");
 const errorMessage = ref("");
@@ -120,6 +121,15 @@ const displayCurrentTime = computed(() => {
 const hoverPercent = computed(() => {
   if (!progressBar.value || hoverTime.value === null) return 0;
   return (hoverTime.value / duration.value) * 100;
+});
+
+const bufferedPercentages = computed(() => {
+  if (duration.value === 0) return [];
+
+  return bufferedRanges.value.map(range => ({
+    start: (range.start / duration.value) * 100,
+    width: ((range.end - range.start) / duration.value) * 100
+  }));
 });
 
 const playbackInfo = computed(() => {
@@ -620,6 +630,9 @@ function cleanup() {
   // Clear HLS playback flag
   isHlsPlayback.value = false;
   isLoading.value = false;
+
+  // Reset buffered ranges
+  bufferedRanges.value = [];
 
   // Remove subtitle tracks
   if (videoElement.value) {
@@ -1134,6 +1147,34 @@ function onTimeUpdate() {
   }
 }
 
+function onProgress() {
+  if (!videoElement.value) return;
+
+  const buffered = videoElement.value.buffered;
+  const ranges: { start: number; end: number }[] = [];
+
+  // Extract all buffered time ranges from the video element
+  for (let i = 0; i < buffered.length; i++) {
+    const start = buffered.start(i);
+    const end = buffered.end(i);
+
+    // For HLS playback, convert relative times to absolute times
+    const absoluteStart = isHlsPlayback.value
+      ? (jobStartOffset.value ?? 0) + start
+      : start;
+    const absoluteEnd = isHlsPlayback.value
+      ? (jobStartOffset.value ?? 0) + end
+      : end;
+
+    ranges.push({
+      start: absoluteStart,
+      end: absoluteEnd
+    });
+  }
+
+  bufferedRanges.value = ranges;
+}
+
 function onPlay() {
   isPlaying.value = true;
   isLoading.value = false;
@@ -1382,6 +1423,7 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
       crossorigin="anonymous"
       @loadedmetadata="onLoadedMetadata"
       @timeupdate="onTimeUpdate"
+      @progress="onProgress"
       @play="onPlay"
       @pause="onPause"
       @volumechange="onVolumeChange"
@@ -1439,13 +1481,27 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
           @mousemove="onProgressHover"
           @mouseleave="hoverTime = null"
         >
+          <!-- Buffered indicator layer -->
           <div
-            class="progress-fill h-full bg-primary-600 rounded-full transition-all"
+            v-for="(range, index) in bufferedPercentages"
+            :key="index"
+            class="buffered-fill absolute h-full bg-gray-400 rounded-full pointer-events-none"
+            :style="{
+              left: `${range.start}%`,
+              width: `${range.width}%`
+            }"
+          />
+
+          <!-- Progress fill (watched portion) -->
+          <div
+            class="progress-fill h-full bg-primary-600 rounded-full transition-all relative z-10"
             :style="{ width: `${progressPercent}%` }"
           />
+
+          <!-- Hover time indicator -->
           <div
             v-if="hoverTime !== null"
-            class="hover-time absolute -top-8 text-white text-xs bg-black/80 px-2 py-1 rounded-sm transform -translate-x-1/2"
+            class="hover-time absolute -top-8 text-white text-xs bg-black/80 px-2 py-1 rounded-sm transform -translate-x-1/2 z-20"
             :style="{ left: `${hoverPercent}%` }"
           >
             {{ formatTime(hoverTime) }}

@@ -3,5 +3,6 @@
     "biome.configurationPath": "web/biome.json",
     "biome.lsp.bin": "web/node_modules/.bin/biome",
     "editor.defaultFormatter": "biomejs.biome",
-    "basedpyright.analysis.configFilePath": "${workspaceFolder}/server"
+    "basedpyright.analysis.configFilePath": "${workspaceFolder}/server",
+    "python.defaultInterpreterPath": "${workspaceFolder}/server/.venv/bin/python"
 }

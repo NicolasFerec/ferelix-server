@@ -190,6 +190,15 @@ def admin_auth_headers(admin_user: User) -> dict[str, str]:
 
 # FFmpeg mocking fixtures
 @pytest.fixture
+def mock_static_ffmpeg_paths() -> Generator[MagicMock]:
+    """Mock static_ffmpeg.run.get_or_fetch_platform_executables_else_raise to return fake paths."""
+    with patch("static_ffmpeg.run.get_or_fetch_platform_executables_else_raise") as mock:
+        # Return fake paths for ffmpeg and ffprobe
+        mock.return_value = ("/usr/bin/ffmpeg", "/usr/bin/ffprobe")
+        yield mock
+
+
+@pytest.fixture
 def mock_ffprobe() -> Generator[MagicMock]:
     """Mock ffprobe subprocess call."""
     mock_result = MagicMock()

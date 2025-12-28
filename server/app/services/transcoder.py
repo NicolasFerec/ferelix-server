@@ -5,7 +5,7 @@ import logging
 import re
 import shutil
 import subprocess
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -291,7 +291,7 @@ class FFmpegTranscoder:
                 .where(TranscodingJob.id == job_id)
                 .values(
                     status=TranscodingJobStatus.RUNNING,
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(UTC),
                     ffmpeg_command=" ".join(cmd),
                     output_path=str(job_dir),
                     playlist_path=str(playlist_path),
@@ -412,7 +412,7 @@ class FFmpegTranscoder:
                 .where(TranscodingJob.id == job_id)
                 .values(
                     status=TranscodingJobStatus.RUNNING,
-                    started_at=datetime.utcnow(),
+                    started_at=datetime.now(UTC),
                     ffmpeg_command=" ".join(cmd),
                     output_path=str(job_dir),
                     playlist_path=str(playlist_path),
@@ -867,7 +867,7 @@ class FFmpegTranscoder:
                     transcoded_duration=progress_data.get("transcoded_duration"),
                     current_fps=progress_data.get("current_fps"),
                     current_bitrate=progress_data.get("current_bitrate"),
-                    last_accessed_at=datetime.utcnow(),
+                    last_accessed_at=datetime.now(UTC),
                 )
             )
             await session.commit()
@@ -881,7 +881,7 @@ class FFmpegTranscoder:
                 .where(TranscodingJob.id == job_id)
                 .values(
                     status=TranscodingJobStatus.COMPLETED,
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(UTC),
                     progress_percent=100.0,
                 )
             )
@@ -897,7 +897,7 @@ class FFmpegTranscoder:
                 .values(
                     status=TranscodingJobStatus.FAILED,
                     error_message=error_message,
-                    completed_at=datetime.utcnow(),
+                    completed_at=datetime.now(UTC),
                 )
             )
             await session.commit()
@@ -931,7 +931,7 @@ class FFmpegTranscoder:
                     .where(TranscodingJob.id == job_id)
                     .values(
                         status=TranscodingJobStatus.CANCELLED,
-                        completed_at=datetime.utcnow(),
+                        completed_at=datetime.now(UTC),
                     )
                 )
                 await session.commit()
@@ -948,7 +948,7 @@ class FFmpegTranscoder:
     async def cleanup_old_jobs(self, max_age_hours: int = 24) -> int:
         """Cleanup old transcoding jobs and their files."""
 
-        cutoff_time = datetime.utcnow() - timedelta(hours=max_age_hours)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
         cleanup_count = 0
 
         async with async_session_maker() as session:

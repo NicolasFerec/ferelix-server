@@ -22,3 +22,26 @@ dev-web:
 # Start both server and web client in parallel
 [parallel]
 dev: dev-server dev-web
+
+# Run backend tests
+test-server:
+    cd server && uv run pytest
+
+# Run frontend tests
+test-web:
+    cd web && pnpm test
+
+# Run all tests (backend + frontend)
+test: test-server test-web
+
+# Run server type checks
+type-check-server:
+    cd server && uv run basedpyright
+
+# Run web type checks
+type-check-web:
+    cd web && pnpm vue-tsc --noEmit
+
+# Run all type checks (backend + frontend)
+type-check: type-check-server type-check-web
+tc: type-check

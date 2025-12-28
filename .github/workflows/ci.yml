@@ -1,16 +1,16 @@
-name: "Copilot Setup Steps"
+name: Test Suite
 
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
-      - .github/actions/setup-deps/action.yml
+
+permissions:
+  contents: read
 
 jobs:
-  copilot-setup-steps:
-    runs-on:  ubuntu-latest
-
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 
@@ -20,3 +20,9 @@ jobs:
 
       - name: Setup dependencies
         uses: ./.github/actions/setup-deps
+
+      - name: Run tests
+        run: just test
+
+      - name: Run type checks
+        run: just type-check

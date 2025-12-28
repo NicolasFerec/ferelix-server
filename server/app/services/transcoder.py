@@ -28,17 +28,43 @@ TEXT_SUBTITLE_CODECS = {"subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "te
 # Image-based subtitle codecs that must be burned into video
 IMAGE_SUBTITLE_CODECS = {"hdmv_pgs_subtitle", "pgssub", "dvd_subtitle", "dvdsub", "dvb_subtitle", "xsub", "vobsub"}
 
+# Cache for FFmpeg/FFprobe paths to avoid repeated lookups
+_FFMPEG_PATH_CACHE: str | None = None
+_FFPROBE_PATH_CACHE: str | None = None
+
 
 def _get_ffmpeg_path() -> str:
     """Get the path to the ffmpeg binary from static-ffmpeg."""
+    global _FFMPEG_PATH_CACHE
+    if _FFMPEG_PATH_CACHE is not None:
+        return _FFMPEG_PATH_CACHE
+
     try:
         # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
         ffmpeg_path, _ = run.get_or_fetch_platform_executables_else_raise()
+        _FFMPEG_PATH_CACHE = ffmpeg_path
         return ffmpeg_path
-    except Exception as e:
+    except (ImportError, RuntimeError, OSError) as e:
         logger.error(f"Failed to get ffmpeg from static-ffmpeg: {e}")
         # Fallback to system ffmpeg (for backwards compatibility during transition)
         return "ffmpeg"
+
+
+def _get_ffprobe_path() -> str:
+    """Get the path to the ffprobe binary from static-ffmpeg."""
+    global _FFPROBE_PATH_CACHE
+    if _FFPROBE_PATH_CACHE is not None:
+        return _FFPROBE_PATH_CACHE
+
+    try:
+        # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
+        _, ffprobe_path = run.get_or_fetch_platform_executables_else_raise()
+        _FFPROBE_PATH_CACHE = ffprobe_path
+        return ffprobe_path
+    except (ImportError, RuntimeError, OSError) as e:
+        logger.error(f"Failed to get ffprobe from static-ffmpeg: {e}")
+        # Fallback to system ffprobe (for backwards compatibility during transition)
+        return "ffprobe"
 
 
 class HardwareAcceleration:

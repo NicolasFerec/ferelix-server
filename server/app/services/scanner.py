@@ -20,14 +20,22 @@ logger = logging.getLogger(__name__)
 # Supported video file extensions
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".flv", ".wmv"}
 
-# Get ffprobe path from static-ffmpeg
+# Cache for ffprobe path to avoid repeated lookups
+_FFPROBE_PATH_CACHE: str | None = None
+
+
 def _get_ffprobe_path() -> str:
     """Get the path to the ffprobe binary from static-ffmpeg."""
+    global _FFPROBE_PATH_CACHE
+    if _FFPROBE_PATH_CACHE is not None:
+        return _FFPROBE_PATH_CACHE
+
     try:
         # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
         _, ffprobe_path = run.get_or_fetch_platform_executables_else_raise()
+        _FFPROBE_PATH_CACHE = ffprobe_path
         return ffprobe_path
-    except Exception as e:
+    except (ImportError, RuntimeError, OSError) as e:
         logger.error(f"Failed to get ffprobe from static-ffmpeg: {e}")
         # Fallback to system ffprobe (for backwards compatibility during transition)
         return "ffprobe"

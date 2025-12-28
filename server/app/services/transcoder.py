@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
+from static_ffmpeg import run
 
 from ..database import async_session_maker
 from ..models import (
@@ -26,6 +27,18 @@ TEXT_SUBTITLE_CODECS = {"subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "te
 
 # Image-based subtitle codecs that must be burned into video
 IMAGE_SUBTITLE_CODECS = {"hdmv_pgs_subtitle", "pgssub", "dvd_subtitle", "dvdsub", "dvb_subtitle", "xsub", "vobsub"}
+
+
+def _get_ffmpeg_path() -> str:
+    """Get the path to the ffmpeg binary from static-ffmpeg."""
+    try:
+        # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
+        ffmpeg_path, _ = run.get_or_fetch_platform_executables_else_raise()
+        return ffmpeg_path
+    except Exception as e:
+        logger.error(f"Failed to get ffmpeg from static-ffmpeg: {e}")
+        # Fallback to system ffmpeg (for backwards compatibility during transition)
+        return "ffmpeg"
 
 
 class HardwareAcceleration:
@@ -47,8 +60,9 @@ class HardwareAcceleration:
 
         # Check for available encoders
         try:
+            ffmpeg_path = _get_ffmpeg_path()
             result = subprocess.run(
-                ["ffmpeg", "-hide_banner", "-encoders"],
+                [ffmpeg_path, "-hide_banner", "-encoders"],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -86,9 +100,10 @@ class HardwareAcceleration:
     def _test_encoder(self, encoder: str) -> bool:
         """Test if an encoder actually works."""
         try:
+            ffmpeg_path = _get_ffmpeg_path()
             result = subprocess.run(
                 [
-                    "ffmpeg",
+                    ffmpeg_path,
                     "-hide_banner",
                     "-f",
                     "lavfi",
@@ -110,9 +125,10 @@ class HardwareAcceleration:
     def _test_vaapi_encoder(self, device: str) -> bool:
         """Test if VAAPI encoder works with specific device."""
         try:
+            ffmpeg_path = _get_ffmpeg_path()
             result = subprocess.run(
                 [
-                    "ffmpeg",
+                    ffmpeg_path,
                     "-hide_banner",
                     "-vaapi_device",
                     device,
@@ -485,7 +501,8 @@ class FFmpegTranscoder:
             start_time: Seek position in seconds
         """
 
-        cmd = ["ffmpeg", "-y"]
+        ffmpeg_path = _get_ffmpeg_path()
+        cmd = [ffmpeg_path, "-y"]
 
         # Fast seek (before input for speed)
         if start_time and start_time > 0:
@@ -563,7 +580,8 @@ class FFmpegTranscoder:
             start_time: Seek position in seconds
         """
 
-        cmd = ["ffmpeg", "-y"]
+        ffmpeg_path = _get_ffmpeg_path()
+        cmd = [ffmpeg_path, "-y"]
 
         # Hardware acceleration initialization for VAAPI
         if self.hw_accel.vaapi_available and self.hw_accel.vaapi_device and video_codec != "copy":
@@ -1033,8 +1051,9 @@ class FFmpegTranscoder:
             True if extraction succeeded, False otherwise
         """
         # Use absolute stream index (0:{index}) not relative (0:s:{index})
+        ffmpeg_path = _get_ffmpeg_path()
         cmd = [
-            "ffmpeg",
+            ffmpeg_path,
             "-y",
             "-i",
             media_file_path,

@@ -28,9 +28,8 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1
 
-# Install system dependencies
+# Install system dependencies (removed ffmpeg as it's now bundled with Python dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
     curl \
     ca-certificates \
     openssl \

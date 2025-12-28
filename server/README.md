@@ -8,7 +8,7 @@ A self-hosted media server with JWT-based authentication, role-based access cont
 - 🎬 **Video Streaming**: HTTP Range request support for seeking and partial content delivery
 - 📁 **Automatic Library Scanning**: Scheduled folder scanner that discovers video files
 - 🗄️ **Database Storage**: SQLite with easy PostgreSQL migration path
-- 📊 **Metadata Extraction**: Automatic video metadata extraction using ffprobe (duration, resolution, codec)
+- 📊 **Metadata Extraction**: Automatic video metadata extraction using ffprobe (bundled with Python dependencies)
 - 🔄 **Database Migrations**: Alembic integration for clean schema evolution
 - ⚡ **Async Everything**: Built on async/await for high performance
 - 🐳 **Docker Support**: Production-ready containerization for easy deployment
@@ -18,7 +18,6 @@ A self-hosted media server with JWT-based authentication, role-based access cont
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/)
-- ffmpeg (for ffprobe metadata extraction)
 - Docker (for production deployment)
 
 Install uv:
@@ -30,17 +29,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Install ffmpeg:
-```bash
-# Ubuntu/Debian
-sudo apt-get install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Windows
-# Download from https://ffmpeg.org/download.html
-```
+**Note:** FFmpeg is no longer required to be installed separately. The `static-ffmpeg` Python package provides bundled FFmpeg binaries that are automatically installed with the project dependencies.
 
 This project uses [pre-commit](https://pre-commit.com/) for code quality checks. Install the git hooks:
 

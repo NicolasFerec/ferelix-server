@@ -10,6 +10,7 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from static_ffmpeg import run
 
 from app.database import async_session_maker
 from app.models import AudioTrack, Library, MediaFile, SubtitleTrack, VideoTrack
@@ -18,6 +19,18 @@ logger = logging.getLogger(__name__)
 
 # Supported video file extensions
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".flv", ".wmv"}
+
+# Get ffprobe path from static-ffmpeg
+def _get_ffprobe_path() -> str:
+    """Get the path to the ffprobe binary from static-ffmpeg."""
+    try:
+        # static_ffmpeg.run returns tuple (ffmpeg_path, ffprobe_path)
+        _, ffprobe_path = run.get_or_fetch_platform_executables_else_raise()
+        return ffprobe_path
+    except Exception as e:
+        logger.error(f"Failed to get ffprobe from static-ffmpeg: {e}")
+        # Fallback to system ffprobe (for backwards compatibility during transition)
+        return "ffprobe"
 
 
 def _parse_fps(r_frame_rate: str | None) -> float | None:
@@ -96,9 +109,10 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
     and track information (video_tracks, audio_tracks, subtitle_tracks).
     """
     try:
+        ffprobe_path = _get_ffprobe_path()
         result = subprocess.run(
             [
-                "ffprobe",
+                ffprobe_path,
                 "-v",
                 "quiet",
                 "-print_format",

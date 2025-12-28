@@ -15,8 +15,9 @@ Ferelix is organized into two main subprojects:
 
 - **Python 3.14+** and **[uv](https://docs.astral.sh/uv/)** - For the backend server
 - **pnpm** - For the web frontend
-- **ffmpeg** - For video metadata extraction
 - **[just](https://github.com/casey/just)** - Command runner (optional but recommended)
+
+**Note:** FFmpeg is no longer required to be installed separately. The backend server now uses `static-ffmpeg`, a Python package that includes bundled FFmpeg binaries.
 
 ### Install Just (Command Runner)
 

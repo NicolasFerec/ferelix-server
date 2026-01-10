@@ -1,5 +1,6 @@
 """Video streaming endpoints with HTTP Range and HLS transcoding support."""
 
+import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -7,7 +8,7 @@ from typing import Annotated
 import aiofiles
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +24,66 @@ from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
 from app.services.transcoder import TEXT_SUBTITLE_CODECS, get_transcoder
 
 router = APIRouter(prefix="/api/v1", tags=["streaming"])
+logger = logging.getLogger(__name__)
+
+
+async def cleanup_previous_sessions(
+    session: AsyncSession,
+    media_id: int,
+    exclude_job_id: str | None = None,
+) -> int:
+    """Clean up previous transcoding sessions for the same media file.
+
+    Args:
+        session: Database session
+        media_id: Media file ID
+        client_ip: Client IP address (not used for filtering - clean all jobs)
+        user_agent: Client user agent (not used for filtering - clean all jobs)
+        exclude_job_id: Job ID to exclude from cleanup (current/new job)
+
+    Returns:
+        Number of jobs cleaned up
+    """
+    from app.services.transcoder import get_transcoder
+
+    transcoder = get_transcoder()
+    cleanup_count = 0
+
+    # Find ALL previous running jobs for the same media file (aggressive cleanup)
+    query = select(TranscodingJob).where(
+        TranscodingJob.media_file_id == media_id,
+        TranscodingJob.status == TranscodingJobStatus.RUNNING,
+    )
+
+    # Exclude current job if specified
+    if exclude_job_id:
+        query = query.where(TranscodingJob.id != exclude_job_id)
+
+    result = await session.execute(query)
+    previous_jobs = result.scalars().all()
+
+    logger.info(f"Found {len(previous_jobs)} previous jobs to clean up for media {media_id}")
+
+    for job in previous_jobs:
+        try:
+            logger.info(f"Cleaning up previous job {job.id} for media {media_id}")
+            # Stop the transcoding process
+            await transcoder.stop_job(job.id)
+
+            # Mark as cancelled
+            job.status = TranscodingJobStatus.CANCELLED
+            job.completed_at = func.now()
+            cleanup_count += 1
+
+        except Exception as e:
+            # Log error but continue with other jobs
+            logger.warning(f"Failed to cleanup previous job {job.id}: {e}")
+
+    if cleanup_count > 0:
+        await session.commit()
+        logger.info(f"Successfully cleaned up {cleanup_count} previous jobs for media {media_id}")
+
+    return cleanup_count
 
 
 async def range_reader(file_path: Path, start: int, end: int, chunk_size: int = 8192):
@@ -196,6 +257,16 @@ async def start_hls_remux(
     await session.commit()
     await session.refresh(job)
 
+    # Clean up previous sessions for this client and media
+    cleanup_count = await cleanup_previous_sessions(
+        session=session,
+        media_id=media_id,
+        exclude_job_id=job_id,
+    )
+
+    if cleanup_count > 0:
+        logger.info(f"Cleaned up {cleanup_count} previous transcoding sessions for media {media_id}")
+
     # Start remuxing (fast, no re-encoding)
     transcoder = get_transcoder()
     try:
@@ -291,6 +362,16 @@ async def start_hls_stream(
     await session.commit()
     await session.refresh(job)
 
+    # Clean up previous sessions for this client and media
+    cleanup_count = await cleanup_previous_sessions(
+        session=session,
+        media_id=media_id,
+        exclude_job_id=job_id,
+    )
+
+    if cleanup_count > 0:
+        logger.info(f"Cleaned up {cleanup_count} previous transcoding sessions for media {media_id}")
+
     # Start transcoding
     transcoder = get_transcoder()
     try:
@@ -383,6 +464,16 @@ async def start_hls_audio_transcode(
     session.add(job)
     await session.commit()
     await session.refresh(job)
+
+    # Clean up previous sessions for this client and media
+    cleanup_count = await cleanup_previous_sessions(
+        session=session,
+        media_id=media_id,
+        exclude_job_id=job_id,
+    )
+
+    if cleanup_count > 0:
+        logger.info(f"Cleaned up {cleanup_count} previous transcoding sessions for media {media_id}")
 
     # Start transcoding (copy video, transcode audio)
     transcoder = get_transcoder()

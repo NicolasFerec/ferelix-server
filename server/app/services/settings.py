@@ -19,6 +19,22 @@ async def scan_all_libraries_job():
     return await scan_all_libraries(scheduler_instance)
 
 
+async def cleanup_transcode_files_job():
+    """Wrapper to call transcoder cleanup with scheduler from global context."""
+    from app.services.transcoder import get_transcoder
+
+    transcoder = get_transcoder()
+    return await transcoder.cleanup_transcode_files()
+
+
+async def cleanup_stalled_jobs_job():
+    """Wrapper to cleanup stalled jobs at startup."""
+    from app.services.transcoder import get_transcoder
+
+    transcoder = get_transcoder()
+    return await transcoder.cleanup_stalled_jobs()
+
+
 async def get_or_create_settings(session: AsyncSession) -> Settings:
     """Get settings or create default if they don't exist.
 
@@ -64,11 +80,21 @@ def initialize_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -
         kwargs={"grace_period_days": settings.cleanup_grace_period_days},
     )
 
+    # Schedule transcode files cleanup job (every 30 minutes)
+    scheduler.add_job(
+        cleanup_transcode_files_job,
+        "interval",
+        minutes=30,
+        id="transcode_cleanup",
+        replace_existing=True,
+    )
+
     logger.info(f"Scheduled library scanner (every {settings.library_scan_interval_minutes} minutes)")
     logger.info(
-        f"Scheduled cleanup job (daily at {settings.cleanup_schedule_hour:02d}:{settings.cleanup_schedule_minute:02d}, "
+        f"Scheduled database cleanup job (daily at {settings.cleanup_schedule_hour:02d}:{settings.cleanup_schedule_minute:02d}, "
         f"grace period: {settings.cleanup_grace_period_days} days)"
     )
+    logger.info("Scheduled transcode cleanup job (every 30 minutes)")
 
 
 def update_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -> None:

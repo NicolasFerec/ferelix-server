@@ -120,6 +120,11 @@ JOB_REGISTRY: dict[str, JobMeta] = {
         name_key="jobs.names.database_maintenance",
         fallback_name="Database Maintenance",
     ),
+    "transcode_cleanup": JobMeta(
+        id="transcode_cleanup",
+        name_key="jobs.names.transcode_cleanup",
+        fallback_name="Transcode Cleanup",
+    ),
 }
 
 # Mutable state cache keyed by job id

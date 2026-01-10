@@ -14,7 +14,7 @@ from app.database import async_session_maker
 from app.dependencies import set_scheduler
 from app.routers.v1 import auth, dashboard, media, streaming, users
 from app.services.jobs import init_job_tracking
-from app.services.settings import get_or_create_settings, initialize_scheduler_jobs
+from app.services.settings import cleanup_stalled_jobs_job, get_or_create_settings, initialize_scheduler_jobs
 from app.services.setup import router as setup_router
 
 # Configure logging
@@ -49,10 +49,27 @@ async def lifespan(app: FastAPI):
         settings = await get_or_create_settings(session)
         initialize_scheduler_jobs(scheduler, settings)
 
+    # Clean up any stalled transcoding jobs from previous server restart
+    try:
+        cleaned_count = await cleanup_stalled_jobs_job()
+        if cleaned_count > 0:
+            logger.info(f"Cleaned up {cleaned_count} stalled transcoding jobs at startup")
+    except Exception as e:
+        logger.error(f"Failed to cleanup stalled jobs at startup: {e}")
+
     yield
 
     # Shutdown
     logger.info("Shutting down Ferelix Server...")
+
+    # Run final cleanup of transcode files before shutdown
+    try:
+        final_cleanup_count = await cleanup_stalled_jobs_job()
+        if final_cleanup_count > 0:
+            logger.info(f"Final cleanup removed {final_cleanup_count} transcoding jobs on shutdown")
+    except Exception as e:
+        logger.error(f"Failed to run final cleanup on shutdown: {e}")
+
     scheduler.shutdown()
     logger.info("Scheduler stopped")
 

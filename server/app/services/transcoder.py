@@ -5,7 +5,7 @@ import logging
 import re
 import shutil
 import subprocess
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -175,7 +175,6 @@ class FFmpegTranscoder:
         self.temp_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
         self.temp_dir.chmod(0o755)
         self._active_jobs: dict[str, Any] = {}
-        self._cleanup_task: asyncio.Task | None = None
 
         # Hardware acceleration
         self.hw_accel = HardwareAcceleration()
@@ -227,7 +226,6 @@ class FFmpegTranscoder:
             subtitle_stream_index: Subtitle stream to burn (None = no subtitles)
             start_time: Start time in seconds for seeking
         """
-        window_size = 10
         logger.info(
             f"Starting HLS transcode for job {job_id}: "
             f"video_codec={video_codec}, audio_codec={audio_codec}, "
@@ -281,7 +279,6 @@ class FFmpegTranscoder:
             subtitle_stream_index=subtitle_stream_index if burn_subtitle else None,
             is_image_subtitle=is_image_subtitle,
             start_time=start_time,
-            window_size=window_size,
         )
 
         logger.info(f"FFmpeg command for job {job_id}: {' '.join(cmd)}")
@@ -388,8 +385,6 @@ class FFmpegTranscoder:
             audio_stream_index: Specific audio stream to include (None = all)
             start_time: Start time in seconds for seeking
         """
-        window_size = 10
-
         # Create job directory
         job_dir = self.temp_dir / job_id
         job_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
@@ -406,7 +401,6 @@ class FFmpegTranscoder:
             segment_duration=segment_duration,
             audio_stream_index=audio_stream_index,
             start_time=start_time,
-            window_size=window_size,
         )
 
         # Update job record
@@ -477,7 +471,6 @@ class FFmpegTranscoder:
         segment_duration: int = 6,
         audio_stream_index: int | None = None,
         start_time: float | None = None,
-        window_size: int = 10,
     ) -> list[str]:
         """Build FFmpeg command for HLS remuxing (no re-encoding).
 
@@ -488,7 +481,6 @@ class FFmpegTranscoder:
             segment_duration: Segment duration in seconds
             audio_stream_index: Specific audio stream index (None = default)
             start_time: Seek position in seconds
-            window_size: Number of segments to keep in playlist (sliding window)
         """
 
         cmd = ["ffmpeg", "-y"]
@@ -513,7 +505,7 @@ class FFmpegTranscoder:
         # Fix timestamp issues and preserve duration metadata
         cmd.extend(["-copyts", "-start_at_zero", "-avoid_negative_ts", "make_zero"])
 
-        # HLS specific settings optimized for remux
+        # HLS specific settings optimized for remux (VOD-style, keep all segments)
         cmd.extend([
             "-f",
             "hls",
@@ -525,12 +517,6 @@ class FFmpegTranscoder:
             "0",
             "-hls_allow_cache",
             "1",
-            "-hls_list_size",
-            str(window_size),
-            "-hls_delete_threshold",
-            str(window_size + 5),
-            "-hls_flags",
-            "delete_segments+append_list+program_date_time",
             playlist_path,
         ])
 
@@ -552,7 +538,6 @@ class FFmpegTranscoder:
         subtitle_stream_index: int | None = None,
         is_image_subtitle: bool = False,
         start_time: float | None = None,
-        window_size: int = 10,
     ) -> list[str]:
         """Build FFmpeg command for HLS transcoding.
 
@@ -570,7 +555,6 @@ class FFmpegTranscoder:
             audio_stream_index: Specific audio stream index (None = default)
             subtitle_stream_index: Subtitle stream to burn (None = no burn)
             start_time: Seek position in seconds
-            window_size: Number of segments to keep in playlist (sliding window)
         """
 
         cmd = ["ffmpeg", "-y"]
@@ -721,7 +705,7 @@ class FFmpegTranscoder:
         # Preserve timestamps for accurate duration
         cmd.extend(["-copyts", "-start_at_zero"])
 
-        # HLS specific settings
+        # HLS specific settings (VOD-style, keep all segments)
         cmd.extend([
             "-f",
             "hls",
@@ -735,12 +719,6 @@ class FFmpegTranscoder:
             "0",
             "-hls_allow_cache",
             "1",
-            "-hls_list_size",
-            str(window_size),
-            "-hls_delete_threshold",
-            str(window_size + 5),
-            "-hls_flags",
-            "delete_segments+append_list+program_date_time",
             playlist_path,
         ])
 
@@ -936,8 +914,12 @@ class FFmpegTranscoder:
                 process.kill()
                 await process.wait()
 
-            # Update job status
+            # Update job status and get output path for cleanup
+            output_path = None
             async with async_session_maker() as session:
+                result = await session.execute(select(TranscodingJob.output_path).where(TranscodingJob.id == job_id))
+                output_path = result.scalar_one_or_none()
+
                 await session.execute(
                     update(TranscodingJob)
                     .where(TranscodingJob.id == job_id)
@@ -948,6 +930,18 @@ class FFmpegTranscoder:
                 )
                 await session.commit()
 
+            # Immediately clean up transcode files
+            if output_path:
+                try:
+                    job_dir = Path(output_path)
+                    if job_dir.exists() and job_dir.is_dir():
+                        import shutil
+
+                        shutil.rmtree(job_dir)
+                        logger.info(f"Immediately cleaned up transcode files for job {job_id}: {job_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up files for job {job_id}: {e}")
+
             return True
 
         except Exception as e:
@@ -957,47 +951,103 @@ class FFmpegTranscoder:
         finally:
             self._active_jobs.pop(job_id, None)
 
-    async def cleanup_old_jobs(self, max_age_hours: int = 24) -> int:
-        """Cleanup old transcoding jobs and their files."""
+    async def cleanup_transcode_files(self) -> int:
+        """Clean up transcode files for jobs that are not running.
 
-        cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        Returns:
+            Number of jobs cleaned up
+        """
         cleanup_count = 0
 
         async with async_session_maker() as session:
-            # Find old jobs to cleanup
+            # Find all non-running jobs that have output paths
             result = await session.execute(
                 select(TranscodingJob).where(
-                    TranscodingJob.auto_cleanup == True,  # noqa: E712
-                    TranscodingJob.last_accessed_at < cutoff_time,
                     TranscodingJob.status.in_([
                         TranscodingJobStatus.COMPLETED,
                         TranscodingJobStatus.FAILED,
                         TranscodingJobStatus.CANCELLED,
+                        TranscodingJobStatus.PENDING,  # Include stalled pending jobs
                     ]),
+                    TranscodingJob.output_path.isnot(None),
                 )
             )
-            old_jobs = result.scalars().all()
+            jobs_to_clean = result.scalars().all()
 
-            for job in old_jobs:
+            for job in jobs_to_clean:
                 try:
-                    # Stop active process if still running
-                    if job.status == TranscodingJobStatus.RUNNING:
-                        await self.stop_job(job.id)
+                    # Remove job directory and files
+                    if job.output_path:
+                        job_path = Path(job.output_path)
+                        if job_path.exists():
+                            shutil.rmtree(job_path, ignore_errors=True)
+                            logger.info(f"Cleaned up transcode files for job {job.id}")
+
+                    # Delete job record from database
+                    await session.delete(job)
+                    cleanup_count += 1
+
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup job {job.id}: {e}")
+
+            await session.commit()
+
+        if cleanup_count > 0:
+            logger.info(f"Cleaned up {cleanup_count} transcoding jobs and their files")
+
+        return cleanup_count
+
+    async def cleanup_stalled_jobs(self) -> int:
+        """Clean up all jobs at startup (in case of server restart).
+
+        This will clean up ALL jobs including running ones since they
+        are likely stalled after a server restart.
+
+        Returns:
+            Number of jobs cleaned up
+        """
+        cleanup_count = 0
+
+        async with async_session_maker() as session:
+            # Find ALL jobs that have output paths
+            result = await session.execute(
+                select(TranscodingJob).where(
+                    TranscodingJob.output_path.isnot(None),
+                )
+            )
+            all_jobs = result.scalars().all()
+
+            for job in all_jobs:
+                try:
+                    # Stop any running processes
+                    if job.status == TranscodingJobStatus.RUNNING and job.process_id:
+                        try:
+                            import os
+                            import signal
+
+                            os.kill(job.process_id, signal.SIGTERM)
+                            logger.info(f"Terminated stalled process {job.process_id} for job {job.id}")
+                        except ProcessLookupError, PermissionError:
+                            pass  # Process already dead or can't be killed
 
                     # Remove job directory and files
                     if job.output_path:
                         job_path = Path(job.output_path)
                         if job_path.exists():
                             shutil.rmtree(job_path, ignore_errors=True)
+                            logger.info(f"Cleaned up stalled job files for {job.id}")
 
-                    # Delete job record
+                    # Delete job record from database
                     await session.delete(job)
                     cleanup_count += 1
 
                 except Exception as e:
-                    print(f"Failed to cleanup job {job.id}: {e}")
+                    logger.warning(f"Failed to cleanup stalled job {job.id}: {e}")
 
             await session.commit()
+
+        if cleanup_count > 0:
+            logger.info(f"Cleaned up {cleanup_count} stalled transcoding jobs at startup")
 
         return cleanup_count
 
@@ -1007,26 +1057,6 @@ class FFmpegTranscoder:
         async with async_session_maker() as session:
             result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
             return result.scalar_one_or_none()
-
-    async def start_cleanup_scheduler(self) -> None:
-        """Start background task for periodic cleanup."""
-
-        if self._cleanup_task and not self._cleanup_task.done():
-            return
-
-        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
-
-    async def _periodic_cleanup(self) -> None:
-        """Periodic cleanup task (runs every hour)."""
-
-        while True:
-            try:
-                await asyncio.sleep(3600)  # 1 hour
-                cleaned = await self.cleanup_old_jobs()
-                if cleaned > 0:
-                    logger.info(f"Cleaned up {cleaned} old transcoding jobs")
-            except Exception as e:
-                logger.error(f"Cleanup scheduler error: {e}")
 
     async def extract_subtitle_to_webvtt(
         self,
@@ -1058,33 +1088,23 @@ class FFmpegTranscoder:
         ]
 
         try:
-            process = await asyncio.create_subprocess_exec(
+            result = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdout=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            _, stderr = await asyncio.wait_for(process.communicate(), timeout=120)
+            _stdout, stderr = await result.communicate()
 
-            if process.returncode != 0:
+            if result.returncode == 0:
+                logger.info(f"Successfully extracted subtitle to {output_path}")
+                return True
+            else:
                 logger.error(f"Subtitle extraction failed: {stderr.decode()}")
                 return False
 
-            return Path(output_path).exists()
-
-        except TimeoutError:
-            logger.error("Subtitle extraction timed out")
-            return False
         except Exception as e:
             logger.error(f"Subtitle extraction error: {e}")
             return False
-
-    def is_text_subtitle(self, codec: str) -> bool:
-        """Check if a subtitle codec is text-based (can be extracted to WebVTT)."""
-        return codec.lower() in TEXT_SUBTITLE_CODECS
-
-    def is_image_subtitle(self, codec: str) -> bool:
-        """Check if a subtitle codec is image-based (must be burned)."""
-        return codec.lower() in IMAGE_SUBTITLE_CODECS
 
 
 # Global transcoder instance

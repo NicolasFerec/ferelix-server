@@ -67,6 +67,7 @@ const selectedAudioTrack = ref<{ id: number; stream_index: number } | null>(null
 const selectedSubtitleTrack = ref<SubtitleTrack | null>(null);
 const selectedResolution = ref<{ width: number; height: number; label: string; is_original: boolean } | null>(null);
 const availableResolutions = ref<Array<{ width: number; height: number; label: string; is_original: boolean }>>([]);
+const subtitleBlobUrls = ref<string[]>([]); // Track blob URLs for cleanup
 
 // Playback method tracking
 const playMethod = ref<"DirectPlay" | "DirectStream" | "Transcode">("DirectPlay");
@@ -130,6 +131,11 @@ const bufferedPercentages = computed(() => {
     start: (range.start / duration.value) * 100,
     width: ((range.end - range.start) / duration.value) * 100
   }));
+});
+
+const isAudioOnlyTranscode = computed(() => {
+  return playMethod.value === "Transcode" &&
+         currentSource.value?.TranscodingType === "audio-only";
 });
 
 const playbackInfo = computed(() => {
@@ -237,6 +243,7 @@ function closeAllMenus() {
   showSubtitleMenu.value = false;
   showResolutionMenu.value = false;
 }
+
 
 async function initializePlayback() {
   if (!props.mediaFile?.id) return;
@@ -478,32 +485,26 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
   hasSourceSet.value = true;
 
   if (Hls.isSupported()) {
-    const hls = new Hls({
+    const hlsConfig = {
       debug: false,
       enableWorker: true,
       lowLatencyMode: false,
-      backBufferLength: 90,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 600,
-      maxBufferSize: 60 * 1000 * 1000, // 60 MB
+      maxBufferLength: 90,
+      maxMaxBufferLength: 180,
+      maxBufferSize: 60 * 1000 * 1000,
       maxBufferHole: 0.5,
-      startLevel: -1, // Auto
-      // Improved audio handling for transcoding scenarios
-      audioPreference: undefined, // Let HLS.js decide
-      preferManagedMediaSource: false, // Use standard MediaSource for compatibility
-      abrEwmaFastLive: 3, // Faster adaptation for live content
-      abrEwmaSlowLive: 9,
-      // Better error recovery
+      startLevel: -1,
       enableSoftwareAES: true,
       xhrSetup: (xhr, url) => {
-        // Add auth token to HLS requests
         const token = getAccessToken();
         if (token && !url.includes("api_key=")) {
           const separator = url.includes("?") ? "&" : "?";
           xhr.open("GET", `${url}${separator}api_key=${token}`, true);
         }
       },
-    });
+    };
+
+    const hls = new Hls(hlsConfig);
 
     hlsInstance.value = hls;
 
@@ -515,21 +516,17 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
       isLoading.value = false;
     });
 
-    // Wait for buffer to have data before seeking
     hls.on(Hls.Events.BUFFER_APPENDED, () => {
       if (pendingStartPosition !== undefined && videoElement.value) {
         console.log("Buffer ready, seeking to", pendingStartPosition);
         const seekPos = pendingStartPosition;
-        pendingStartPosition = undefined; // Clear pending seek
+        pendingStartPosition = undefined;
 
         videoElement.value.currentTime = seekPos;
-        // Use one-time event listener for seeked
         videoElement.value.addEventListener('seeked', () => {
-          console.log("Seek completed, starting playback");
           videoElement.value?.play().catch((e) => console.warn("Autoplay blocked:", e));
         }, { once: true });
       } else if (pendingStartPosition === undefined && !videoElement.value?.currentTime) {
-        // No pending seek, just play
         videoElement.value?.play().catch((e) => console.warn("Autoplay blocked:", e));
       }
     });
@@ -634,13 +631,18 @@ function cleanup() {
   // Reset buffered ranges
   bufferedRanges.value = [];
 
-  // Remove subtitle tracks
+  // Remove subtitle tracks and clean up blob URLs
   if (videoElement.value) {
     const tracks = videoElement.value.querySelectorAll("track");
     for (const track of tracks) {
       track.remove();
     }
   }
+  // Clean up blob URLs
+  for (const url of subtitleBlobUrls.value) {
+    URL.revokeObjectURL(url);
+  }
+  subtitleBlobUrls.value = [];
 }
 
 // Audio track switching
@@ -729,6 +731,12 @@ async function selectSubtitleTrack(track: SubtitleTrack | null) {
   if (videoElement.value) {
     const existingTracks = videoElement.value.querySelectorAll("track[data-external]");
     for (const t of existingTracks) {
+      // Clean up blob URLs if any
+      const src = t.getAttribute('src');
+      if (src?.startsWith('blob:')) {
+        URL.revokeObjectURL(src);
+        subtitleBlobUrls.value = subtitleBlobUrls.value.filter(url => url !== src);
+      }
       t.remove();
     }
 
@@ -757,12 +765,105 @@ async function loadExternalSubtitle(track: SubtitleTrack) {
   if (!videoElement.value) return;
 
   const subtitleUrl = media.getSubtitleUrl(props.mediaFile.id, track.stream_index);
+  let finalSubtitleUrl = subtitleUrl;
+
+  // If we have a jobStartOffset, we need to adjust the subtitle timestamps
+  // Fetch the WebVTT file, adjust timestamps, and create a blob URL
+  if (isHlsPlayback.value && jobStartOffset.value > 0) {
+    try {
+      const token = getAccessToken();
+      const urlWithAuth = token ? `${subtitleUrl}${subtitleUrl.includes('?') ? '&' : '?'}api_key=${token}` : subtitleUrl;
+      const response = await fetch(urlWithAuth);
+      const vttContent = await response.text();
+
+      // Adjust WebVTT timestamps by subtracting jobStartOffset
+      // We need to process cue blocks (timestamp line + text lines) together
+      const offset = jobStartOffset.value;
+      let adjustedCount = 0;
+      let skippedCount = 0;
+
+      // Detect timestamp format from first cue (WebVTT supports both HH:MM:SS.mmm and MM:SS.mmm)
+      // Check for HH:MM:SS.mmm format first (more specific pattern)
+      const firstLongFormatMatch = vttContent.match(/(\d{2,}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2,}:\d{2}:\d{2}\.\d{3})/);
+      const firstShortFormatMatch = vttContent.match(/(\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}\.\d{3})/);
+      // Use short format only if long format is not found
+      const useShortFormat = !firstLongFormatMatch && !!firstShortFormatMatch;
+
+      // Split into cue blocks (separated by double newlines)
+      const cueBlocks = vttContent.split(/\n\n+/);
+      const adjustedBlocks: string[] = [];
+
+      // Keep WEBVTT header
+      if (cueBlocks[0]?.includes('WEBVTT')) {
+        adjustedBlocks.push(cueBlocks[0]);
+      }
+
+      // Process each cue block
+      for (let i = cueBlocks[0]?.includes('WEBVTT') ? 1 : 0; i < cueBlocks.length; i++) {
+        const block = cueBlocks[i];
+        if (!block) continue;
+
+        // Extract timestamp line - try both formats and use the one that matches
+        // Try long format first (HH:MM:SS.mmm) since it's more specific
+        let timestampMatch: RegExpMatchArray | null = block.match(/(\d{2,}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2,}:\d{2}:\d{2}\.\d{3})/);
+        let isShortFormat = false;
+
+        // If long format didn't match, try short format (MM:SS.mmm)
+        if (!timestampMatch) {
+          timestampMatch = block.match(/(\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}\.\d{3})/);
+          isShortFormat = true;
+        }
+
+        if (!timestampMatch) {
+          // Not a cue block, keep as-is
+          adjustedBlocks.push(block);
+          continue;
+        }
+
+        const startTime = timestampMatch[1];
+        const endTime = timestampMatch[2];
+        const startSeconds = timeToSeconds(startTime, isShortFormat);
+        const endSeconds = timeToSeconds(endTime, isShortFormat);
+
+        // Only include cues that are within or after the job start
+        if (startSeconds >= offset) {
+          // Cue is fully after job start, adjust timestamps
+          const adjustedStart = startSeconds - offset;
+          const adjustedEnd = endSeconds - offset;
+          const adjustedTimestamp = `${secondsToTime(adjustedStart, isShortFormat)} --> ${secondsToTime(adjustedEnd, isShortFormat)}`;
+          const adjustedBlock = block.replace(timestampMatch[0], adjustedTimestamp);
+          adjustedBlocks.push(adjustedBlock);
+          adjustedCount++;
+        } else if (endSeconds > offset) {
+          // Cue spans the job start, adjust to start at 0
+          const adjustedEnd = endSeconds - offset;
+          const adjustedTimestamp = `${secondsToTime(0, isShortFormat)} --> ${secondsToTime(adjustedEnd, isShortFormat)}`;
+          const adjustedBlock = block.replace(timestampMatch[0], adjustedTimestamp);
+          adjustedBlocks.push(adjustedBlock);
+          adjustedCount++;
+        } else {
+          // Cue is before job start, skip it
+          skippedCount++;
+        }
+      }
+
+      const adjustedVtt = adjustedBlocks.join('\n\n');
+
+      // Create blob URL
+      const blob = new Blob([adjustedVtt], { type: 'text/vtt' });
+      finalSubtitleUrl = URL.createObjectURL(blob);
+      subtitleBlobUrls.value.push(finalSubtitleUrl);
+    } catch (error) {
+      console.warn("Failed to adjust subtitle timestamps, using original:", error);
+      // Fall back to original URL if adjustment fails
+    }
+  }
 
   const trackElement = document.createElement("track");
   trackElement.kind = "subtitles";
   trackElement.label = getSubtitleTrackLabel(track);
   trackElement.srclang = track.language || "und";
-  trackElement.src = subtitleUrl;
+  trackElement.src = finalSubtitleUrl;
   trackElement.default = true;
   trackElement.setAttribute("data-external", "true");
 
@@ -779,6 +880,47 @@ async function loadExternalSubtitle(track: SubtitleTrack) {
       }
     }
   });
+}
+
+// Helper functions to convert WebVTT time format to/from seconds
+// WebVTT supports both HH:MM:SS.mmm and MM:SS.mmm formats
+function timeToSeconds(time: string, isShortFormat: boolean = false): number {
+  const parts = time.split(':');
+  if (isShortFormat || parts.length === 2) {
+    // MM:SS.mmm format
+    const minutes = parseInt(parts[0], 10);
+    const secondsParts = parts[1].split('.');
+    const seconds = parseInt(secondsParts[0], 10);
+    const milliseconds = parseInt(secondsParts[1], 10);
+    return minutes * 60 + seconds + milliseconds / 1000;
+  } else {
+    // HH:MM:SS.mmm format
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    const secondsParts = parts[2].split('.');
+    const seconds = parseInt(secondsParts[0], 10);
+    const milliseconds = parseInt(secondsParts[1], 10);
+    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+  }
+}
+
+function secondsToTime(seconds: number, useShortFormat: boolean = false): string {
+  if (useShortFormat) {
+    // MM:SS.mmm format
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const wholeSecs = Math.floor(secs);
+    const ms = Math.floor((secs - wholeSecs) * 1000);
+    return `${minutes.toString().padStart(2, '0')}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+  } else {
+    // HH:MM:SS.mmm format
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    const wholeSecs = Math.floor(secs);
+    const ms = Math.floor((secs - wholeSecs) * 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+  }
 }
 
 async function restartWithBurnedSubtitle(track: SubtitleTrack) {
@@ -923,6 +1065,7 @@ async function handleSeekForHls(absoluteSeek: number) {
     const relativeTime = Math.max(0, absoluteSeek - jobStart);
     if (videoElement.value) {
       videoElement.value.currentTime = relativeTime;
+
     }
     return;
   }
@@ -1008,6 +1151,67 @@ async function restartHlsAt(absoluteStart: number) {
     const playlistUrl = media.getHlsPlaylistUrl(job.id);
     const relative = Math.max(0, savedTime - jobStartOffset.value);
     await setupHlsPlayer(playlistUrl, relative);
+
+    // Wait for HLS to be stable before re-adding subtitle track
+    // This prevents subtitle track addition from triggering HLS reloads
+    await new Promise<void>((resolve) => {
+      if (!hlsInstance.value) {
+        resolve();
+        return;
+      }
+
+      let resolved = false;
+      const onManifestParsed = () => {
+        if (!resolved) {
+          resolved = true;
+          hlsInstance.value?.off(Hls.Events.MANIFEST_PARSED, onManifestParsed);
+          // Wait a bit more for HLS to stabilize
+          setTimeout(() => resolve(), 500);
+        }
+      };
+
+      // Check if manifest is already parsed
+      if (hlsInstance.value.levels && hlsInstance.value.levels.length > 0) {
+        setTimeout(() => resolve(), 500);
+      } else {
+        hlsInstance.value.on(Hls.Events.MANIFEST_PARSED, onManifestParsed);
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            hlsInstance.value?.off(Hls.Events.MANIFEST_PARSED, onManifestParsed);
+            resolve();
+          }
+        }, 5000);
+      }
+    });
+
+    // Re-add subtitle track if it was selected (for text-based subtitles)
+    // Don't pause/resume - just add the track while playing
+    // Pausing can cause timing issues with HLS
+    if (selectedSubtitleTrack.value && videoElement.value) {
+      const isTextBased = TEXT_SUBTITLE_CODECS.has(selectedSubtitleTrack.value.codec?.toLowerCase() || "");
+      if (isTextBased) {
+        // Always remove existing tracks first to avoid duplicates/conflicts
+        const existingTracks = videoElement.value.querySelectorAll("track[data-external]");
+        for (const track of existingTracks) {
+          // Clean up blob URLs if any
+          const src = track.getAttribute('src');
+          if (src?.startsWith('blob:')) {
+            URL.revokeObjectURL(src);
+            subtitleBlobUrls.value = subtitleBlobUrls.value.filter(url => url !== src);
+          }
+          track.remove();
+        }
+        // Hide all native tracks
+        const textTracks = videoElement.value.textTracks;
+        for (let i = 0; i < textTracks.length; i++) {
+          textTracks[i].mode = "hidden";
+        }
+        // Re-add the subtitle track
+        await loadExternalSubtitle(selectedSubtitleTrack.value);
+      }
+    }
 
   } catch (error) {
     console.error("Failed to restart HLS at seek", error);
@@ -1251,7 +1455,6 @@ function onWaiting() {
 
 function onPlaying() {
   isLoading.value = false;
-  // Ensure controls are visible when playback actually starts
   showControls();
 }
 

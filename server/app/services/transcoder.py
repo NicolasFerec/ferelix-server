@@ -505,12 +505,13 @@ class FFmpegTranscoder:
         # Fix timestamp issues and preserve duration metadata
         cmd.extend(["-copyts", "-start_at_zero", "-avoid_negative_ts", "make_zero"])
 
-        # HLS specific settings optimized for remux (VOD-style, keep all segments)
         cmd.extend([
             "-f",
             "hls",
             "-hls_time",
             str(segment_duration),
+            "-hls_list_size",
+            "0",
             "-hls_segment_filename",
             segment_pattern,
             "-start_number",
@@ -711,6 +712,8 @@ class FFmpegTranscoder:
             "hls",
             "-hls_time",
             str(segment_duration),
+            "-hls_list_size",
+            "0",
             "-hls_segment_type",
             "mpegts",  # Explicit TS segments for better compatibility
             "-hls_segment_filename",

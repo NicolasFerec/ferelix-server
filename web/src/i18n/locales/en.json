@@ -176,6 +176,28 @@
         "recommended": "Recommended",
         "allItems": "All Items"
     },
+    "mediaDetail": {
+        "loading": "Loading media...",
+        "loadFailed": "Failed to load media details. Please try again.",
+        "notFound": "Media not found",
+        "back": "Go back",
+        "backHome": "Back to home",
+        "play": "Play",
+        "fileInformation": "File Information",
+        "fields": {
+            "file": "File",
+            "path": "Path",
+            "duration": "Duration",
+            "resolution": "Resolution",
+            "codec": "Codec",
+            "bitrate": "Bitrate",
+            "size": "Size"
+        },
+        "duration": {
+            "hoursMinutes": "{hours}h {minutes}m",
+            "minutes": "{minutes}m"
+        }
+    },
     "jobs": {
         "title": "Scheduled Jobs",
         "scheduled": "Scheduled Jobs",
@@ -232,6 +254,12 @@
         "volume": "Volume",
         "mute": "Mute",
         "unmute": "Unmute",
+        "quality": "Quality",
+        "select": "Select",
+        "auto": "Auto",
+        "close": "Close player",
+        "toggle_info_panel": "Toggle info panel",
+        "no_audio_tracks": "No audio tracks available",
         "loading": "Loading video...",
         "error": "Failed to load video",
         "retry": "Retry",

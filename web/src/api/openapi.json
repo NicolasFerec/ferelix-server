@@ -950,7 +950,7 @@
           "streaming"
         ],
         "summary": "Stream Video",
-        "description": "Stream video file with HTTP Range request support for seeking.\n\nAuthentication is optional but recommended. Supports both:\n- Authorization: Bearer <token> header\n- ?api_key=<token> query parameter (for browser video tags)\n\nArgs:\n    media_id: Media file ID\n    session: Database session\n    user: Optional authenticated user\n    range_header: HTTP Range header for partial content requests\n\nReturns:\n    Streaming response with video content\n\nRaises:\n    HTTPException: If media file not found or range invalid",
+        "description": "Stream video file with HTTP Range request support for seeking.\n\nSupports both:\n- Authorization: Bearer <token> header\n- ?api_key=<token> query parameter (for browser video tags)\n\nArgs:\n    media_id: Media file ID\n    session: Database session\n    _user: Authenticated user\n    range_header: HTTP Range header for partial content requests\n\nReturns:\n    Streaming response with video content\n\nRaises:\n    HTTPException: If media file not found or range invalid",
         "operationId": "stream_video_api_v1_stream__media_id__get",
         "security": [
           {
@@ -1597,6 +1597,139 @@
         "summary": "Get Hls Segment",
         "description": "Get HLS segment file for a transcoding job.",
         "operationId": "get_hls_segment_api_v1_hls__job_id__segment__segment_num__ts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "segment_num",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Segment Num"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{job_id}/init.mp4": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Hls Fmp4 Init",
+        "description": "Get fMP4 HLS initialization segment.",
+        "operationId": "get_hls_fmp4_init_api_v1_hls__job_id__init_mp4_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/hls/{job_id}/segment_{segment_num}.m4s": {
+      "get": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Get Hls Fmp4 Segment",
+        "description": "Get fMP4 HLS media segment.",
+        "operationId": "get_hls_fmp4_segment_api_v1_hls__job_id__segment__segment_num__m4s_get",
         "security": [
           {
             "HTTPBearer": []

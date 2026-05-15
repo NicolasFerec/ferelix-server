@@ -7,7 +7,7 @@ Ferelix is a self-hosted media server, similar to Plex or Jellyfin. It allows yo
 Ferelix is organized into two main subprojects:
 
 - **[Server](./server)** - The backend API and media management engine built with Python
-- **[Web](./web)** - The web dashboard and media player built with modern web technologies
+- **[Web](./web)** - The Vue dashboard and media player, with playback orchestration split from reusable player controls and UI helpers
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ Ferelix is organized into two main subprojects:
 
 - **Python 3.14+** and **[uv](https://docs.astral.sh/uv/)** - For the backend server
 - **pnpm** - For the web frontend
-- **ffmpeg** - For video metadata extraction
+- **ffmpeg** - For video metadata extraction and generated HLS playback
 - **[just](https://github.com/casey/just)** - Command runner (optional but recommended)
 
 ### Install Just (Command Runner)
@@ -54,7 +54,18 @@ just dev-server   # Backend only
 just dev-web      # Frontend only
 ```
 
-The server will be available at `http://localhost:8000` and the web client at `http://localhost:5173`.
+The server will be available at `http://localhost:8005` and the web client at `http://localhost:5187`.
+
+### Transcoding Configuration
+
+Ferelix defaults to the `ffmpeg` binary on `PATH`. To run a packaged build such as `jellyfin-ffmpeg`, point the server at it without changing code:
+
+```bash
+export FERELIX_FFMPEG_PATH=/usr/lib/jellyfin-ffmpeg/ffmpeg
+export FERELIX_TRANSCODE_DIR=/tmp/ferelix-transcode
+```
+
+The player uses DirectPlay when possible, HLS remux for compatible streams in unsupported containers, audio-only transcode when only audio is incompatible, and full HLS transcode as the fallback.
 
 ### Discover Available Commands
 

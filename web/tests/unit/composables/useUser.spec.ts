@@ -1,7 +1,7 @@
 /**
  * Unit tests for useUser composable
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as apiClient from "@/api/client";
 import { useUser } from "@/composables/useUser";
 

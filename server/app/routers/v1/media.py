@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,7 @@ from app.models.playback import (
     PlaybackInfoRequest,
     PlaybackInfoResponse,
 )
+from app.services.playback_session import ClientContext, PlaybackSessionService
 from app.services.recommendation_row import apply_filter_criteria
 from app.services.stream_builder import StreamBuilder
 
@@ -412,6 +413,7 @@ async def get_library_rows(
 @router.post("/start-stream/{media_id}")
 async def start_media_stream(
     media_id: int,
+    request: Request,
     playback_request: PlaybackInfoRequest,
     _user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -448,112 +450,12 @@ async def start_media_stream(
         enable_transcoding=playback_request.EnableTranscoding,
     )
 
-    from app.models.playback import PlayMethod
-
-    if stream_info.PlayMethod == PlayMethod.DIRECT_PLAY:
-        # Direct file streaming
-        return {
-            "method": "direct_play",
-            "url": f"/api/v1/stream/{media_id}",
-            "message": "Use direct streaming endpoint",
-        }
-
-    elif stream_info.PlayMethod == PlayMethod.DIRECT_STREAM:
-        # DirectStream could be remux or direct file access
-        if stream_info.IsRemuxOnly:
-            # Need container conversion - start remux job
-            from app.routers.v1.streaming import start_hls_remux
-
-            class RemuxMockRequest:
-                def __init__(self):
-                    self.client = None
-                    self.headers = {}
-                    self.url = "mock://remux"
-                    self.method = "POST"
-                    self.path_info = "/"
-                    self.query_string = b""
-                    self.cookies = {}
-
-            mock_request = RemuxMockRequest()
-
-            try:
-                job = await start_hls_remux(
-                    media_id=media_id,
-                    request=mock_request,  # type: ignore
-                    session=session,
-                    user=_user,
-                )
-
-                return {
-                    "method": "hls_remux",
-                    "job_id": job.id,
-                    "playlist_url": f"/api/v1/hls/{job.id}/playlist.m3u8",
-                    "status_url": f"/api/v1/hls/{job.id}/status",
-                    "message": "HLS remuxing started (fast, no re-encoding)",
-                }
-
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Failed to start remuxing: {e}")
-
-        else:
-            # Direct streaming (no transcoding needed)
-            return {
-                "method": "direct_stream",
-                "url": f"/api/v1/stream/{media_id}",
-                "message": "Use direct streaming endpoint",
-            }
-
-    else:
-        # Need full transcoding - start HLS job automatically
-
-        from app.routers.v1.streaming import start_hls_stream
-
-        # Create a mock request for the HLS endpoint
-        # In a real implementation, you'd pass the actual request
-        class TranscodeMockRequest:
-            def __init__(self):
-                self.client = None
-                self.headers = {}
-                self.url = "mock://transcode"
-                self.method = "POST"
-                self.path_info = "/"
-                self.query_string = b""
-                self.cookies = {}
-
-        mock_request = TranscodeMockRequest()
-
-        # Extract transcoding settings from stream info
-        transcode_settings = stream_info.TranscodeSettings
-        video_codec = "h264"  # Default
-        audio_codec = "aac"  # Default
-
-        if transcode_settings and transcode_settings.VideoCodec:
-            video_codec = transcode_settings.VideoCodec
-        if transcode_settings and transcode_settings.AudioCodec:
-            audio_codec = transcode_settings.AudioCodec
-
-        # Start HLS transcoding
-        try:
-            job = await start_hls_stream(
-                media_id=media_id,
-                request=mock_request,  # type: ignore
-                session=session,
-                user=_user,
-                video_codec=video_codec,
-                audio_codec=audio_codec,
-                video_bitrate=transcode_settings.VideoBitrate if transcode_settings else None,
-                audio_bitrate=transcode_settings.AudioBitrate if transcode_settings else None,
-                max_width=transcode_settings.MaxWidth if transcode_settings else None,
-                max_height=transcode_settings.MaxHeight if transcode_settings else None,
-            )
-
-            return {
-                "method": "hls_transcode",
-                "job_id": job.id,
-                "playlist_url": f"/api/v1/hls/{job.id}/playlist.m3u8",
-                "status_url": f"/api/v1/hls/{job.id}/status",
-                "message": "HLS transcoding started",
-            }
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to start streaming: {e}")
+    service = PlaybackSessionService(session)
+    client = ClientContext(
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    try:
+        return await service.start_from_stream_info(media_id, stream_info, client)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start streaming: {e}") from e

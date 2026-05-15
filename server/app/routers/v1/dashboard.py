@@ -1,7 +1,6 @@
 """Dashboard API endpoints for admin management (v1 with router-level authentication)."""
 
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -28,6 +27,7 @@ from app.models import (
     UserSchema,
     UserUpdate,
 )
+from app.services.directory_browser import DirectoryItem, browse_directory_items
 from app.services.jobs import (
     JobExecutionRecord,
     JobState,
@@ -221,16 +221,6 @@ async def update_library(
 # ============================================================================
 
 
-class DirectoryItem(BaseModel):
-    """Schema for directory browser items."""
-
-    name: str
-    path: str
-    is_directory: bool
-    is_symlink: bool = False
-    symlink_target: str | None = None
-
-
 @router.get("/browse", response_model=list[DirectoryItem])
 async def browse_directory(
     path: str = Query(..., description="Directory path to browse"),
@@ -246,101 +236,7 @@ async def browse_directory(
     Raises:
         HTTPException: If path doesn't exist or is not accessible
     """
-    try:
-        dir_path = Path(path)
-
-        # Validate path exists
-        if not dir_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Path does not exist: {path}",
-            )
-
-        # Validate it's a directory
-        if not dir_path.is_dir():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Path is not a directory: {path}",
-            )
-
-        # Get all items in directory
-        items = []
-        current_real_path = dir_path.resolve()
-        current_path_str = str(current_real_path)
-
-        # Track visited resolved paths to detect loops
-        # Build up the path hierarchy and resolve each to catch symlink loops
-        visited_resolved_paths = set()
-        path_parts = current_path_str.split("/")
-        for i in range(1, len(path_parts) + 1):
-            path_to_check = "/" + "/".join(path_parts[1:i])
-            try:
-                resolved = Path(path_to_check).resolve()
-                visited_resolved_paths.add(str(resolved))
-            except OSError, RuntimeError:
-                # Path can't be resolved, skip it
-                pass
-
-        try:
-            for item in dir_path.iterdir():
-                # Skip hidden files/directories
-                if item.name.startswith("."):
-                    continue
-
-                # Check if it's a symlink
-                is_symlink = item.is_symlink()
-                symlink_target = None
-                skip_item = False
-
-                if is_symlink:
-                    try:
-                        resolved_path = item.resolve()
-                        symlink_target_str = str(resolved_path)
-                        symlink_target = symlink_target_str
-
-                        # Check if symlink creates a loop
-                        # 1. Check if resolved symlink target is already in visited resolved paths
-                        if (
-                            symlink_target_str in visited_resolved_paths
-                            or resolved_path == current_real_path
-                            or str(current_real_path).startswith(symlink_target_str + "/")
-                        ):
-                            skip_item = True
-                    except OSError, RuntimeError:
-                        # Symlink is broken or can't be resolved - skip it to be safe
-                        skip_item = True
-                        symlink_target = None
-
-                if skip_item:
-                    continue
-
-                items.append(
-                    DirectoryItem(
-                        name=item.name,
-                        path=str(item.absolute()),
-                        is_directory=item.is_dir(),
-                        is_symlink=is_symlink,
-                        symlink_target=symlink_target,
-                    )
-                )
-        except PermissionError:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: {path}",
-            )
-
-        # Sort: directories first, then files, both alphabetically
-        items.sort(key=lambda x: (not x.is_directory, x.name.lower()))
-
-        return items
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error browsing directory: {e!s}",
-        )
+    return browse_directory_items(path)
 
 
 # ============================================================================

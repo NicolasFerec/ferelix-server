@@ -3,7 +3,7 @@
  *
  * Provides reactive access to device capabilities and profile generation
  */
-import { type ComputedRef, computed, onMounted, type Ref, ref } from "vue";
+import { type ComputedRef, computed, getCurrentInstance, onMounted, type Ref, ref } from "vue";
 import {
     buildDeviceProfile,
     type DeviceProfile,
@@ -76,8 +76,6 @@ export function useDeviceProfile(): DeviceProfileReturn {
             cachedProfile = deviceProfile;
             profile.value = deviceProfile;
             isProfileBuilt = true;
-
-            console.log("Device profile built:", deviceProfile);
 
             return deviceProfile;
         } catch (err) {
@@ -215,10 +213,12 @@ export function useDeviceProfile(): DeviceProfileReturn {
         return false; // Likely can direct play
     };
 
-    // Auto-build profile on mount
-    onMounted(() => {
-        buildProfile();
-    });
+    // Auto-build profile only when this composable is used inside a component setup.
+    if (getCurrentInstance()) {
+        onMounted(() => {
+            buildProfile();
+        });
+    }
 
     return {
         // State

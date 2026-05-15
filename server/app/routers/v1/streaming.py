@@ -1,133 +1,95 @@
 """Video streaming endpoints with HTTP Range and HLS transcoding support."""
 
-import logging
-import uuid
 from pathlib import Path
 from typing import Annotated
 
 import aiofiles
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_session
-from app.dependencies import get_optional_user
+from app.dependencies import get_current_active_user
 from app.models import (
     MediaFile,
     TranscodingJob,
     TranscodingJobSchema,
     User,
 )
-from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
+from app.models.transcoding import TranscodingJobType
+from app.services.playback_session import ClientContext, HlsStartOptions, PlaybackSessionService
+from app.services.streaming_io import (
+    HLS_HEADERS,
+    SEGMENT_HEADERS,
+    VIDEO_CONTENT_TYPES,
+    append_api_key_to_playlist_segments,
+    parse_range_header,
+    range_reader,
+    touch_job,
+    wait_for_hls_asset,
+    wait_for_playlist,
+    wait_for_segment,
+)
 from app.services.transcoder import TEXT_SUBTITLE_CODECS, get_transcoder
 
 router = APIRouter(prefix="/api/v1", tags=["streaming"])
-logger = logging.getLogger(__name__)
 
 
-async def cleanup_previous_sessions(
-    session: AsyncSession,
-    media_id: int,
-    exclude_job_id: str | None = None,
-) -> int:
-    """Clean up previous transcoding sessions for the same media file.
-
-    Args:
-        session: Database session
-        media_id: Media file ID
-        client_ip: Client IP address (not used for filtering - clean all jobs)
-        user_agent: Client user agent (not used for filtering - clean all jobs)
-        exclude_job_id: Job ID to exclude from cleanup (current/new job)
-
-    Returns:
-        Number of jobs cleaned up
-    """
-    from app.services.transcoder import get_transcoder
-
-    transcoder = get_transcoder()
-    cleanup_count = 0
-
-    # Find ALL previous running jobs for the same media file (aggressive cleanup)
-    query = select(TranscodingJob).where(
-        TranscodingJob.media_file_id == media_id,
-        TranscodingJob.status == TranscodingJobStatus.RUNNING,
+def client_context_from_request(request: Request) -> ClientContext:
+    """Extract the small amount of request metadata stored with an HLS job."""
+    return ClientContext(
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
     )
 
-    # Exclude current job if specified
-    if exclude_job_id:
-        query = query.where(TranscodingJob.id != exclude_job_id)
 
-    result = await session.execute(query)
-    previous_jobs = result.scalars().all()
+async def get_hls_job_or_404(session: AsyncSession, job_id: str) -> TranscodingJob:
+    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
+    job = result.scalar_one_or_none()
 
-    logger.info(f"Found {len(previous_jobs)} previous jobs to clean up for media {media_id}")
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcoding job not found")
 
-    for job in previous_jobs:
-        try:
-            logger.info(f"Cleaning up previous job {job.id} for media {media_id}")
-            # Stop the transcoding process
-            await transcoder.stop_job(job.id)
-
-            # Mark as cancelled
-            job.status = TranscodingJobStatus.CANCELLED
-            job.completed_at = func.now()
-            cleanup_count += 1
-
-        except Exception as e:
-            # Log error but continue with other jobs
-            logger.warning(f"Failed to cleanup previous job {job.id}: {e}")
-
-    if cleanup_count > 0:
-        await session.commit()
-        logger.info(f"Successfully cleaned up {cleanup_count} previous jobs for media {media_id}")
-
-    return cleanup_count
+    return job
 
 
-async def range_reader(file_path: Path, start: int, end: int, chunk_size: int = 8192):
-    """Async generator to stream file chunks within a byte range.
-
-    Args:
-        file_path: Path to the file to stream
-        start: Start byte position
-        end: End byte position (inclusive)
-        chunk_size: Size of chunks to read
-
-    Yields:
-        File chunks as bytes
-    """
-    async with aiofiles.open(file_path, mode="rb") as f:
-        await f.seek(start)
-        remaining = end - start + 1
-
-        while remaining > 0:
-            chunk_size_to_read = min(chunk_size, remaining)
-            data = await f.read(chunk_size_to_read)
-            if not data:
-                break
-            remaining -= len(data)
-            yield data
+async def start_hls_job_response(
+    media_id: int,
+    request: Request,
+    session: AsyncSession,
+    options: HlsStartOptions,
+    failure_message: str,
+) -> TranscodingJobSchema:
+    try:
+        service = PlaybackSessionService(session)
+        job = await service.start_hls_job(media_id, options, client_context_from_request(request))
+        return TranscodingJobSchema.model_validate(job)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{failure_message}: {exc}",
+        ) from exc
 
 
 @router.get("/stream/{media_id}")
 async def stream_video(
     media_id: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
     range_header: Annotated[str | None, Header(alias="Range")] = None,
 ) -> StreamingResponse:
     """Stream video file with HTTP Range request support for seeking.
 
-    Authentication is optional but recommended. Supports both:
+    Supports both:
     - Authorization: Bearer <token> header
     - ?api_key=<token> query parameter (for browser video tags)
 
     Args:
         media_id: Media file ID
         session: Database session
-        user: Optional authenticated user
+        _user: Authenticated user
         range_header: HTTP Range header for partial content requests
 
     Returns:
@@ -136,10 +98,6 @@ async def stream_video(
     Raises:
         HTTPException: If media file not found or range invalid
     """
-    # Note: Authentication is optional for streaming to support public access
-    # In production, you may want to require authentication
-
-    # Fetch media file from database
     media_file = await session.get(MediaFile, media_id)
 
     if not media_file:
@@ -152,38 +110,9 @@ async def stream_video(
             detail="Media file not found on disk",
         )
 
-    file_size = media_file.file_size
-
-    # Parse Range header
-    start = 0
-    end = file_size - 1
-
-    if range_header:
-        # Range header format: "bytes=start-end"
-        range_str = range_header.replace("bytes=", "")
-        range_parts = range_str.split("-")
-
-        if range_parts[0]:
-            start = int(range_parts[0])
-        end = int(range_parts[1]) if range_parts[1] else file_size - 1
-
-        # Validate range
-        if start >= file_size or end >= file_size or start > end:
-            raise HTTPException(
-                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
-                detail="Invalid range",
-            )
-
-    # Determine content type based on file extension
-    content_type_map = {
-        ".mp4": "video/mp4",
-        ".mkv": "video/x-matroska",
-        ".avi": "video/x-msvideo",
-        ".mov": "video/quicktime",
-        ".webm": "video/webm",
-        ".m4v": "video/x-m4v",
-    }
-    content_type = content_type_map.get(media_file.file_extension.lower(), "application/octet-stream")
+    file_size = file_path.stat().st_size
+    start, end, partial = parse_range_header(range_header, file_size)
+    content_type = VIDEO_CONTENT_TYPES.get(media_file.file_extension.lower(), "application/octet-stream")
 
     headers = {
         "Accept-Ranges": "bytes",
@@ -192,7 +121,7 @@ async def stream_video(
     }
 
     # Return partial content if range was requested
-    if range_header:
+    if partial:
         headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
         return StreamingResponse(
             range_reader(file_path, start, end),
@@ -213,7 +142,7 @@ async def start_hls_remux(
     media_id: int,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
     audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
     start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
 ) -> TranscodingJobSchema:
@@ -228,67 +157,19 @@ async def start_hls_remux(
         start_time: Start position in seconds for seeking
     """
 
-    # Fetch media file
-    media_file = await session.get(MediaFile, media_id)
-    if not media_file:
-        raise HTTPException(status_code=404, detail="Media file not found")
-
-    file_path = Path(media_file.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Media file not found on disk")
-
-    # Generate session ID for this streaming session
-    session_id = str(uuid.uuid4())
-
-    # Create transcoding job
-    job_id = str(uuid.uuid4())
-    job = TranscodingJob(
-        id=job_id,
-        media_file_id=media_id,
-        type=TranscodingJobType.REMUX,  # Use REMUX type for fast container conversion
-        status=TranscodingJobStatus.PENDING,
-        session_id=session_id,
-        client_ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        start_time=start_time,
-    )
-
-    session.add(job)
-    await session.commit()
-    await session.refresh(job)
-
-    # Clean up previous sessions for this client and media
-    cleanup_count = await cleanup_previous_sessions(
-        session=session,
-        media_id=media_id,
-        exclude_job_id=job_id,
-    )
-
-    if cleanup_count > 0:
-        logger.info(f"Cleaned up {cleanup_count} previous transcoding sessions for media {media_id}")
-
-    # Start remuxing (fast, no re-encoding)
-    transcoder = get_transcoder()
-    try:
-        await transcoder.start_remux_hls(
-            job_id=job_id,
-            media_file=media_file,
-            session_id=session_id,
-            client_ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
+    return await start_hls_job_response(
+        media_id,
+        request,
+        session,
+        HlsStartOptions(
+            job_type=TranscodingJobType.REMUX,
+            video_codec="copy",
+            audio_codec="copy",
             audio_stream_index=audio_stream_index,
             start_time=start_time,
-        )
-
-        # Refresh job to get updated status
-        await session.refresh(job)
-        return TranscodingJobSchema.model_validate(job)
-
-    except Exception as e:
-        # Clean up failed job
-        await session.delete(job)
-        await session.commit()
-        raise HTTPException(status_code=500, detail=f"Failed to start remuxing: {e}")
+        ),
+        "Failed to start remuxing",
+    )
 
 
 @router.post("/hls/{media_id}/start", response_model=TranscodingJobSchema)
@@ -296,7 +177,7 @@ async def start_hls_stream(
     media_id: int,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
     video_codec: Annotated[str, Query(description="Target video codec")] = "h264",
     audio_codec: Annotated[str, Query(description="Target audio codec")] = "aac",
     video_bitrate: Annotated[int | None, Query(description="Target video bitrate")] = None,
@@ -326,81 +207,24 @@ async def start_hls_stream(
     Returns:
         Transcoding job that can be used to access the HLS playlist once ready.
     """
-    # Fetch media file with tracks
-    result = await session.execute(
-        select(MediaFile)
-        .options(
-            selectinload(MediaFile.subtitle_tracks),
-        )
-        .where(MediaFile.id == media_id)
-    )
-    media_file = result.scalar_one_or_none()
-    if not media_file:
-        raise HTTPException(status_code=404, detail="Media file not found")
-
-    file_path = Path(media_file.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Media file not found on disk")
-
-    # Generate session ID for this streaming session
-    session_id = str(uuid.uuid4())
-
-    # Create transcoding job
-    job_id = str(uuid.uuid4())
-    job = TranscodingJob(
-        id=job_id,
-        media_file_id=media_id,
-        type=TranscodingJobType.HLS,
-        status=TranscodingJobStatus.PENDING,
-        session_id=session_id,
-        client_ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        start_time=start_time,
-    )
-
-    session.add(job)
-    await session.commit()
-    await session.refresh(job)
-
-    # Clean up previous sessions for this client and media
-    cleanup_count = await cleanup_previous_sessions(
-        session=session,
-        media_id=media_id,
-        exclude_job_id=job_id,
-    )
-
-    if cleanup_count > 0:
-        logger.info(f"Cleaned up {cleanup_count} previous transcoding sessions for media {media_id}")
-
-    # Start transcoding
-    transcoder = get_transcoder()
-    try:
-        await transcoder.start_hls_transcode(
-            job_id=job_id,
-            media_file=media_file,
+    return await start_hls_job_response(
+        media_id,
+        request,
+        session,
+        HlsStartOptions(
+            job_type=TranscodingJobType.HLS,
             video_codec=video_codec,
             audio_codec=audio_codec,
             video_bitrate=video_bitrate,
             audio_bitrate=audio_bitrate,
             max_width=max_width,
             max_height=max_height,
-            session_id=session_id,
-            client_ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
             audio_stream_index=audio_stream_index,
             subtitle_stream_index=subtitle_stream_index,
             start_time=start_time,
-        )
-
-        # Refresh job to get updated status
-        await session.refresh(job)
-        return TranscodingJobSchema.model_validate(job)
-
-    except Exception as e:
-        # Clean up failed job
-        await session.delete(job)
-        await session.commit()
-        raise HTTPException(status_code=500, detail=f"Failed to start transcoding: {e}")
+        ),
+        "Failed to start transcoding",
+    )
 
 
 @router.post("/hls/{media_id}/audio-transcode", response_model=TranscodingJobSchema)
@@ -408,7 +232,7 @@ async def start_hls_audio_transcode(
     media_id: int,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
     audio_codec: Annotated[str, Query(description="Target audio codec")] = "aac",
     audio_bitrate: Annotated[int | None, Query(description="Target audio bitrate")] = 128000,
     audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
@@ -426,81 +250,20 @@ async def start_hls_audio_transcode(
         start_time: Start position in seconds for seeking
     """
 
-    # Fetch media file with tracks
-    result = await session.execute(
-        select(MediaFile)
-        .options(
-            selectinload(MediaFile.subtitle_tracks),
-        )
-        .where(MediaFile.id == media_id)
-    )
-    media_file = result.scalar_one_or_none()
-    if not media_file:
-        raise HTTPException(status_code=404, detail="Media file not found")
-
-    file_path = Path(media_file.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Media file not found on disk")
-
-    # Generate session ID for this streaming session
-    session_id = str(uuid.uuid4())
-
-    # Create transcoding job (audio-transcode)
-    job_id = str(uuid.uuid4())
-    job = TranscodingJob(
-        id=job_id,
-        media_file_id=media_id,
-        type=TranscodingJobType.AUDIO_TRANSCODE,
-        status=TranscodingJobStatus.PENDING,
-        session_id=session_id,
-        client_ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        audio_codec=audio_codec,
-        audio_bitrate=audio_bitrate,
-        video_codec="copy",
-        start_time=start_time,
-    )
-
-    session.add(job)
-    await session.commit()
-    await session.refresh(job)
-
-    # Clean up previous sessions for this client and media
-    cleanup_count = await cleanup_previous_sessions(
-        session=session,
-        media_id=media_id,
-        exclude_job_id=job_id,
-    )
-
-    if cleanup_count > 0:
-        logger.info(f"Cleaned up {cleanup_count} previous transcoding sessions for media {media_id}")
-
-    # Start transcoding (copy video, transcode audio)
-    transcoder = get_transcoder()
-    try:
-        await transcoder.start_hls_transcode(
-            job_id=job_id,
-            media_file=media_file,
+    return await start_hls_job_response(
+        media_id,
+        request,
+        session,
+        HlsStartOptions(
+            job_type=TranscodingJobType.AUDIO_TRANSCODE,
             video_codec="copy",
             audio_codec=audio_codec,
-            video_bitrate=None,
             audio_bitrate=audio_bitrate,
-            session_id=session_id,
-            client_ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
             audio_stream_index=audio_stream_index,
             start_time=start_time,
-        )
-
-        # Refresh job to get updated status
-        await session.refresh(job)
-        return TranscodingJobSchema.model_validate(job)
-
-    except Exception as e:
-        # Clean up failed job
-        await session.delete(job)
-        await session.commit()
-        raise HTTPException(status_code=500, detail=f"Failed to start audio-transcode: {e}")
+        ),
+        "Failed to start audio-transcode",
+    )
 
 
 @router.get("/hls/{job_id}/playlist.m3u8")
@@ -509,63 +272,36 @@ async def get_hls_playlist(
     job_id: str,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
 ) -> PlainTextResponse:
     """Get HLS playlist file for a transcoding job."""
 
-    # Get job from database
-    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
-    job = result.scalar_one_or_none()
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Transcoding job not found")
-
-    if job.status == TranscodingJobStatus.CANCELLED:
-        raise HTTPException(status_code=410, detail="Transcoding job was cancelled")
-    elif job.status == TranscodingJobStatus.FAILED:
-        error_detail = f"Transcoding failed: {job.error_message}" if job.error_message else "Transcoding failed"
-        raise HTTPException(status_code=500, detail=error_detail)
-    elif job.status != TranscodingJobStatus.RUNNING and job.status != TranscodingJobStatus.COMPLETED:
-        raise HTTPException(status_code=404, detail="Playlist not ready yet")
-
-    if not job.playlist_path:
-        raise HTTPException(status_code=404, detail="Playlist path not set")
-
-    playlist_path = Path(job.playlist_path)
-    if not playlist_path.exists():
-        raise HTTPException(status_code=404, detail="Playlist file not found")
+    job = await get_hls_job_or_404(session, job_id)
+    playlist_path = await wait_for_playlist(job, session)
+    await touch_job(session, job)
 
     # For HEAD requests, just return empty response with proper headers
     if request.method == "HEAD":
         return PlainTextResponse(
             content="",
             media_type="application/vnd.apple.mpegurl",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Cache-Control": "no-cache",
-            },
+            headers=HLS_HEADERS,
         )
-
-    # Update last accessed time - will be set by database default
-    await session.commit()
 
     # Return playlist content with CORS headers
     try:
         async with aiofiles.open(playlist_path) as f:
             content = await f.read()
 
+        content = append_api_key_to_playlist_segments(content, request.query_params.get("api_key"))
+
         return PlainTextResponse(
             content,
             media_type="application/vnd.apple.mpegurl",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Cache-Control": "no-cache",
-            },
+            headers=HLS_HEADERS,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read playlist: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read playlist: {exc}") from exc
 
 
 @router.get("/hls/{job_id}/segment_{segment_num:int}.ts")
@@ -573,38 +309,56 @@ async def get_hls_segment(
     job_id: str,
     segment_num: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
 ) -> FileResponse:
     """Get HLS segment file for a transcoding job."""
 
-    # Get job from database
-    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
-    job = result.scalar_one_or_none()
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Transcoding job not found")
-
-    if not job.output_path:
-        raise HTTPException(status_code=404, detail="Job output path not set")
-
-    # Build segment file path
-    segment_path = Path(job.output_path) / f"segment_{segment_num:03d}.ts"
-
-    if not segment_path.exists():
-        raise HTTPException(status_code=404, detail=f"Segment {segment_num} not found")
-
-    # Update last accessed time - will be set by database default
-    await session.commit()
+    job = await get_hls_job_or_404(session, job_id)
+    segment_path = await wait_for_segment(job, segment_num, session)
+    await touch_job(session, job)
 
     # Return segment file
     return FileResponse(
         segment_path,
         media_type="video/mp2t",
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-            "Cache-Control": "public, max-age=3600",  # Cache segments for 1 hour
-        },
+        headers=SEGMENT_HEADERS,
+    )
+
+
+@router.get("/hls/{job_id}/init.mp4")
+async def get_hls_fmp4_init(
+    job_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+) -> FileResponse:
+    """Get fMP4 HLS initialization segment."""
+    job = await get_hls_job_or_404(session, job_id)
+    asset_path = await wait_for_hls_asset(job, "init.mp4", session)
+    await touch_job(session, job)
+
+    return FileResponse(
+        asset_path,
+        media_type="video/mp4",
+        headers=SEGMENT_HEADERS,
+    )
+
+
+@router.get("/hls/{job_id}/segment_{segment_num:int}.m4s")
+async def get_hls_fmp4_segment(
+    job_id: str,
+    segment_num: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+) -> FileResponse:
+    """Get fMP4 HLS media segment."""
+    job = await get_hls_job_or_404(session, job_id)
+    asset_path = await wait_for_hls_asset(job, f"segment_{segment_num:03d}.m4s", session)
+    await touch_job(session, job)
+
+    return FileResponse(
+        asset_path,
+        media_type="video/iso.segment",
+        headers=SEGMENT_HEADERS,
     )
 
 
@@ -612,16 +366,12 @@ async def get_hls_segment(
 async def get_hls_status(
     job_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
 ) -> TranscodingJobSchema:
     """Get status of HLS transcoding job."""
 
-    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
-    job = result.scalar_one_or_none()
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Transcoding job not found")
-
+    job = await get_hls_job_or_404(session, job_id)
+    await touch_job(session, job)
     return TranscodingJobSchema.model_validate(job)
 
 
@@ -629,18 +379,11 @@ async def get_hls_status(
 async def stop_hls_stream(
     job_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
 ) -> dict[str, str]:
     """Stop HLS transcoding job."""
 
-    # Check job exists
-    result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
-    job = result.scalar_one_or_none()
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Transcoding job not found")
-
-    # Stop transcoding process
+    await get_hls_job_or_404(session, job_id)
     transcoder = get_transcoder()
     success = await transcoder.stop_job(job_id)
 
@@ -655,7 +398,7 @@ async def get_subtitle(
     media_id: int,
     stream_index: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    user: Annotated[User | None, Depends(get_optional_user)] = None,
+    _user: Annotated[User, Depends(get_current_active_user)],
 ) -> PlainTextResponse:
     """Extract and serve a subtitle track as WebVTT.
 
@@ -682,13 +425,10 @@ async def get_subtitle(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Media file not found on disk")
 
-    # Find the subtitle track
-    subtitle_track = None
-    for track in media_file.subtitle_tracks:
-        if track.stream_index == stream_index:
-            subtitle_track = track
-            break
-
+    subtitle_track = next(
+        (track for track in media_file.subtitle_tracks if track.stream_index == stream_index),
+        None,
+    )
     if not subtitle_track:
         raise HTTPException(status_code=404, detail="Subtitle track not found")
 
@@ -733,5 +473,5 @@ async def get_subtitle(
                 "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
             },
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read subtitle: {e}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read subtitle: {exc}") from exc

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, type Ref, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { type MediaFile, media } from "@/api/client";
 import MenuBar from "../components/MenuBar.vue";
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const mediaFile: Ref<MediaFile | null> = ref(null);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string> = ref("");
@@ -19,7 +21,7 @@ async function loadMedia(): Promise<void> {
     mediaFile.value = await media.getMediaFile(Number(route.params.id));
   } catch (err: unknown) {
     console.error("Failed to load media:", err);
-    error.value = "Failed to load media details. Please try again.";
+    error.value = t("mediaDetail.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -33,9 +35,9 @@ function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+    return t("mediaDetail.duration.hoursMinutes", { hours, minutes });
   }
-  return `${minutes}m`;
+  return t("mediaDetail.duration.minutes", { minutes });
 }
 
 function formatDurationSeconds(seconds: number): string {
@@ -85,7 +87,7 @@ onMounted(() => {
   <div class="media-detail-view min-h-screen bg-gray-900">
     <MenuBar />
     <div v-if="loading" class="container mx-auto px-6 py-8 text-center text-gray-400">
-      Loading media...
+      {{ t("mediaDetail.loading") }}
     </div>
 
     <div v-else-if="error" class="container mx-auto px-6 py-8 text-center">
@@ -94,7 +96,7 @@ onMounted(() => {
         @click="loadMedia"
         class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
       >
-        Retry
+        {{ t("common.retry") }}
       </button>
     </div>
 
@@ -109,7 +111,7 @@ onMounted(() => {
         <button
           @click="goBack"
           class="absolute top-4 left-4 z-20 bg-black/50 hover:bg-black/70 backdrop-blur-xs text-white p-2 rounded-full transition-all duration-200 flex items-center justify-center"
-          aria-label="Go back"
+          :aria-label="t('mediaDetail.back')"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -159,38 +161,38 @@ onMounted(() => {
 
             <!-- MediaFile Information -->
             <div class="mb-6 p-4 bg-gray-800/50 rounded-lg">
-              <h2 class="text-xl font-semibold mb-3">File Information</h2>
+              <h2 class="text-xl font-semibold mb-3">{{ t("mediaDetail.fileInformation") }}</h2>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div>
-                  <span class="text-gray-400">File:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.file") }}:</span>
                   <span class="ml-2 text-gray-300">{{ mediaFile.file_name }}</span>
                 </div>
                 <div>
-                  <span class="text-gray-400">Path:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.path") }}:</span>
                   <span class="ml-2 text-gray-300 break-all">{{ mediaFile.file_path }}</span>
                 </div>
                 <div v-if="mediaFile.duration">
-                  <span class="text-gray-400">Duration:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.duration") }}:</span>
                   <span class="ml-2 text-gray-300">{{
                     formatDurationSeconds(mediaFile.duration)
                   }}</span>
                 </div>
                 <div v-if="mediaFile.width && mediaFile.height">
-                  <span class="text-gray-400">Resolution:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.resolution") }}:</span>
                   <span class="ml-2 text-gray-300"
                     >{{ mediaFile.width }}x{{ mediaFile.height }}</span
                   >
                 </div>
                 <div v-if="mediaFile.codec">
-                  <span class="text-gray-400">Codec:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.codec") }}:</span>
                   <span class="ml-2 text-gray-300">{{ mediaFile.codec }}</span>
                 </div>
                 <div v-if="mediaFile.bitrate">
-                  <span class="text-gray-400">Bitrate:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.bitrate") }}:</span>
                   <span class="ml-2 text-gray-300">{{ formatBitrate(mediaFile.bitrate) }}</span>
                 </div>
                 <div>
-                  <span class="text-gray-400">Size:</span>
+                  <span class="text-gray-400">{{ t("mediaDetail.fields.size") }}:</span>
                   <span class="ml-2 text-gray-300">{{
                     formatFileSize(mediaFile.file_size || 0)
                   }}</span>
@@ -208,7 +210,7 @@ onMounted(() => {
                   d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
                 />
               </svg>
-              Play
+              {{ t("mediaDetail.play") }}
             </button>
           </div>
         </div>
@@ -216,9 +218,9 @@ onMounted(() => {
     </div>
 
     <div v-else class="container mx-auto px-6 py-8 text-center text-white">
-      <p class="text-xl">Media not found</p>
+      <p class="text-xl">{{ t("mediaDetail.notFound") }}</p>
       <router-link to="/" class="text-primary-400 hover:text-primary-300 mt-4 inline-block">
-        Back to home
+        {{ t("mediaDetail.backHome") }}
       </router-link>
     </div>
   </div>

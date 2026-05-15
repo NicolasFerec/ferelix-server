@@ -10,12 +10,12 @@ Ferelix is a media server with FastAPI backend and Vue 3 frontend, featuring tra
 - FastAPI + Python 3.14+ + SQLAlchemy (async) + Alembic migrations
 - Media processing: FFmpeg/ffprobe for metadata extraction and HLS transcoding
 - Streaming strategies: DirectPlay → DirectStream/Remux → Full Transcode
-- Key services: `StreamBuilder` (playback decisions), `FFmpegTranscoder` (HLS), `Scanner` (library indexing)
+- Key services: `StreamBuilder` (playback decisions), `PlaybackSessionService` (HLS job startup), `FFmpegTranscoder` (ffmpeg process coordination), `Scanner` (library indexing)
 
 **Frontend Stack** (`./web`):
 - Vue 3 + TypeScript + Vite + Tailwind CSS 4 + HLS.js
 - API client: openapi-fetch with auto-generated types from backend OpenAPI schema
-- Dev server proxies `/api` → `http://localhost:8000`
+- Dev server proxies `/api` → `http://localhost:8005`
 
 ## Critical Workflows
 
@@ -40,7 +40,7 @@ pnpm generate-api-types
 ```bash
 # Package manager: uv (NOT pip)
 uv sync                              # Install dependencies
-uv run fastapi dev                   # Start dev server (hot reload)
+uv run fastapi dev --port 8005       # Start dev server (hot reload)
 uv run --no-sync fastapi run         # Production server
 
 # Database migrations
@@ -56,9 +56,9 @@ uv run ruff format
 ```bash
 # Package manager: pnpm (version pinned in package.json)
 pnpm install                         # Install dependencies
-pnpm dev                            # Dev server on port 5173
+pnpm dev                            # Dev server on port 5187 from Vite config
 pnpm build                          # Production build
-pnpm check --fix                    # Format + lint (Biome)
+pnpm check                          # Format + lint (Biome)
 pnpm test                           # Run Vitest unit tests
 pnpm test:watch                     # Run Vitest in watch mode
 pnpm test:coverage                  # Generate test coverage report
@@ -154,9 +154,20 @@ const { t } = useI18n();
 `StreamBuilder` service (`app/services/stream_builder.py`) determines playback method:
 1. **DirectPlay**: Native file serving (no processing)
 2. **DirectStream/Remux**: Container conversion only (fast, no re-encoding)
-3. **Transcode**: Full video+audio re-encoding (fallback)
+3. **Audio-only Transcode**: Copy video, transcode incompatible audio to AAC
+4. **Transcode**: Full video+audio re-encoding (fallback)
 
 Decision logic compares `DeviceProfile` capabilities against media file metadata (codecs, resolution, bitrate).
+
+`PlaybackSessionService` starts HLS jobs for the selected method. `FFmpegTranscoder` coordinates ffmpeg processes while command construction, hardware detection, subtitle extraction, and HLS file I/O live in focused helper modules under `app/services/transcoding/` and `app/services/streaming_io.py`.
+
+The Vue player keeps playback orchestration in `CustomVideoPlayer.vue`, presentational controls/status overlays in `web/src/components/player/`, and small formatting/type helpers in `web/src/services/playerUi.ts`.
+
+Optional runtime configuration:
+```bash
+FERELIX_FFMPEG_PATH=/usr/lib/jellyfin-ffmpeg/ffmpeg
+FERELIX_TRANSCODE_DIR=/tmp/ferelix-transcode
+```
 
 ## Docker & CI
 
@@ -190,8 +201,15 @@ When reviewing code, **focus on real bugs only** - not style preferences or mino
 ## Key Files
 
 - `server/app/main.py` - FastAPI app entry, scheduler setup
-- `server/app/services/transcoder.py` - FFmpeg HLS transcoding (1000+ lines)
+- `server/app/services/transcoder.py` - FFmpeg process coordination
+- `server/app/services/transcoding/` - FFmpeg command building, hardware detection, subtitle extraction, cleanup helpers
+- `server/app/services/playback_session.py` - HLS playback job startup and previous-session cleanup
+- `server/app/services/streaming_io.py` - HTTP range parsing and HLS playlist/segment readiness helpers
 - `server/app/services/stream_builder.py` - Playback decision logic
+- `server/app/services/directory_browser.py` - Admin filesystem browsing helper used by dashboard routes
 - `web/src/api/client.ts` - Centralized API client with token refresh
 - `web/src/components/CustomVideoPlayer.vue` - HLS player with transcode management
+- `web/src/components/player/` - Presentational video player controls and status overlays
+- `web/src/services/playerPlayback.ts` - Playback job selection and HLS readiness polling
+- `web/src/services/playerUi.ts` - Shared player UI types, labels, and time formatting
 - `justfile` - All development commands

@@ -77,8 +77,6 @@ global.IntersectionObserver = class IntersectionObserver {
     readonly rootMargin: string = "";
     readonly thresholds: readonly number[] = [];
 
-    constructor() {}
-
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -89,12 +87,12 @@ global.IntersectionObserver = class IntersectionObserver {
 
 // Mock localStorage
 const localStorageMock = {
-    getItem: (key: string) => null,
-    setItem: (key: string, value: string) => {},
-    removeItem: (key: string) => {},
+    getItem: (_key: string) => null,
+    setItem: (_key: string, _value: string) => {},
+    removeItem: (_key: string) => {},
     clear: () => {},
     length: 0,
-    key: (index: number) => null,
+    key: (_index: number) => null,
 };
 Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
@@ -103,7 +101,7 @@ Object.defineProperty(window, "sessionStorage", { value: localStorageMock });
 
 // Suppress console.error during tests unless debugging
 const originalConsoleError = console.error;
-console.error = (...args: any[]) => {
+console.error = (...args: unknown[]) => {
     // Filter out Vue warnings that are expected in tests
     const message = args[0]?.toString?.() || "";
     if (message.includes("[Vue warn]") || message.includes("Failed to resolve component")) {

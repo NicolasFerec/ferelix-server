@@ -176,6 +176,28 @@
         "recommended": "Recommandé",
         "allItems": "Tous les éléments"
     },
+    "mediaDetail": {
+        "loading": "Chargement du média...",
+        "loadFailed": "Échec du chargement des détails du média. Veuillez réessayer.",
+        "notFound": "Média introuvable",
+        "back": "Retour",
+        "backHome": "Retour à l'accueil",
+        "play": "Lire",
+        "fileInformation": "Informations du fichier",
+        "fields": {
+            "file": "Fichier",
+            "path": "Chemin",
+            "duration": "Durée",
+            "resolution": "Résolution",
+            "codec": "Codec",
+            "bitrate": "Débit",
+            "size": "Taille"
+        },
+        "duration": {
+            "hoursMinutes": "{hours} h {minutes} min",
+            "minutes": "{minutes} min"
+        }
+    },
     "jobs": {
         "title": "Tâches planifiées",
         "scheduled": "Tâches planifiées",
@@ -232,6 +254,12 @@
         "volume": "Volume",
         "mute": "Muet",
         "unmute": "Activer le son",
+        "quality": "Qualité",
+        "select": "Sélectionner",
+        "auto": "Auto",
+        "close": "Fermer le lecteur",
+        "toggle_info_panel": "Afficher les informations",
+        "no_audio_tracks": "Aucune piste audio disponible",
         "loading": "Chargement de la vidéo...",
         "error": "Échec du chargement de la vidéo",
         "retry": "Réessayer",

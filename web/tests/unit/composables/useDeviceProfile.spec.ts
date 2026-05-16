@@ -2,7 +2,6 @@
  * Unit tests for useDeviceProfile composable
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick } from "vue";
 
 // Mock the buildDeviceProfile function
 vi.mock("@/services/deviceProfile", () => ({

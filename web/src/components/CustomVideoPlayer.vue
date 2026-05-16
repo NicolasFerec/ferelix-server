@@ -3,25 +3,26 @@ import Hls from "hls.js";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { getAccessToken, media } from "@/api/client";
-import type { components } from "@/api/types";
 import { useDeviceProfile } from "@/composables/useDeviceProfile";
+import {
+  defaultAudioStreamIndex,
+  type StreamSource,
+  startPlaybackJob,
+  type TranscodingJob,
+  waitForHlsReady as waitForHlsReadyService,
+} from "@/services/playerPlayback";
+import {
+  type AudioTrackOption,
+  formatTime,
+  getSubtitleTrackLabel,
+  type PlaybackMethod,
+  type ResolutionOption,
+  type SubtitleTrackOption,
+} from "@/services/playerUi";
+import { adjustWebVttForOffset, isTextSubtitleCodec } from "@/services/subtitles";
 import PlayerInfoPanel from "./PlayerInfoPanel.vue";
-
-// Types for subtitle tracks
-interface SubtitleTrack {
-  id: number;
-  stream_index: number;
-  codec: string;
-  language?: string;
-  title?: string;
-  is_forced: boolean;
-  is_default: boolean;
-}
-
-// Text-based subtitle codecs that can be extracted
-const TEXT_SUBTITLE_CODECS = new Set([
-  "subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text"
-]);
+import PlayerControls from "./player/PlayerControls.vue";
+import PlayerStatusOverlays from "./player/PlayerStatusOverlays.vue";
 
 const props = defineProps({
   mediaFile: {
@@ -37,7 +38,6 @@ const { profile, buildProfile } = useDeviceProfile();
 
 // Video element and HLS instance refs
 const videoElement = ref<HTMLVideoElement | null>(null);
-const progressBar = ref<HTMLDivElement | null>(null);
 const hlsInstance = ref<Hls | null>(null);
 const currentJobId = ref<string | null>(null);
 const jobStartOffset = ref<number>(0); // Absolute time offset that the current job starts at
@@ -63,38 +63,20 @@ const errorMessage = ref("");
 const showAudioMenu = ref(false);
 const showSubtitleMenu = ref(false);
 const showResolutionMenu = ref(false);
-const selectedAudioTrack = ref<{ id: number; stream_index: number } | null>(null);
-const selectedSubtitleTrack = ref<SubtitleTrack | null>(null);
-const selectedResolution = ref<{ width: number; height: number; label: string; is_original: boolean } | null>(null);
-const availableResolutions = ref<Array<{ width: number; height: number; label: string; is_original: boolean }>>([]);
+const selectedAudioTrack = ref<AudioTrackOption | null>(null);
+const selectedSubtitleTrack = ref<SubtitleTrackOption | null>(null);
+const selectedResolution = ref<ResolutionOption | null>(null);
+const availableResolutions = ref<ResolutionOption[]>([]);
 const subtitleBlobUrls = ref<string[]>([]); // Track blob URLs for cleanup
 
 // Playback method tracking
-const playMethod = ref<"DirectPlay" | "DirectStream" | "Transcode">("DirectPlay");
+const playMethod = ref<PlaybackMethod>("DirectPlay");
 const isHlsPlayback = ref(false);
 const isInitializing = ref(true); // Flag to prevent error handler during init
 const hasSourceSet = ref(false); // Flag to track if a source was ever set
 const transcodeReasons = ref<string[]>([]);
 const retryCount = ref(0);
 const maxRetries = 3;
-// Types
-interface TranscodeSettings {
-  MaxWidth?: number;
-  MaxHeight?: number;
-}
-
-interface StreamSource {
-  PlayMethod?: string;
-  TranscodingUrl?: string;
-  DirectStreamUrl?: string;
-  IsRemuxOnly?: boolean;
-  TranscodingType?: string;
-  TranscodeReasons?: string[];
-  AvailableResolutions?: Array<Record<string, unknown>>;
-  TranscodeSettings?: TranscodeSettings;
-  [key: string]: unknown; // For other dynamic properties
-}
-
 const currentSource = ref<StreamSource | null>(null);
 
 // Info panel
@@ -120,7 +102,7 @@ const displayCurrentTime = computed(() => {
 });
 
 const hoverPercent = computed(() => {
-  if (!progressBar.value || hoverTime.value === null) return 0;
+  if (duration.value === 0 || hoverTime.value === null) return 0;
   return (hoverTime.value / duration.value) * 100;
 });
 
@@ -133,9 +115,11 @@ const bufferedPercentages = computed(() => {
   }));
 });
 
-const isAudioOnlyTranscode = computed(() => {
-  return playMethod.value === "Transcode" &&
-         currentSource.value?.TranscodingType === "audio-only";
+const selectedResolutionLabel = computed(() => {
+  if (selectedResolution.value) {
+    return selectedResolution.value.label.split(" ")[0];
+  }
+  return availableResolutions.value.length > 1 ? t("player.select") : t("player.auto");
 });
 
 const playbackInfo = computed(() => {
@@ -270,7 +254,7 @@ async function initializePlayback() {
 
     const source = playbackInfo.MediaSources[0];
     currentSource.value = source as StreamSource;
-    playMethod.value = source.PlayMethod as "DirectPlay" | "DirectStream" | "Transcode";
+    playMethod.value = source.PlayMethod as PlaybackMethod;
 
     // Store available resolutions and transcode reasons
     const rawResolutions = source.AvailableResolutions as Array<Record<string, unknown>>;
@@ -282,20 +266,10 @@ async function initializePlayback() {
     })) || [];
     transcodeReasons.value = source.TranscodeReasons || [];
 
-    console.log("Available resolutions:", availableResolutions.value);
-    console.log("Transcode reasons:", transcodeReasons.value);
-
     // Set initial resolution to original
     if (availableResolutions.value.length > 0) {
       selectedResolution.value = availableResolutions.value.find(r => r.is_original) || availableResolutions.value[0];
-      console.log("Selected initial resolution:", selectedResolution.value);
     }
-
-    console.log("Playback decision:", {
-      method: source.PlayMethod,
-      reasons: source.TranscodeReasons,
-      isRemuxOnly: source.IsRemuxOnly,
-    });
 
     if (source.PlayMethod === "DirectPlay" && source.DirectStreamUrl) {
       // Direct play - use native video element
@@ -346,49 +320,21 @@ async function setupHlsPlayback(source: StreamSource) {
   loadingMessage.value = source.IsRemuxOnly ? "Starting remux..." : "Starting transcode...";
 
   try {
-    // Determine which endpoint to use based on the TranscodingType flag
-    let job: Awaited<ReturnType<typeof media.startRemux>>;
-    const defaultAudioIndex = audioTracks.value.find((t: { is_default: boolean }) => t.is_default)?.stream_index ?? 0;
-
-    // Use TranscodingType to determine which endpoint to call
-    const transcodingType = source.TranscodingType || "full";
-
-    // Use absolute current time as startTime if user has already progressed
-    const desiredStart = currentTime.value > 0 ? (isHlsPlayback.value ? (jobStartOffset.value ?? 0) + currentTime.value : currentTime.value) : 0;
-
-    if (transcodingType === "remux" || source.IsRemuxOnly) {
-      job = await media.startRemux(props.mediaFile.id, {
-        audioStreamIndex: defaultAudioIndex,
-        startTime: desiredStart || undefined,
-      });
-    } else if (transcodingType === "audio-only") {
-      job = await media.startAudioTranscode(props.mediaFile.id, {
-        audioStreamIndex: defaultAudioIndex,
-        startTime: desiredStart || undefined,
-      });
-    } else {
-      // Full transcoding (video + audio)
-      // Extract resolution settings from TranscodeSettings if available
-      const transcodeSettings = source.TranscodeSettings;
-
-      // Preserve subtitle selection if user has selected an image-based subtitle
-      let subtitleIndex: number | undefined ;
-      if (selectedSubtitleTrack.value && selectedSubtitleTrack.value.stream_index !== undefined) {
-        const isTextBased = TEXT_SUBTITLE_CODECS.has(selectedSubtitleTrack.value.codec?.toLowerCase() || "");
-        // Only pass subtitle index for image-based subtitles (they need burning)
-        if (!isTextBased) {
-          subtitleIndex = selectedSubtitleTrack.value.stream_index;
-        }
-      }
-
-      job = await media.startTranscode(props.mediaFile.id, {
-        audioStreamIndex: defaultAudioIndex,
-        startTime: desiredStart || undefined,
-        maxWidth: transcodeSettings?.MaxWidth,
-        maxHeight: transcodeSettings?.MaxHeight,
-        subtitleStreamIndex: subtitleIndex,
-      });
-    }
+    const desiredStart =
+      currentTime.value > 0
+        ? (isHlsPlayback.value ? (jobStartOffset.value ?? 0) + currentTime.value : currentTime.value)
+        : 0;
+    const subtitleIndex =
+      selectedSubtitleTrack.value && !isTextSubtitleCodec(selectedSubtitleTrack.value.codec)
+        ? selectedSubtitleTrack.value.stream_index
+        : undefined;
+    const job = await startPlaybackJob({
+      mediaId: props.mediaFile.id,
+      source,
+      audioStreamIndex: defaultAudioStreamIndex(audioTracks.value),
+      subtitleStreamIndex: subtitleIndex,
+      startTime: desiredStart,
+    });
 
     currentJobId.value = job.id;
 
@@ -415,60 +361,16 @@ async function setupHlsPlayback(source: StreamSource) {
   }
 }
 
-type TranscodingJobSchema = components["schemas"]["TranscodingJobSchema"];
+type TranscodingJobSchema = TranscodingJob;
 
 async function waitForHlsReady(jobId: string, maxWait = 30000): Promise<TranscodingJobSchema> {
-  const startTime = Date.now();
-  const pollInterval = 500;
-
-  while (Date.now() - startTime < maxWait) {
-    const status = await media.getHlsStatus(jobId);
-
-    if (status.status === "running" || status.status === "completed") {
+  return waitForHlsReadyService(
+    jobId,
+    (status) => {
       loadingMessage.value = `Transcoding... ${Math.round(status.progress_percent || 0)}%`;
-
-      // Wait for playlist to be accessible - poll until it returns 200
-      const playlistUrl = media.getHlsPlaylistUrl(jobId);
-      let playlistReady = false;
-      for (let i = 0; i < 20; i++) {
-        try {
-          // Use GET with abort to check if playlist is ready (HEAD may not be supported)
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2000);
-          const response = await fetch(playlistUrl, {
-            method: "GET",
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (response.ok) {
-            playlistReady = true;
-            break;
-          }
-        } catch {
-          // Playlist not ready yet or request aborted
-        }
-        await new Promise((r) => setTimeout(r, 500));
-        loadingMessage.value = `Waiting for segments... ${i + 1}/20`;
-      }
-
-      if (playlistReady) {
-        return status;
-      }
-      // Continue waiting if playlist not ready yet
-    }
-
-    if (status.status === "failed") {
-      throw new Error(status.error_message || "Transcoding failed");
-    }
-
-    if (status.status === "cancelled") {
-      throw new Error("Transcoding was cancelled");
-    }
-
-    await new Promise((r) => setTimeout(r, pollInterval));
-  }
-
-  throw new Error("Timeout waiting for transcode");
+    },
+    maxWait,
+  );
 }
 
 async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
@@ -488,6 +390,7 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
     const hlsConfig = {
       debug: false,
       enableWorker: true,
+      testBandwidth: false,
       lowLatencyMode: false,
       maxBufferLength: 90,
       maxMaxBufferLength: 180,
@@ -512,13 +415,11 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
     let pendingStartPosition = startPosition;
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      console.log("HLS manifest parsed");
       isLoading.value = false;
     });
 
     hls.on(Hls.Events.BUFFER_APPENDED, () => {
       if (pendingStartPosition !== undefined && videoElement.value) {
-        console.log("Buffer ready, seeking to", pendingStartPosition);
         const seekPos = pendingStartPosition;
         pendingStartPosition = undefined;
 
@@ -546,13 +447,11 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
       if (data.fatal) {
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
-            console.log("Network error, trying to recover...");
             // Check if it's a 410 (cancelled job) or empty playlist
             if (data.response?.code === 410 || data.reason === "no EXTM3U delimiter") {
               if (retryCount.value < maxRetries) {
                 retryCount.value++;
                 const backoffDelay = Math.min(1000 * 2 ** (retryCount.value - 1), 8000);
-                console.log(`Job cancelled or empty playlist, retry ${retryCount.value}/${maxRetries} in ${backoffDelay}ms...`);
                 setTimeout(() => initializePlayback(), backoffDelay);
               } else {
                 console.error("Max retries reached, giving up");
@@ -564,7 +463,6 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
             }
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
-            console.log("Media error, trying to recover...");
             hls.recoverMediaError();
             break;
           default:
@@ -574,7 +472,6 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
       } else {
         // Non-fatal error - try recovery for specific audio issues
         if (data.details?.includes('bufferAppend') && data.sourceBufferName === 'audio') {
-          console.log("Audio buffer error, attempting recovery...");
           // Try to recover from audio buffer issues
           setTimeout(() => {
             if (hls && !hls.media?.error) {
@@ -598,8 +495,6 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
 
 async function tryFallbackPlayback() {
   // If playback-info failed, try direct streaming as fallback
-  console.log("Trying fallback direct stream...");
-
   try {
     const directUrl = media.getDirectStreamUrl(props.mediaFile.id);
     await setupDirectPlay(directUrl);
@@ -646,7 +541,7 @@ function cleanup() {
 }
 
 // Audio track switching
-async function selectAudioTrack(track: { id: number; stream_index: number }) {
+async function selectAudioTrack(track: AudioTrackOption) {
   selectedAudioTrack.value = track;
   showAudioMenu.value = false;
 
@@ -670,16 +565,13 @@ async function selectAudioTrack(track: { id: number; stream_index: number }) {
       await media.stopHls(currentJobId.value);
     }
 
-    // Start new job with different audio
-    const job = playMethod.value === "DirectStream"
-      ? await media.startRemux(props.mediaFile.id, {
-          audioStreamIndex: track.stream_index,
-          startTime: absoluteStartTime,
-        })
-      : await media.startAudioTranscode(props.mediaFile.id, {
-          audioStreamIndex: track.stream_index,
-          startTime: absoluteStartTime,
-        });
+    const source = currentSource.value || { TranscodingType: "audio-only" };
+    const job = await startPlaybackJob({
+      mediaId: props.mediaFile.id,
+      source,
+      audioStreamIndex: track.stream_index,
+      startTime: absoluteStartTime,
+    });
 
     currentJobId.value = job.id;
 
@@ -696,7 +588,7 @@ async function selectAudioTrack(track: { id: number; stream_index: number }) {
   }
 }
 
-function selectNativeAudioTrack(track: { id: number; stream_index: number; language?: string }) {
+function selectNativeAudioTrack(track: AudioTrackOption) {
   if (!videoElement.value) return;
 
   // AudioTrackList is not fully typed in all browsers
@@ -723,7 +615,7 @@ function selectNativeAudioTrack(track: { id: number; stream_index: number; langu
 }
 
 // Subtitle track switching
-async function selectSubtitleTrack(track: SubtitleTrack | null) {
+async function selectSubtitleTrack(track: SubtitleTrackOption | null) {
   selectedSubtitleTrack.value = track;
   showSubtitleMenu.value = false;
 
@@ -750,7 +642,7 @@ async function selectSubtitleTrack(track: SubtitleTrack | null) {
   if (!track) return;
 
   // Check if it's a text-based subtitle (can be extracted)
-  const isTextBased = TEXT_SUBTITLE_CODECS.has(track.codec?.toLowerCase() || "");
+  const isTextBased = isTextSubtitleCodec(track.codec);
 
   if (isTextBased) {
     // Load external WebVTT subtitle
@@ -761,7 +653,7 @@ async function selectSubtitleTrack(track: SubtitleTrack | null) {
   }
 }
 
-async function loadExternalSubtitle(track: SubtitleTrack) {
+async function loadExternalSubtitle(track: SubtitleTrackOption) {
   if (!videoElement.value) return;
 
   const subtitleUrl = media.getSubtitleUrl(props.mediaFile.id, track.stream_index);
@@ -775,79 +667,8 @@ async function loadExternalSubtitle(track: SubtitleTrack) {
       const urlWithAuth = token ? `${subtitleUrl}${subtitleUrl.includes('?') ? '&' : '?'}api_key=${token}` : subtitleUrl;
       const response = await fetch(urlWithAuth);
       const vttContent = await response.text();
-
-      // Adjust WebVTT timestamps by subtracting jobStartOffset
-      // We need to process cue blocks (timestamp line + text lines) together
       const offset = jobStartOffset.value;
-      let adjustedCount = 0;
-      let skippedCount = 0;
-
-      // Detect timestamp format from first cue (WebVTT supports both HH:MM:SS.mmm and MM:SS.mmm)
-      // Check for HH:MM:SS.mmm format first (more specific pattern)
-      const firstLongFormatMatch = vttContent.match(/(\d{2,}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2,}:\d{2}:\d{2}\.\d{3})/);
-      const firstShortFormatMatch = vttContent.match(/(\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}\.\d{3})/);
-      // Use short format only if long format is not found
-      const useShortFormat = !firstLongFormatMatch && !!firstShortFormatMatch;
-
-      // Split into cue blocks (separated by double newlines)
-      const cueBlocks = vttContent.split(/\n\n+/);
-      const adjustedBlocks: string[] = [];
-
-      // Keep WEBVTT header
-      if (cueBlocks[0]?.includes('WEBVTT')) {
-        adjustedBlocks.push(cueBlocks[0]);
-      }
-
-      // Process each cue block
-      for (let i = cueBlocks[0]?.includes('WEBVTT') ? 1 : 0; i < cueBlocks.length; i++) {
-        const block = cueBlocks[i];
-        if (!block) continue;
-
-        // Extract timestamp line - try both formats and use the one that matches
-        // Try long format first (HH:MM:SS.mmm) since it's more specific
-        let timestampMatch: RegExpMatchArray | null = block.match(/(\d{2,}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2,}:\d{2}:\d{2}\.\d{3})/);
-        let isShortFormat = false;
-
-        // If long format didn't match, try short format (MM:SS.mmm)
-        if (!timestampMatch) {
-          timestampMatch = block.match(/(\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}\.\d{3})/);
-          isShortFormat = true;
-        }
-
-        if (!timestampMatch) {
-          // Not a cue block, keep as-is
-          adjustedBlocks.push(block);
-          continue;
-        }
-
-        const startTime = timestampMatch[1];
-        const endTime = timestampMatch[2];
-        const startSeconds = timeToSeconds(startTime, isShortFormat);
-        const endSeconds = timeToSeconds(endTime, isShortFormat);
-
-        // Only include cues that are within or after the job start
-        if (startSeconds >= offset) {
-          // Cue is fully after job start, adjust timestamps
-          const adjustedStart = startSeconds - offset;
-          const adjustedEnd = endSeconds - offset;
-          const adjustedTimestamp = `${secondsToTime(adjustedStart, isShortFormat)} --> ${secondsToTime(adjustedEnd, isShortFormat)}`;
-          const adjustedBlock = block.replace(timestampMatch[0], adjustedTimestamp);
-          adjustedBlocks.push(adjustedBlock);
-          adjustedCount++;
-        } else if (endSeconds > offset) {
-          // Cue spans the job start, adjust to start at 0
-          const adjustedEnd = endSeconds - offset;
-          const adjustedTimestamp = `${secondsToTime(0, isShortFormat)} --> ${secondsToTime(adjustedEnd, isShortFormat)}`;
-          const adjustedBlock = block.replace(timestampMatch[0], adjustedTimestamp);
-          adjustedBlocks.push(adjustedBlock);
-          adjustedCount++;
-        } else {
-          // Cue is before job start, skip it
-          skippedCount++;
-        }
-      }
-
-      const adjustedVtt = adjustedBlocks.join('\n\n');
+      const adjustedVtt = adjustWebVttForOffset(vttContent, offset);
 
       // Create blob URL
       const blob = new Blob([adjustedVtt], { type: 'text/vtt' });
@@ -882,48 +703,7 @@ async function loadExternalSubtitle(track: SubtitleTrack) {
   });
 }
 
-// Helper functions to convert WebVTT time format to/from seconds
-// WebVTT supports both HH:MM:SS.mmm and MM:SS.mmm formats
-function timeToSeconds(time: string, isShortFormat: boolean = false): number {
-  const parts = time.split(':');
-  if (isShortFormat || parts.length === 2) {
-    // MM:SS.mmm format
-    const minutes = parseInt(parts[0], 10);
-    const secondsParts = parts[1].split('.');
-    const seconds = parseInt(secondsParts[0], 10);
-    const milliseconds = parseInt(secondsParts[1], 10);
-    return minutes * 60 + seconds + milliseconds / 1000;
-  } else {
-    // HH:MM:SS.mmm format
-    const hours = parseInt(parts[0], 10);
-    const minutes = parseInt(parts[1], 10);
-    const secondsParts = parts[2].split('.');
-    const seconds = parseInt(secondsParts[0], 10);
-    const milliseconds = parseInt(secondsParts[1], 10);
-    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
-  }
-}
-
-function secondsToTime(seconds: number, useShortFormat: boolean = false): string {
-  if (useShortFormat) {
-    // MM:SS.mmm format
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    const wholeSecs = Math.floor(secs);
-    const ms = Math.floor((secs - wholeSecs) * 1000);
-    return `${minutes.toString().padStart(2, '0')}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
-  } else {
-    // HH:MM:SS.mmm format
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    const wholeSecs = Math.floor(secs);
-    const ms = Math.floor((secs - wholeSecs) * 1000);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
-  }
-}
-
-async function restartWithBurnedSubtitle(track: SubtitleTrack) {
+async function restartWithBurnedSubtitle(track: SubtitleTrackOption) {
   if (!isHlsPlayback.value) {
     errorMessage.value = "Image subtitles require transcoding";
     return;
@@ -947,8 +727,10 @@ async function restartWithBurnedSubtitle(track: SubtitleTrack) {
       await media.stopHls(currentJobId.value);
     }
 
-    // Full transcode with subtitle burning
-    const job = await media.startTranscode(props.mediaFile.id, {
+    const source = currentSource.value || { TranscodingType: "full" };
+    const job = await startPlaybackJob({
+      mediaId: props.mediaFile.id,
+      source: { ...source, TranscodingType: "full", IsRemuxOnly: false },
       audioStreamIndex: selectedAudioTrack.value?.stream_index,
       subtitleStreamIndex: track.stream_index,
       startTime: absoluteStartTime,
@@ -1006,12 +788,8 @@ function togglePlay() {
   }
 }
 
-function seek(e: MouseEvent) {
-  if (!videoElement.value || !progressBar.value) return;
-  const rect = progressBar.value.getBoundingClientRect();
-  const percent = (e.clientX - rect.left) / rect.width;
-  const absoluteSeek = percent * duration.value;
-
+function seek(absoluteSeek: number) {
+  if (!videoElement.value) return;
   if (isHlsPlayback.value && !currentJobId.value) {
     // Job hasn't started yet - remember the desired seek and handle it when the job is ready
     pendingSeek.value = absoluteSeek;
@@ -1086,58 +864,26 @@ async function restartHlsAt(absoluteStart: number) {
       await media.stopHls(currentJobId.value);
     }
 
-    // Decide which transcode endpoint to call based on currentSource
     const source = currentSource.value as StreamSource;
-    // Use currently selected audio track, fallback to default
     const audioIndex = selectedAudioTrack.value?.stream_index ??
-      audioTracks.value.find((t: { is_default: boolean }) => t.is_default)?.stream_index ?? 0;
-
-    // Check if we need to burn subtitles (image-based only)
-    let needsSubtitleBurning = false;
+      defaultAudioStreamIndex(audioTracks.value);
     let subtitleIndex: number | undefined ;
     if (selectedSubtitleTrack.value && selectedSubtitleTrack.value.stream_index !== undefined) {
-      const isTextBased = TEXT_SUBTITLE_CODECS.has(selectedSubtitleTrack.value.codec?.toLowerCase() || "");
-      if (!isTextBased) {
-        needsSubtitleBurning = true;
+      if (!isTextSubtitleCodec(selectedSubtitleTrack.value.codec)) {
         subtitleIndex = selectedSubtitleTrack.value.stream_index;
-        console.log("Seek - Need to burn subtitle at stream index:", subtitleIndex);
       }
     }
 
-    let job: TranscodingJobSchema;
-    // If subtitle burning is needed, force full transcode
-    if (needsSubtitleBurning) {
-      const transcodeSettings = source.TranscodeSettings;
-      console.log("Seek - Using full transcode due to burned subtitles");
-      job = await media.startTranscode(props.mediaFile.id, {
-        audioStreamIndex: audioIndex,
-        subtitleStreamIndex: subtitleIndex,
-        startTime: savedTime,
-        maxWidth: transcodeSettings?.MaxWidth,
-        maxHeight: transcodeSettings?.MaxHeight,
-      });
-    } else if (source.IsRemuxOnly || source.TranscodingType === 'remux') {
-      job = await media.startRemux(props.mediaFile.id, {
-        audioStreamIndex: audioIndex,
-        startTime: savedTime
-      });
-    } else if (source.TranscodingType === 'audio-only') {
-      job = await media.startAudioTranscode(props.mediaFile.id, {
-        audioStreamIndex: audioIndex,
-        startTime: savedTime
-      });
-    } else {
-      // For full transcode without subtitles, preserve resolution settings
-      const transcodeSettings = source.TranscodeSettings;
-      console.log("Seek - Using full transcode");
-      job = await media.startTranscode(props.mediaFile.id, {
-        audioStreamIndex: audioIndex,
-        subtitleStreamIndex: undefined,
-        startTime: savedTime,
-        maxWidth: transcodeSettings?.MaxWidth,
-        maxHeight: transcodeSettings?.MaxHeight,
-      });
-    }
+    const sourceForJob = subtitleIndex
+      ? { ...source, TranscodingType: "full", IsRemuxOnly: false }
+      : source;
+    const job = await startPlaybackJob({
+      mediaId: props.mediaFile.id,
+      source: sourceForJob,
+      audioStreamIndex: audioIndex,
+      subtitleStreamIndex: subtitleIndex,
+      startTime: savedTime,
+    });
 
     currentJobId.value = job.id;
 
@@ -1190,7 +936,7 @@ async function restartHlsAt(absoluteStart: number) {
     // Don't pause/resume - just add the track while playing
     // Pausing can cause timing issues with HLS
     if (selectedSubtitleTrack.value && videoElement.value) {
-      const isTextBased = TEXT_SUBTITLE_CODECS.has(selectedSubtitleTrack.value.codec?.toLowerCase() || "");
+      const isTextBased = isTextSubtitleCodec(selectedSubtitleTrack.value.codec);
       if (isTextBased) {
         // Always remove existing tracks first to avoid duplicates/conflicts
         const existingTracks = videoElement.value.querySelectorAll("track[data-external]");
@@ -1219,13 +965,6 @@ async function restartHlsAt(absoluteStart: number) {
   } finally {
     isLoading.value = false;
   }
-}
-
-function onProgressHover(e: MouseEvent) {
-  if (!progressBar.value || duration.value === 0) return;
-  const rect = progressBar.value.getBoundingClientRect();
-  const percent = (e.clientX - rect.left) / rect.width;
-  hoverTime.value = percent * duration.value;
 }
 
 function setVolume(e: Event) {
@@ -1403,7 +1142,6 @@ function onError(e: Event) {
 
   // Ignore errors during initialization or if no source was ever set
   if (isInitializing.value || !hasSourceSet.value) {
-    console.log("Ignoring video error during initialization");
     return;
   }
 
@@ -1413,7 +1151,6 @@ function onError(e: Event) {
 
     // If direct play failed, try transcoding fallback
     if (error.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-      console.log("Direct play not supported, falling back to transcoding...");
       retryWithTranscoding();
     }
   }
@@ -1425,7 +1162,9 @@ async function retryWithTranscoding() {
   errorMessage.value = "";
 
   try {
-    const job = await media.startTranscode(props.mediaFile.id, {
+    const job = await startPlaybackJob({
+      mediaId: props.mediaFile.id,
+      source: { TranscodingType: "full" },
       audioStreamIndex: selectedAudioTrack.value?.stream_index,
     });
 
@@ -1456,54 +1195,6 @@ function onWaiting() {
 function onPlaying() {
   isLoading.value = false;
   showControls();
-}
-
-// Utility functions
-function formatTime(seconds: number): string {
-  if (!seconds || Number.isNaN(seconds)) return "0:00";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, "0")}`;
-}
-
-function getAudioTrackLabel(track: { language?: string; channels?: number; title?: string; stream_index: number }): string {
-  const parts = [];
-  if (track.language) {
-    parts.push(track.language.toUpperCase());
-  }
-  if (track.channels) {
-    if (track.channels === 2) parts.push("Stereo");
-    else if (track.channels === 6) parts.push("5.1");
-    else if (track.channels === 8) parts.push("7.1");
-    else parts.push(`${track.channels}ch`);
-  }
-  if (track.title) {
-    parts.push(track.title);
-  }
-  return parts.length > 0 ? parts.join(" ") : `Track ${track.stream_index}`;
-}
-
-function getSubtitleTrackLabel(track: SubtitleTrack): string {
-  const parts = [];
-  if (track.language) {
-    parts.push(track.language.toUpperCase());
-  }
-  if (track.is_forced) {
-    parts.push("(Forced)");
-  }
-  if (track.title) {
-    parts.push(track.title);
-  }
-  // Indicate if it needs burning
-  if (!TEXT_SUBTITLE_CODECS.has(track.codec?.toLowerCase() || "")) {
-    parts.push("⚠️");
-  }
-  return parts.length > 0 ? parts.join(" ") : `Track ${track.stream_index}`;
 }
 
 function toggleAudioMenu() {
@@ -1583,7 +1274,7 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
     const source = response.MediaSources[0];
     currentSource.value = source as StreamSource;
 
-    playMethod.value = source.PlayMethod as "DirectPlay" | "DirectStream" | "Transcode";
+    playMethod.value = source.PlayMethod as PlaybackMethod;
     transcodeReasons.value = source.TranscodeReasons || [];
 
     if (source.PlayMethod === "DirectPlay" && source.DirectStreamUrl) {
@@ -1636,261 +1327,52 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
       @playing="onPlaying"
     />
 
-    <!-- Loading Overlay -->
-    <div
-      v-if="isLoading"
-      class="absolute inset-0 flex flex-col items-center justify-center bg-black/60"
-    >
-      <div class="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div>
-      <p class="mt-4 text-white text-sm">{{ loadingMessage }}</p>
-    </div>
+    <PlayerStatusOverlays
+      :is-loading="isLoading"
+      :loading-message="loadingMessage"
+      :error-message="errorMessage"
+      :play-method="playMethod"
+      @retry="initializePlayback"
+    />
 
-    <!-- Error Overlay -->
-    <div
-      v-if="errorMessage"
-      class="absolute inset-0 flex flex-col items-center justify-center bg-black/80"
-    >
-      <svg class="w-16 h-16 text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <p class="text-white text-lg mb-4">{{ errorMessage }}</p>
-      <button
-        @click="initializePlayback"
-        class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-      >
-        Retry
-      </button>
-    </div>
-
-    <!-- Playback Method Indicator -->
-    <div
-      v-if="!isLoading && !errorMessage"
-      class="absolute top-4 left-4 px-2 py-1 bg-black/50 rounded text-xs text-white/70"
-    >
-      {{ playMethod }}{{ playMethod === 'DirectStream' ? ' (Remux)' : '' }}
-    </div>
-
-    <!-- Controls Overlay -->
-    <div
-      v-show="controlsVisible && !errorMessage"
-      class="controls-overlay absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end transition-opacity duration-300"
-    >
-      <!-- Progress Bar -->
-      <div class="progress-container px-4 mb-2">
-        <div
-          ref="progressBar"
-          class="progress-bar h-1 bg-gray-600 rounded-full cursor-pointer relative"
-          @click="seek"
-          @mousemove="onProgressHover"
-          @mouseleave="hoverTime = null"
-        >
-          <!-- Buffered indicator layer -->
-          <div
-            v-for="(range, index) in bufferedPercentages"
-            :key="index"
-            class="buffered-fill absolute h-full bg-gray-400 rounded-full pointer-events-none"
-            :style="{
-              left: `${range.start}%`,
-              width: `${range.width}%`
-            }"
-          />
-
-          <!-- Progress fill (watched portion) -->
-          <div
-            class="progress-fill h-full bg-primary-600 rounded-full transition-all relative z-10"
-            :style="{ width: `${progressPercent}%` }"
-          />
-
-          <!-- Hover time indicator -->
-          <div
-            v-if="hoverTime !== null"
-            class="hover-time absolute -top-8 text-white text-xs bg-black/80 px-2 py-1 rounded-sm transform -translate-x-1/2 z-20"
-            :style="{ left: `${hoverPercent}%` }"
-          >
-            {{ formatTime(hoverTime) }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Control Bar -->
-      <div class="control-bar px-4 pb-4 flex items-center gap-4">
-        <!-- Play/Pause Button -->
-        <button
-          @click="togglePlay"
-          class="text-white hover:text-primary-400 transition-colors"
-          :aria-label="isPlaying ? $t('player.pause') : $t('player.play')"
-        >
-          <svg v-if="!isPlaying" class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-          </svg>
-          <svg v-else class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M5.5 3.5A.5.5 0 016 4v12a.5.5 0 01-1 0V4a.5.5 0 01.5-.5zm5 0A.5.5 0 0111 4v12a.5.5 0 01-1 0V4a.5.5 0 01.5-.5z" />
-          </svg>
-        </button>
-
-        <!-- Time Display -->
-        <div class="text-white text-sm">
-          {{ formatTime(displayCurrentTime) }} / {{ formatTime(duration) }}
-        </div>
-
-        <!-- Volume Control -->
-        <div class="flex items-center gap-2">
-          <button
-            @click="toggleMute"
-            class="text-white hover:text-primary-400 transition-colors"
-            :aria-label="isMuted ? $t('player.unmute') : $t('player.mute')"
-          >
-            <svg v-if="isMuted || volume === 0" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.383 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.383l4-3.793a1 1 0 011.617.793zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clip-rule="evenodd" />
-            </svg>
-            <svg v-else-if="volume < 0.5" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.383 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.383l4-3.793a1 1 0 011.617.793zm2.274 4.217a1 1 0 011.414 0 3.984 3.984 0 010 5.414 1 1 0 01-1.414-1.414 1.984 1.984 0 000-2.586 1 1 0 010-1.414z" clip-rule="evenodd" />
-            </svg>
-            <svg v-else class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.793L4.383 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.383l4-3.793a1 1 0 011.617.793zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clip-rule="evenodd" />
-            </svg>
-          </button>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            :value="volume"
-            @input="setVolume"
-            class="volume-slider w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer"
-          />
-        </div>
-
-        <!-- Audio Track Selection -->
-        <div class="relative z-50">
-          <button
-            @click.stop="toggleAudioMenu"
-            class="text-white hover:text-primary-400 transition-colors px-3 py-1 text-sm"
-          >
-            {{ $t('player.audio_tracks') }}
-            <span v-if="audioTracks.length > 0" class="ml-1 text-xs">({{ audioTracks.length }})</span>
-          </button>
-          <div
-            v-if="showAudioMenu"
-            class="absolute bottom-full left-0 mb-2 bg-gray-900 rounded-lg shadow-lg min-w-[200px] max-h-64 overflow-y-auto z-50 border border-gray-700"
-            @click.stop
-          >
-            <div v-if="audioTracks.length === 0" class="px-4 py-2 text-gray-400 text-sm">
-              No audio tracks available
-            </div>
-            <div
-              v-for="track in audioTracks"
-              v-else
-              :key="track.id"
-              @click="selectAudioTrack(track)"
-              class="px-4 py-2 hover:bg-gray-800 cursor-pointer text-white text-sm"
-              :class="{ 'bg-primary-600': selectedAudioTrack?.id === track.id }"
-            >
-              {{ getAudioTrackLabel(track) }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Subtitle Track Selection -->
-        <div class="relative z-50">
-          <button
-            @click.stop="toggleSubtitleMenu"
-            class="text-white hover:text-primary-400 transition-colors px-3 py-1 text-sm"
-          >
-            {{ $t('player.subtitles') }}
-            <span v-if="subtitleTracks.length > 0" class="ml-1 text-xs">({{ subtitleTracks.length }})</span>
-          </button>
-          <div
-            v-if="showSubtitleMenu"
-            class="absolute bottom-full left-0 mb-2 bg-gray-900 rounded-lg shadow-lg min-w-[200px] max-h-64 overflow-y-auto z-50 border border-gray-700"
-            @click.stop
-          >
-            <div
-              @click="selectSubtitleTrack(null)"
-              class="px-4 py-2 hover:bg-gray-800 cursor-pointer text-white text-sm"
-              :class="{ 'bg-primary-600': selectedSubtitleTrack === null }"
-            >
-              {{ $t('player.subtitle_off') }}
-            </div>
-            <div
-              v-for="track in subtitleTracks"
-              :key="track.id"
-              @click="selectSubtitleTrack(track)"
-              class="px-4 py-2 hover:bg-gray-800 cursor-pointer text-white text-sm"
-              :class="{ 'bg-primary-600': selectedSubtitleTrack?.id === track.id }"
-            >
-              {{ getSubtitleTrackLabel(track) }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Resolution Selection -->
-        <div class="relative z-50">
-          <button
-            @click.stop="toggleResolutionMenu"
-            class="text-white hover:text-primary-400 transition-colors px-3 py-1 text-sm"
-            :disabled="availableResolutions.length <= 1"
-            :class="{ 'opacity-50 cursor-not-allowed': availableResolutions.length <= 1 }"
-          >
-            Quality
-            <span class="ml-1 text-xs">
-              ({{ selectedResolution ? selectedResolution.label.split(' ')[0] : availableResolutions.length > 1 ? 'Select' : 'Auto' }})
-            </span>
-          </button>
-          <div
-            v-if="showResolutionMenu && availableResolutions.length > 1"
-            class="absolute bottom-full left-0 mb-2 bg-gray-900 rounded-lg shadow-lg min-w-[180px] max-h-64 overflow-y-auto z-50 border border-gray-700"
-            @click.stop
-          >
-            <div
-              v-for="resolution in availableResolutions"
-              :key="`${resolution.width}x${resolution.height}`"
-              @click="selectResolution(resolution)"
-              class="px-4 py-2 hover:bg-gray-800 cursor-pointer text-white text-sm"
-              :class="{ 'bg-primary-600': selectedResolution?.width === resolution.width && selectedResolution?.height === resolution.height }"
-            >
-              {{ resolution.label }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Info Panel Toggle -->
-        <button
-          @click="toggleInfoPanel"
-          class="text-white hover:text-primary-400 transition-colors px-2 py-1"
-          title="Toggle info panel"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </button>
-
-        <!-- Fullscreen Button -->
-        <button
-          @click="toggleFullscreen"
-          class="text-white hover:text-primary-400 transition-colors ml-auto"
-          :aria-label="isFullscreen ? $t('player.exit_fullscreen') : $t('player.fullscreen')"
-        >
-          <svg v-if="!isFullscreen" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-          </svg>
-          <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-          </svg>
-        </button>
-
-        <!-- Close Button -->
-        <button
-          @click="$emit('close')"
-          class="text-white hover:text-primary-400 transition-colors"
-          aria-label="Close player"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    </div>
+    <PlayerControls
+      :visible="controlsVisible && !errorMessage"
+      :is-playing="isPlaying"
+      :display-current-time="displayCurrentTime"
+      :duration="duration"
+      :volume="volume"
+      :is-muted="isMuted"
+      :is-fullscreen="isFullscreen"
+      :progress-percent="progressPercent"
+      :hover-time="hoverTime"
+      :hover-percent="hoverPercent"
+      :buffered-percentages="bufferedPercentages"
+      :audio-tracks="audioTracks"
+      :subtitle-tracks="subtitleTracks"
+      :available-resolutions="availableResolutions"
+      :selected-audio-track="selectedAudioTrack"
+      :selected-subtitle-track="selectedSubtitleTrack"
+      :selected-resolution="selectedResolution"
+      :selected-resolution-label="selectedResolutionLabel"
+      :show-audio-menu="showAudioMenu"
+      :show-subtitle-menu="showSubtitleMenu"
+      :show-resolution-menu="showResolutionMenu"
+      @toggle-play="togglePlay"
+      @seek="seek"
+      @progress-hover="hoverTime = $event"
+      @clear-hover="hoverTime = null"
+      @set-volume="setVolume"
+      @toggle-mute="toggleMute"
+      @toggle-audio-menu="toggleAudioMenu"
+      @select-audio-track="selectAudioTrack"
+      @toggle-subtitle-menu="toggleSubtitleMenu"
+      @select-subtitle-track="selectSubtitleTrack"
+      @toggle-resolution-menu="toggleResolutionMenu"
+      @select-resolution="selectResolution"
+      @toggle-info-panel="toggleInfoPanel"
+      @toggle-fullscreen="toggleFullscreen"
+      @close="$emit('close')"
+    />
 
     <!-- Player Info Panel -->
     <PlayerInfoPanel
@@ -1904,23 +1386,3 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
     />
   </div>
 </template>
-
-<style scoped>
-.volume-slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #3b82f6;
-  cursor: pointer;
-}
-
-.volume-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #3b82f6;
-  cursor: pointer;
-  border: none;
-}
-</style>

@@ -465,14 +465,14 @@ export interface paths {
          * Stream Video
          * @description Stream video file with HTTP Range request support for seeking.
          *
-         *     Authentication is optional but recommended. Supports both:
+         *     Supports both:
          *     - Authorization: Bearer <token> header
          *     - ?api_key=<token> query parameter (for browser video tags)
          *
          *     Args:
          *         media_id: Media file ID
          *         session: Database session
-         *         user: Optional authenticated user
+         *         _user: Authenticated user
          *         range_header: HTTP Range header for partial content requests
          *
          *     Returns:
@@ -620,6 +620,46 @@ export interface paths {
          * @description Get HLS segment file for a transcoding job.
          */
         get: operations["get_hls_segment_api_v1_hls__job_id__segment__segment_num__ts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hls/{job_id}/init.mp4": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hls Fmp4 Init
+         * @description Get fMP4 HLS initialization segment.
+         */
+        get: operations["get_hls_fmp4_init_api_v1_hls__job_id__init_mp4_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hls/{job_id}/segment_{segment_num}.m4s": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hls Fmp4 Segment
+         * @description Get fMP4 HLS media segment.
+         */
+        get: operations["get_hls_fmp4_segment_api_v1_hls__job_id__segment__segment_num__m4s_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2948,6 +2988,73 @@ export interface operations {
         };
     };
     get_hls_segment_api_v1_hls__job_id__segment__segment_num__ts_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                job_id: string;
+                segment_num: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hls_fmp4_init_api_v1_hls__job_id__init_mp4_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hls_fmp4_segment_api_v1_hls__job_id__segment__segment_num__m4s_get: {
         parameters: {
             query?: {
                 api_key?: string | null;

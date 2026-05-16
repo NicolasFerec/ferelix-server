@@ -12,7 +12,7 @@ install:
 
 # Start development server (backend FastAPI)
 dev-server:
-    cd server && uv run alembic upgrade head && uv run fastapi dev
+    cd server && uv run alembic upgrade head && uv run fastapi dev --port 8005
 
 # Start development web client (frontend Vite)
 dev-web:

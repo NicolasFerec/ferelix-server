@@ -163,6 +163,40 @@ class TestStreamBuilderTranscode:
         # Should either direct stream (remux) or transcode
         assert stream_info.PlayMethod in (PlayMethod.DIRECT_STREAM, PlayMethod.TRANSCODE)
 
+    def test_unsupported_container_with_hevc_remuxes_to_fmp4_hls(self) -> None:
+        """Test HEVC can be copied into fMP4 HLS instead of full transcoding."""
+        profile = create_device_profile()
+        media_file = create_media_file(video_codec="hevc", audio_codec="aac", container=".avi")
+
+        builder = StreamBuilder(profile)
+        stream_info = builder.build_stream_info(media_file)
+
+        assert stream_info.PlayMethod == PlayMethod.DIRECT_STREAM
+        assert stream_info.TranscodingContainer == "fmp4"
+        assert stream_info.IsRemuxOnly is True
+
+    def test_mkv_hevc_remuxes_when_browser_supports_hevc_mp4_but_not_mkv(self) -> None:
+        """Test HEVC MKV avoids full transcode when the browser can decode HEVC."""
+        profile = create_device_profile(
+            direct_play_profiles=[
+                DirectPlayProfile(
+                    Type="Video",
+                    Container="mp4",
+                    VideoCodec="h264,hevc",
+                    AudioCodec="aac",
+                )
+            ]
+        )
+        media_file = create_media_file(video_codec="hevc", audio_codec="aac", container=".mkv")
+
+        builder = StreamBuilder(profile)
+        stream_info = builder.build_stream_info(media_file)
+
+        assert stream_info.PlayMethod == PlayMethod.DIRECT_STREAM
+        assert stream_info.TranscodingContainer == "fmp4"
+        assert stream_info.IsRemuxOnly is True
+        assert TranscodeReason.CONTAINER_NOT_SUPPORTED in stream_info.TranscodeReasons
+
     def test_transcode_unsupported_audio_codec(self) -> None:
         """Test transcoding for unsupported audio codec."""
         profile = create_device_profile()
@@ -242,6 +276,7 @@ class TestStreamBuilderMediaStreams:
         video_streams = [s for s in stream_info.MediaStreams if s.get("Type") == "Video"]
         assert len(video_streams) == 1
         assert video_streams[0]["Codec"] == "h264"
+        assert video_streams[0]["Index"] == 0
         assert video_streams[0]["Width"] == 1920
         assert video_streams[0]["Height"] == 1080
 
@@ -256,6 +291,7 @@ class TestStreamBuilderMediaStreams:
         audio_streams = [s for s in stream_info.MediaStreams if s.get("Type") == "Audio"]
         assert len(audio_streams) == 1
         assert audio_streams[0]["Codec"] == "aac"
+        assert audio_streams[0]["Index"] == 1
         assert audio_streams[0]["Channels"] == 2
 
     def test_builds_subtitle_stream_info(self) -> None:
@@ -281,6 +317,7 @@ class TestStreamBuilderMediaStreams:
         subtitle_streams = [s for s in stream_info.MediaStreams if s.get("Type") == "Subtitle"]
         assert len(subtitle_streams) == 1
         assert subtitle_streams[0]["Codec"] == "srt"
+        assert subtitle_streams[0]["Index"] == 2
         assert subtitle_streams[0]["Language"] == "en"
 
 

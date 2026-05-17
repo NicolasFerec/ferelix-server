@@ -465,12 +465,6 @@ export function buildDeviceProfile(): DeviceProfile {
     const hdrSupport = probeHDRSupport();
     const displayCaps = probeDisplayCapabilities();
 
-    console.log("Device capabilities:", {
-        codecSupport,
-        hdrSupport,
-        displayCaps,
-    });
-
     const profile: DeviceProfile = {
         Name: "Ferelix Web Client",
         Id: "ferelix-web",

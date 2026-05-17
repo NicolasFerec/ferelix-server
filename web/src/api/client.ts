@@ -77,6 +77,16 @@ export function isAuthenticated(): boolean {
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
 
+function apiErrorMessage(error: unknown, fallback: string): string {
+    if (error && typeof error === "object" && "detail" in error) {
+        const detail = (error as { detail?: unknown }).detail;
+        if (typeof detail === "string" && detail) {
+            return detail;
+        }
+    }
+    return fallback;
+}
+
 /**
  * Subscribe to token refresh completion
  */
@@ -390,7 +400,7 @@ export const media = {
             },
         });
         if (error || !data) {
-            throw new Error("Failed to start remux");
+            throw new Error(apiErrorMessage(error, "Failed to start remux"));
         }
         return data;
     },
@@ -431,7 +441,7 @@ export const media = {
             },
         });
         if (error || !data) {
-            throw new Error("Failed to start transcode");
+            throw new Error(apiErrorMessage(error, "Failed to start transcode"));
         }
         return data;
     },
@@ -462,7 +472,7 @@ export const media = {
             },
         });
         if (error || !data) {
-            throw new Error("Failed to start audio transcode");
+            throw new Error(apiErrorMessage(error, "Failed to start audio transcode"));
         }
         return data;
     },

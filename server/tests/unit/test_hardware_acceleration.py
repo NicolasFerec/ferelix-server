@@ -93,3 +93,55 @@ def test_ffmpeg_vaapi_decoders_probe_h264_and_hevc(monkeypatch, tmp_path) -> Non
     )
 
     assert decoders == {"h264", "hevc"}
+
+
+def test_nvidia_decoders_are_probed_before_being_reported(monkeypatch, tmp_path) -> None:
+    calls: list[list[str]] = []
+
+    class FakeTemporaryDirectory:
+        def __enter__(self):
+            return tmp_path
+
+        def __exit__(self, *args) -> None:
+            return None
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+
+        class Result:
+            stdout = ""
+            stderr = ""
+
+            def __init__(self, returncode: int):
+                self.returncode = returncode
+
+        output = cmd[-1]
+        if isinstance(output, str) and output.endswith(".mkv"):
+            (tmp_path / output.split("/")[-1]).write_bytes(b"sample")
+            return Result(0)
+
+        if "av1_cuvid" in cmd:
+            return Result(1)
+
+        return Result(0)
+
+    monkeypatch.setattr("app.services.transcoding.hardware.tempfile.TemporaryDirectory", FakeTemporaryDirectory)
+    monkeypatch.setattr("app.services.transcoding.hardware.subprocess.run", fake_run)
+
+    hw_accel = HardwareAcceleration()
+    device = HardwareDevice(
+        id="nvidia:0",
+        type="nvidia",
+        name="NVIDIA GPU",
+        index=0,
+    )
+
+    hw_accel._populate_nvidia_device(
+        device,
+        encoders_output="h264_nvenc libx264 av1_nvenc libaom-av1",
+        decoders_output="h264_cuvid av1_cuvid",
+        index=0,
+    )
+
+    assert device.decoders == {"h264"}
+    assert any("av1_cuvid" in call for call in calls)

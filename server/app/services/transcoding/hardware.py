@@ -54,6 +54,12 @@ HARDWARE_DECODERS: dict[str, dict[str, str]] = {
     },
 }
 
+NVIDIA_DECODE_SAMPLE_ENCODERS: dict[str, tuple[str, ...]] = {
+    "h264": ("libx264",),
+    "hevc": ("libx265",),
+    "av1": ("libaom-av1", "libsvtav1", "librav1e"),
+}
+
 CODEC_ALIASES = {
     "h265": "hevc",
     "libx265": "hevc",
@@ -326,7 +332,12 @@ class HardwareAcceleration:
                 device.encoders[codec] = encoder
 
         for codec, decoder in HARDWARE_DECODERS["nvidia"].items():
-            if self._has_ffmpeg_component(decoders_output, decoder):
+            if self._has_ffmpeg_component(decoders_output, decoder) and self._test_nvidia_decoder(
+                codec,
+                decoder,
+                encoders_output,
+                index=index,
+            ):
                 device.decoders.add(codec)
 
     def _detect_vaapi_devices(self, encoders_output: str, hwaccels_output: str) -> list[HardwareDevice]:
@@ -551,6 +562,72 @@ class HardwareAcceleration:
                 timeout=10,
             )
             return result.returncode == 0
+        except Exception:
+            return False
+
+    def _test_nvidia_decoder(
+        self,
+        codec: str,
+        decoder: str,
+        encoders_output: str,
+        index: int | None = None,
+    ) -> bool:
+        sample_encoders = NVIDIA_DECODE_SAMPLE_ENCODERS.get(codec, ())
+        sample_encoder = next(
+            (encoder for encoder in sample_encoders if self._has_ffmpeg_component(encoders_output, encoder)),
+            None,
+        )
+        if not sample_encoder:
+            return False
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                sample_path = Path(tmp_dir) / f"sample-{codec}.mkv"
+                encode_sample = subprocess.run(
+                    [
+                        self.ffmpeg_path,
+                        "-hide_banner",
+                        "-f",
+                        "lavfi",
+                        "-i",
+                        "color=black:s=64x64:d=0.1",
+                        "-frames:v",
+                        "1",
+                        "-c:v",
+                        sample_encoder,
+                        str(sample_path),
+                    ],
+                    capture_output=True,
+                    timeout=20,
+                )
+                if encode_sample.returncode != 0 or not sample_path.exists():
+                    return False
+
+                decode_cmd = [
+                    self.ffmpeg_path,
+                    "-hide_banner",
+                    "-hwaccel",
+                    "cuda",
+                    "-hwaccel_output_format",
+                    "cuda",
+                ]
+                if index is not None:
+                    decode_cmd.extend(["-hwaccel_device", str(index)])
+                decode_cmd.extend([
+                    "-c:v",
+                    decoder,
+                    "-i",
+                    str(sample_path),
+                    "-f",
+                    "null",
+                    "-",
+                ])
+                decode_sample = subprocess.run(
+                    decode_cmd,
+                    capture_output=True,
+                    timeout=15,
+                )
+                return decode_sample.returncode == 0
         except Exception:
             return False
 

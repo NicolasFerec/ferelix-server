@@ -106,6 +106,7 @@ class FFmpegTranscoder:
                 is_image_subtitle=is_image_subtitle,
                 start_time=start_time,
                 hls_segment_type=hls_segment_type,
+                real_frame_rate=self._source_video_frame_rate(media_file),
             )
         )
 
@@ -292,6 +293,11 @@ class FFmpegTranscoder:
         if media_file.video_tracks:
             return media_file.video_tracks[0].codec
         return media_file.codec
+
+    def _source_video_frame_rate(self, media_file: MediaFile) -> float | None:
+        if media_file.video_tracks:
+            return media_file.video_tracks[0].fps
+        return None
 
     def _subtitle_burn_options(
         self,

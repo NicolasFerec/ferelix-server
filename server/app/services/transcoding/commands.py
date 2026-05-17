@@ -25,6 +25,7 @@ class HlsCommandOptions:
     is_image_subtitle: bool = False
     start_time: float | None = None
     hls_segment_type: str = "mpegts"
+    real_frame_rate: float | None = None
 
 
 class HlsCommandBuilder:
@@ -53,6 +54,7 @@ class HlsCommandBuilder:
         else:
             cmd.extend(["-map", "0:v:0", "-map", "0:a?"])
 
+        cmd.extend(self._output_sanitizing_args())
         cmd.extend(["-c", "copy", "-copyts", "-start_at_zero", "-avoid_negative_ts", "make_zero"])
         cmd.extend(
             self._hls_args(
@@ -82,14 +84,13 @@ class HlsCommandBuilder:
             input_args=self._hardware_decode_args(active_device, hardware_decode),
         )
 
+        cmd.extend(self._output_sanitizing_args())
         cmd.extend(["-c:v", encoder])
         if encoder != "copy":
             cmd.extend(encoder_args)
             if "vaapi" not in encoder:
                 cmd.extend(["-pix_fmt", "yuv420p"])
-            cmd.extend(["-force_key_frames", f"expr:gte(t,n_forced*{options.segment_duration})"])
-            if "nvenc" in encoder:
-                cmd.extend(["-forced-idr", "1"])
+            cmd.extend(self._keyframe_args(encoder, options.segment_duration, options.real_frame_rate))
 
         cmd.extend(["-c:a", options.audio_codec])
         if options.audio_codec == "aac":
@@ -115,7 +116,7 @@ class HlsCommandBuilder:
             if vf_filters and encoder != "copy":
                 cmd.extend(["-vf", ",".join(vf_filters)])
 
-        cmd.extend(["-copyts", "-start_at_zero"])
+        cmd.extend(["-copyts", "-start_at_zero", "-avoid_negative_ts", "disabled"])
         cmd.extend(
             self._hls_args(
                 options.segment_duration,
@@ -126,6 +127,39 @@ class HlsCommandBuilder:
             )
         )
         return cmd
+
+    def _keyframe_args(self, encoder: str, segment_duration: int, real_frame_rate: float | None) -> list[str]:
+        gop_args = self._gop_args(segment_duration, real_frame_rate)
+        if self._uses_gop_for_hls_keyframes(encoder):
+            return gop_args
+
+        args = ["-force_key_frames", f"expr:gte(t,n_forced*{segment_duration})"]
+        if encoder == "libx264":
+            args.extend(["-sc_threshold:v:0", "0"])
+        return args
+
+    def _gop_args(self, segment_duration: int, real_frame_rate: float | None) -> list[str]:
+        if not real_frame_rate or real_frame_rate <= 0:
+            return []
+        gop_size = max(1, int(segment_duration * real_frame_rate + 0.9999))
+        return ["-g:v:0", str(gop_size), "-keyint_min:v:0", str(gop_size)]
+
+    def _uses_gop_for_hls_keyframes(self, encoder: str) -> bool:
+        return encoder in {
+            "h264_nvenc",
+            "hevc_nvenc",
+            "av1_nvenc",
+            "h264_qsv",
+            "hevc_qsv",
+            "av1_qsv",
+            "h264_amf",
+            "hevc_amf",
+            "av1_amf",
+            "libsvtav1",
+        }
+
+    def _output_sanitizing_args(self) -> list[str]:
+        return ["-map_metadata", "-1", "-map_chapters", "-1"]
 
     def _append_subtitle_filters(
         self,
@@ -159,20 +193,29 @@ class HlsCommandBuilder:
 
     def _video_filters(self, options: HlsCommandOptions, encoder: str, hardware_decode: bool) -> list[str]:
         filters: list[str] = []
-        if "vaapi" in encoder and not hardware_decode:
+        uses_vaapi_encoder = "vaapi" in encoder
+        if uses_vaapi_encoder and not hardware_decode:
             filters.extend(["format=nv12", "hwupload"])
 
         if (options.max_width or options.max_height) and encoder != "copy":
-            scale = "scale_vaapi" if "vaapi" in encoder else "scale"
+            scale = "scale_vaapi" if uses_vaapi_encoder else "scale"
             if options.max_width and options.max_height:
-                filters.append(
-                    f"{scale}=w={options.max_width}:h={options.max_height}:"
-                    "force_original_aspect_ratio=decrease:force_divisible_by=2"
-                )
+                scale_args = [
+                    f"w={options.max_width}",
+                    f"h={options.max_height}",
+                    "force_original_aspect_ratio=decrease",
+                    "force_divisible_by=2",
+                ]
             elif options.max_width:
-                filters.append(f"{scale}=w={options.max_width}:h=-2")
+                scale_args = [f"w={options.max_width}", "h=-2"]
             else:
-                filters.append(f"{scale}=w=-2:h={options.max_height}")
+                scale_args = ["w=-2", f"h={options.max_height}"]
+
+            if uses_vaapi_encoder:
+                scale_args.append("format=nv12")
+            filters.append(f"{scale}={':'.join(scale_args)}")
+        elif uses_vaapi_encoder and hardware_decode and encoder == "h264_vaapi":
+            filters.append("scale_vaapi=format=nv12")
 
         return filters
 
@@ -248,6 +291,8 @@ class HlsCommandBuilder:
             "2048",
             "-f",
             "hls",
+            "-max_delay",
+            "5000000",
             "-hls_time",
             str(segment_duration),
             "-hls_playlist_type",
@@ -259,6 +304,7 @@ class HlsCommandBuilder:
         ]
         if segment_type == "fmp4":
             args.extend(["-hls_fmp4_init_filename", "init.mp4"])
+            args.extend(["-hls_segment_options", "movflags=+frag_discont"])
         hls_flags = ["temp_file"]
         if independent_segments:
             hls_flags.append("independent_segments")

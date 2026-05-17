@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { type Library, libraries as libraryApi } from "@/api/client";
+import DashboardTable from "./DashboardTable.vue";
 import LibraryForm from "./LibraryForm.vue";
 import LibraryItem from "./LibraryItem.vue";
 
@@ -112,13 +113,10 @@ onMounted(() => {
     </div>
 
     <!-- Libraries table -->
-    <div v-else class="bg-gray-800 rounded-lg overflow-visible">
-      <table class="min-w-full divide-y divide-gray-700">
+    <DashboardTable v-else>
         <thead class="bg-gray-700">
           <tr>
-            <th
-              class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider rounded-tl-lg"
-            >
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
               {{ $t('libraries.name') }}
             </th>
             <th
@@ -136,9 +134,7 @@ onMounted(() => {
             >
               {{ $t('libraries.enabled') }}
             </th>
-            <th
-              class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider rounded-tr-lg"
-            >
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
               {{ $t('common.actions') }}
             </th>
           </tr>
@@ -153,17 +149,6 @@ onMounted(() => {
             @scan="handleScan"
           />
         </tbody>
-      </table>
-    </div>
+    </DashboardTable>
   </div>
 </template>
-
-<style scoped>
-.library-list tbody tr:last-child td:first-child {
-  border-bottom-left-radius: 0.5rem;
-}
-
-.library-list tbody tr:last-child td:last-child {
-  border-bottom-right-radius: 0.5rem;
-}
-</style>

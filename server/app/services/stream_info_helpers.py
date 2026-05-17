@@ -1,6 +1,14 @@
 """Helpers for shaping playback-info response data."""
 
+from typing import TypedDict
+
 from app.models.media_file import MediaFile
+
+
+class ResolutionOption(TypedDict):
+    width: int
+    height: int
+    label: str
 
 
 def build_media_streams(media_file: MediaFile) -> list[dict]:
@@ -72,7 +80,7 @@ def calculate_available_resolutions(media_file: MediaFile) -> list[dict]:
         }
     ]
 
-    standard_resolutions = [
+    standard_resolutions: list[ResolutionOption] = [
         {"width": 3840, "height": 2160, "label": "4K (3840x2160)"},
         {"width": 2560, "height": 1440, "label": "1440p (2560x1440)"},
         {"width": 1920, "height": 1080, "label": "1080p (1920x1080)"},

@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { jobs as jobsApi } from "@/api/client";
+import DashboardTable from "./DashboardTable.vue";
 
 const { t, locale } = useI18n();
 
@@ -382,8 +383,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Jobs table -->
-      <div v-else class="bg-gray-800 rounded-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-700">
+      <DashboardTable v-else>
           <thead class="bg-gray-700">
             <tr>
               <th
@@ -445,8 +445,7 @@ onBeforeUnmount(() => {
               </td>
             </tr>
           </tbody>
-        </table>
-      </div>
+      </DashboardTable>
     </div>
 
     <!-- Job History Section -->
@@ -462,8 +461,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- History table -->
-      <div v-else class="bg-gray-800 rounded-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-700">
+      <DashboardTable v-else>
           <thead class="bg-gray-700">
             <tr>
               <th
@@ -560,8 +558,7 @@ onBeforeUnmount(() => {
               </td>
             </tr>
           </tbody>
-        </table>
-      </div>
+      </DashboardTable>
     </div>
 
     <!-- Success notification -->

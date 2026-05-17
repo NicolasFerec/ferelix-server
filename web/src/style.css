@@ -35,4 +35,20 @@
     body {
         @apply bg-gray-900 text-white;
     }
+
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]),
+    a[href],
+    summary,
+    select,
+    input[type="checkbox"],
+    input[type="radio"] {
+        cursor: pointer;
+    }
+
+    button:disabled,
+    input:disabled,
+    select:disabled {
+        cursor: not-allowed;
+    }
 }

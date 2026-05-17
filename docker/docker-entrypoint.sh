@@ -25,6 +25,26 @@ if [ "$PUID" != "$CURRENT_PUID" ]; then
     usermod -o -u "$PUID" ferelix
 fi
 
+# Add the runtime user to mounted GPU device groups when Docker exposes them.
+for DEVICE in /dev/dri/renderD* /dev/dri/card* /dev/nvidia*; do
+    if [ ! -e "$DEVICE" ]; then
+        continue
+    fi
+
+    DEVICE_GID=$(stat -c "%g" "$DEVICE")
+    if [ "$DEVICE_GID" = "0" ]; then
+        continue
+    fi
+
+    DEVICE_GROUP=$(getent group "$DEVICE_GID" | cut -d: -f1)
+    if [ -z "$DEVICE_GROUP" ]; then
+        DEVICE_GROUP="ferelix-device-${DEVICE_GID}"
+        groupadd -g "$DEVICE_GID" "$DEVICE_GROUP"
+    fi
+
+    usermod -aG "$DEVICE_GROUP" ferelix
+done
+
 # -------------------------------
 # Ensure /config directory has correct ownership
 # -------------------------------

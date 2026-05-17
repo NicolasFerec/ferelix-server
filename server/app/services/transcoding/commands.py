@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.services.transcoding.hardware import HardwareAcceleration
+from app.services.transcoding.hardware import HardwareAcceleration, HardwareDevice, normalize_video_codec
 
 
 @dataclass(slots=True)
@@ -12,6 +12,7 @@ class HlsCommandOptions:
     input_path: str
     playlist_path: str
     segment_pattern: str
+    source_video_codec: str | None = None
     video_codec: str = "h264"
     audio_codec: str = "aac"
     video_bitrate: int | None = None
@@ -68,12 +69,19 @@ class HlsCommandBuilder:
         """Build an HLS command that can transcode video, audio, or both."""
         cmd = [self.ffmpeg_path, "-hide_banner", "-y"]
 
-        if self.hw_accel.vaapi_available and self.hw_accel.vaapi_device and options.video_codec != "copy":
-            cmd.extend(["-vaapi_device", self.hw_accel.vaapi_device])
-
-        self._append_seek_and_input(cmd, options.input_path, options.start_time)
-
+        active_device = self.hw_accel.get_active_device()
         encoder, encoder_args = self.hw_accel.get_video_encoder(options.video_codec)
+        hardware_decode = self._should_hardware_decode(active_device, options, encoder)
+        if active_device and active_device.type == "vaapi" and active_device.path and options.video_codec != "copy":
+            cmd.extend(["-vaapi_device", active_device.path])
+
+        self._append_seek_and_input(
+            cmd,
+            options.input_path,
+            options.start_time,
+            input_args=self._hardware_decode_args(active_device, hardware_decode),
+        )
+
         cmd.extend(["-c:v", encoder])
         if encoder != "copy":
             cmd.extend(encoder_args)
@@ -97,7 +105,7 @@ class HlsCommandBuilder:
                 str(options.video_bitrate * 2),
             ])
 
-        vf_filters = self._video_filters(options, encoder)
+        vf_filters = self._video_filters(options, encoder, hardware_decode)
         if options.subtitle_stream_index is not None and encoder != "copy":
             self._append_subtitle_filters(cmd, options, encoder, vf_filters)
         else:
@@ -147,9 +155,9 @@ class HlsCommandBuilder:
         self._append_default_maps(cmd, options.audio_stream_index)
         cmd.extend(["-vf", ",".join(vf_filters)])
 
-    def _video_filters(self, options: HlsCommandOptions, encoder: str) -> list[str]:
+    def _video_filters(self, options: HlsCommandOptions, encoder: str, hardware_decode: bool) -> list[str]:
         filters: list[str] = []
-        if "vaapi" in encoder:
+        if "vaapi" in encoder and not hardware_decode:
             filters.extend(["format=nv12", "hwupload"])
 
         if (options.max_width or options.max_height) and encoder != "copy":
@@ -166,6 +174,42 @@ class HlsCommandBuilder:
 
         return filters
 
+    def _should_hardware_decode(
+        self,
+        active_device: HardwareDevice | None,
+        options: HlsCommandOptions,
+        encoder: str,
+    ) -> bool:
+        if not active_device or options.video_codec == "copy" or options.subtitle_stream_index is not None:
+            return False
+
+        source_codec = normalize_video_codec(options.source_video_codec)
+        if source_codec not in active_device.decoders:
+            return False
+
+        if active_device.type == "vaapi":
+            return "vaapi" in encoder
+
+        if active_device.type == "nvidia":
+            return "nvenc" in encoder and not (options.max_width or options.max_height)
+
+        return False
+
+    def _hardware_decode_args(self, active_device: HardwareDevice | None, hardware_decode: bool) -> list[str]:
+        if not hardware_decode or not active_device:
+            return []
+
+        if active_device.type == "vaapi":
+            return ["-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi"]
+
+        if active_device.type == "nvidia":
+            args = ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"]
+            if active_device.index is not None:
+                args.extend(["-hwaccel_device", str(active_device.index)])
+            return args
+
+        return []
+
     def _append_default_maps(self, cmd: list[str], audio_stream_index: int | None) -> None:
         cmd.extend(["-map", "0:v:0"])
         self._append_audio_map(cmd, audio_stream_index)
@@ -176,9 +220,17 @@ class HlsCommandBuilder:
         else:
             cmd.extend(["-map", "0:a:0?"])
 
-    def _append_seek_and_input(self, cmd: list[str], input_path: str, start_time: float | None) -> None:
+    def _append_seek_and_input(
+        self,
+        cmd: list[str],
+        input_path: str,
+        start_time: float | None,
+        input_args: list[str] | None = None,
+    ) -> None:
         if start_time and start_time > 0:
             cmd.extend(["-ss", str(start_time)])
+        if input_args:
+            cmd.extend(input_args)
         cmd.extend(["-i", input_path])
 
     def _hls_args(

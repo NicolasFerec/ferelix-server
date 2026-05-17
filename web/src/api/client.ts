@@ -18,15 +18,19 @@ export type User = components["schemas"]["UserSchema"];
 export type UserUpdate = components["schemas"]["UserUpdate"];
 export type Job = components["schemas"]["JobSchema"];
 export type JobExecution = components["schemas"]["JobExecutionSchema"];
+export type ActiveStream = components["schemas"]["ActiveStreamSchema"];
 export type RecommendationRow = components["schemas"]["RecommendationRowSchema"];
 export type RecommendationRowCreate = components["schemas"]["RecommendationRowCreate"];
 export type RecommendationRowUpdate = components["schemas"]["RecommendationRowUpdate"];
 export type Settings = components["schemas"]["SettingsSchema"];
 export type SettingsUpdate = components["schemas"]["SettingsUpdate"];
+export type HardwareAccelerationStatus = components["schemas"]["HardwareAccelerationStatus"];
 export type DirectoryItem = components["schemas"]["DirectoryItem"];
 export type HomepageRow = components["schemas"]["HomepageRow"];
 export type DeviceProfile = components["schemas"]["DeviceProfile"];
 export type PlaybackInfoResponse = components["schemas"]["PlaybackInfoResponse"];
+export type PlaybackSession = components["schemas"]["PlaybackSessionSchema"];
+export type PlaybackSessionHeartbeatResponse = components["schemas"]["PlaybackSessionHeartbeatResponse"];
 export type StreamInfo = components["schemas"]["StreamInfo"];
 export type TranscodingJob = components["schemas"]["TranscodingJobSchema"];
 
@@ -323,6 +327,7 @@ export const media = {
         options?: {
             audioStreamIndex?: number;
             startTime?: number;
+            sessionId?: string | null;
         },
     ): Promise<components["schemas"]["TranscodingJobSchema"]> {
         const { data, error } = await client.POST("/api/v1/hls/{media_id}/remux", {
@@ -331,6 +336,7 @@ export const media = {
                 query: {
                     audio_stream_index: options?.audioStreamIndex,
                     start_time: options?.startTime,
+                    session_id: options?.sessionId ?? undefined,
                 },
             },
         });
@@ -355,6 +361,7 @@ export const media = {
             audioStreamIndex?: number;
             subtitleStreamIndex?: number;
             startTime?: number;
+            sessionId?: string | null;
         },
     ): Promise<components["schemas"]["TranscodingJobSchema"]> {
         const { data, error } = await client.POST("/api/v1/hls/{media_id}/start", {
@@ -370,6 +377,7 @@ export const media = {
                     audio_stream_index: options?.audioStreamIndex,
                     subtitle_stream_index: options?.subtitleStreamIndex,
                     start_time: options?.startTime,
+                    session_id: options?.sessionId ?? undefined,
                 },
             },
         });
@@ -389,6 +397,7 @@ export const media = {
             audioBitrate?: number;
             audioStreamIndex?: number;
             startTime?: number;
+            sessionId?: string | null;
         },
     ): Promise<components["schemas"]["TranscodingJobSchema"]> {
         const { data, error } = await client.POST("/api/v1/hls/{media_id}/audio-transcode", {
@@ -399,6 +408,7 @@ export const media = {
                     audio_bitrate: options?.audioBitrate ?? 128000,
                     audio_stream_index: options?.audioStreamIndex,
                     start_time: options?.startTime,
+                    session_id: options?.sessionId ?? undefined,
                 },
             },
         });
@@ -445,10 +455,14 @@ export const media = {
     /**
      * Get direct stream URL
      */
-    getDirectStreamUrl(mediaId: number): string {
+    getDirectStreamUrl(mediaId: number, sessionId?: string | null): string {
         const token = getAccessToken();
         const baseUrl = `/api/v1/stream/${mediaId}`;
-        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
+        const params = new URLSearchParams();
+        if (token) params.set("api_key", token);
+        if (sessionId) params.set("session_id", sessionId);
+        const query = params.toString();
+        return query ? `${baseUrl}?${query}` : baseUrl;
     },
 
     /**
@@ -658,6 +672,96 @@ export const jobs = {
     },
 };
 
+// Export active stream-related functions
+export const streams = {
+    /**
+     * Get active playback/transcoding streams across all users (admin only)
+     */
+    async getActiveStreams(): Promise<ActiveStream[]> {
+        const { data, error } = await client.GET("/api/v1/dashboard/streams");
+        if (error || !data) {
+            throw new Error("Failed to get active streams");
+        }
+        return data;
+    },
+
+    /**
+     * Stop an active HLS/remux/transcoding stream
+     */
+    async stopStream(jobId: string): Promise<void> {
+        const { error } = await client.DELETE("/api/v1/dashboard/streams/{session_id}", {
+            params: { path: { session_id: jobId } },
+        });
+        if (error) {
+            throw new Error("Failed to stop stream");
+        }
+    },
+};
+
+// Export playback session-related functions
+export const playbackSessions = {
+    async create(payload: {
+        mediaFileId: number;
+        durationSeconds?: number | null;
+        audioStreamIndex?: number | null;
+        subtitleStreamIndex?: number | null;
+    }): Promise<PlaybackSession> {
+        const { data, error } = await client.POST("/api/v1/playback-sessions", {
+            body: {
+                media_file_id: payload.mediaFileId,
+                duration_seconds: payload.durationSeconds,
+                audio_stream_index: payload.audioStreamIndex,
+                subtitle_stream_index: payload.subtitleStreamIndex,
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to create playback session");
+        }
+        return data;
+    },
+
+    async heartbeat(
+        sessionId: string,
+        payload: {
+            positionSeconds: number;
+            durationSeconds?: number | null;
+            isPaused: boolean;
+            playMethod?: string | null;
+            transcodingType?: string | null;
+            transcodingJobId?: string | null;
+            audioStreamIndex?: number | null;
+            subtitleStreamIndex?: number | null;
+        },
+    ): Promise<PlaybackSessionHeartbeatResponse> {
+        const { data, error } = await client.POST("/api/v1/playback-sessions/{session_id}/heartbeat", {
+            params: { path: { session_id: sessionId } },
+            body: {
+                position_seconds: payload.positionSeconds,
+                duration_seconds: payload.durationSeconds,
+                is_paused: payload.isPaused,
+                play_method: payload.playMethod,
+                transcoding_type: payload.transcodingType,
+                transcoding_job_id: payload.transcodingJobId,
+                audio_stream_index: payload.audioStreamIndex,
+                subtitle_stream_index: payload.subtitleStreamIndex,
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to update playback session");
+        }
+        return data;
+    },
+
+    async end(sessionId: string): Promise<void> {
+        const { error } = await client.DELETE("/api/v1/playback-sessions/{session_id}", {
+            params: { path: { session_id: sessionId } },
+        });
+        if (error) {
+            throw new Error("Failed to end playback session");
+        }
+    },
+};
+
 // Export settings-related functions
 export const settings = {
     /**
@@ -680,6 +784,19 @@ export const settings = {
         });
         if (error || !data) {
             throw new Error("Failed to update settings");
+        }
+        return data;
+    },
+
+    /**
+     * Get detected hardware transcoding devices (admin only)
+     */
+    async getHardwareTranscodingStatus(refresh = false): Promise<HardwareAccelerationStatus> {
+        const { data, error } = await client.GET("/api/v1/dashboard/hardware-transcoding", {
+            params: { query: { refresh } },
+        });
+        if (error || !data) {
+            throw new Error("Failed to get hardware transcoding status");
         }
         return data;
     },

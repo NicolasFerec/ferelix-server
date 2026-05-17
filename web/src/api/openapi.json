@@ -1006,6 +1006,202 @@
         }
       }
     },
+    "/api/v1/playback-sessions": {
+      "post": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Create Playback Session",
+        "description": "Create a playback session tracked independently from transcoding jobs.",
+        "operationId": "create_playback_session_api_v1_playback_sessions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSessionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSessionSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback-sessions/{session_id}/heartbeat": {
+      "post": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "Heartbeat Playback Session",
+        "description": "Update playback position and tell the player if it has been kicked.",
+        "operationId": "heartbeat_playback_session_api_v1_playback_sessions__session_id__heartbeat_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSessionHeartbeat"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackSessionHeartbeatResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playback-sessions/{session_id}": {
+      "delete": {
+        "tags": [
+          "streaming"
+        ],
+        "summary": "End Playback Session",
+        "description": "Mark a playback session as ended by the player.",
+        "operationId": "end_playback_session_api_v1_playback_sessions__session_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/stream/{media_id}": {
       "get": {
         "tags": [
@@ -1027,6 +1223,22 @@
             "schema": {
               "type": "integer",
               "title": "Media Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
             }
           },
           {
@@ -1142,6 +1354,22 @@
               "title": "Start Time"
             },
             "description": "Start time in seconds for seeking"
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
           },
           {
             "name": "api_key",
@@ -1358,6 +1586,22 @@
             "description": "Start time in seconds for seeking"
           },
           {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          },
+          {
             "name": "api_key",
             "in": "query",
             "required": false,
@@ -1487,6 +1731,22 @@
               "title": "Start Time"
             },
             "description": "Start time in seconds for seeking"
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
           },
           {
             "name": "api_key",
@@ -2689,6 +2949,122 @@
         }
       }
     },
+    "/api/v1/dashboard/streams": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "List Active Streams",
+        "description": "List active playback sessions across all users, including direct play.",
+        "operationId": "list_active_streams_api_v1_dashboard_streams_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActiveStreamSchema"
+                  },
+                  "title": "Response List Active Streams Api V1 Dashboard Streams Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/streams/{session_id}": {
+      "delete": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Stop Active Stream",
+        "description": "Kick a playback session and stop its transcoder if one is attached.",
+        "operationId": "stop_active_stream_api_v1_dashboard_streams__session_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/dashboard/users": {
       "get": {
         "tags": [
@@ -3579,6 +3955,73 @@
         }
       }
     },
+    "/api/v1/dashboard/hardware-transcoding": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Hardware Transcoding Status",
+        "description": "Get detected hardware transcoding devices and capabilities.",
+        "operationId": "get_hardware_transcoding_status_api_v1_dashboard_hardware_transcoding_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force hardware capability detection to run again",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Force hardware capability detection to run again"
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HardwareAccelerationStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/dashboard/settings": {
       "get": {
         "tags": [
@@ -3717,6 +4160,340 @@
   },
   "components": {
     "schemas": {
+      "ActiveStreamSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "media_file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media File Name"
+          },
+          "media_file_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media File Path"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "play_method": {
+            "type": "string",
+            "title": "Play Method"
+          },
+          "transcoding_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoding Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "is_paused": {
+            "type": "boolean",
+            "title": "Is Paused"
+          },
+          "position_seconds": {
+            "type": "number",
+            "title": "Position Seconds"
+          },
+          "progress_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Percent"
+          },
+          "transcoding_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoding Job Id"
+          },
+          "job_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Type"
+          },
+          "job_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Status"
+          },
+          "transcoded_duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoded Duration"
+          },
+          "current_fps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Fps"
+          },
+          "current_bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Bitrate"
+          },
+          "video_codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Codec"
+          },
+          "audio_codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Codec"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StreamMediaTrackSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "audio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StreamMediaTrackSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StreamMediaTrackSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Width"
+          },
+          "max_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "last_accessed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Accessed At"
+          },
+          "last_heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat At"
+          },
+          "client_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Ip"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "acceleration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StreamAccelerationSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "username",
+          "media_file_id",
+          "play_method",
+          "status",
+          "is_paused",
+          "position_seconds"
+        ],
+        "title": "ActiveStreamSchema",
+        "description": "Admin view of an active playback/transcoding stream."
+      },
       "AdminSetupRequest": {
         "properties": {
           "username": {
@@ -4042,6 +4819,144 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HardwareAccelerationStatus": {
+        "properties": {
+          "ffmpeg_path": {
+            "type": "string",
+            "title": "Ffmpeg Path"
+          },
+          "selected_device": {
+            "type": "string",
+            "title": "Selected Device"
+          },
+          "active_device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Device Id"
+          },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/HardwareDeviceInfo"
+            },
+            "type": "array",
+            "title": "Devices"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ffmpeg_path",
+          "selected_device"
+        ],
+        "title": "HardwareAccelerationStatus",
+        "description": "Current hardware acceleration state."
+      },
+      "HardwareCodecCapability": {
+        "properties": {
+          "codec": {
+            "type": "string",
+            "title": "Codec"
+          },
+          "can_decode": {
+            "type": "boolean",
+            "title": "Can Decode",
+            "default": false
+          },
+          "can_encode": {
+            "type": "boolean",
+            "title": "Can Encode",
+            "default": false
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "ffmpeg"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codec"
+        ],
+        "title": "HardwareCodecCapability",
+        "description": "Encode/decode support for one video codec."
+      },
+      "HardwareDeviceInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "default": true
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/HardwareCodecCapability"
+            },
+            "type": "array",
+            "title": "Capabilities"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "name"
+        ],
+        "title": "HardwareDeviceInfo",
+        "description": "Detected hardware transcoding device exposed to the admin UI."
       },
       "HomepageRow": {
         "properties": {
@@ -4705,6 +5620,330 @@
         "title": "PlaybackInfoResponse",
         "description": "Response containing playback information and media sources."
       },
+      "PlaybackSessionCreate": {
+        "properties": {
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "audio_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Stream Index"
+          },
+          "subtitle_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Stream Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "media_file_id"
+        ],
+        "title": "PlaybackSessionCreate",
+        "description": "Payload used by the player to create a playback session."
+      },
+      "PlaybackSessionHeartbeat": {
+        "properties": {
+          "position_seconds": {
+            "type": "number",
+            "title": "Position Seconds",
+            "default": 0.0
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "is_paused": {
+            "type": "boolean",
+            "title": "Is Paused",
+            "default": false
+          },
+          "play_method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Play Method"
+          },
+          "transcoding_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoding Type"
+          },
+          "transcoding_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoding Job Id"
+          },
+          "audio_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Stream Index"
+          },
+          "subtitle_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Stream Index"
+          }
+        },
+        "type": "object",
+        "title": "PlaybackSessionHeartbeat",
+        "description": "Periodic playback session update sent by the player."
+      },
+      "PlaybackSessionHeartbeatResponse": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/PlaybackSessionSchema"
+          },
+          "kicked": {
+            "type": "boolean",
+            "title": "Kicked",
+            "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session"
+        ],
+        "title": "PlaybackSessionHeartbeatResponse",
+        "description": "Heartbeat response, including whether the player should stop itself."
+      },
+      "PlaybackSessionSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "media_file_id": {
+            "type": "integer",
+            "title": "Media File Id"
+          },
+          "transcoding_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoding Job Id"
+          },
+          "play_method": {
+            "type": "string",
+            "title": "Play Method"
+          },
+          "transcoding_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcoding Type"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlaybackSessionStatus"
+          },
+          "stopped_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped Reason"
+          },
+          "position_seconds": {
+            "type": "number",
+            "title": "Position Seconds"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "is_paused": {
+            "type": "boolean",
+            "title": "Is Paused"
+          },
+          "audio_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Stream Index"
+          },
+          "subtitle_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle Stream Index"
+          },
+          "client_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Ip"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "last_heartbeat_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Heartbeat At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "media_file_id",
+          "play_method",
+          "status",
+          "position_seconds",
+          "is_paused",
+          "started_at",
+          "last_heartbeat_at"
+        ],
+        "title": "PlaybackSessionSchema",
+        "description": "Playback session response."
+      },
+      "PlaybackSessionStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "ended",
+          "stopped_by_admin"
+        ],
+        "title": "PlaybackSessionStatus",
+        "description": "Lifecycle state for a user playback session."
+      },
       "RecommendationRowCreate": {
         "properties": {
           "library_id": {
@@ -4894,6 +6133,10 @@
           "cleanup_grace_period_days": {
             "type": "integer",
             "title": "Cleanup Grace Period Days"
+          },
+          "hardware_transcoding_device": {
+            "type": "string",
+            "title": "Hardware Transcoding Device"
           }
         },
         "type": "object",
@@ -4902,7 +6145,8 @@
           "library_scan_interval_minutes",
           "cleanup_schedule_hour",
           "cleanup_schedule_minute",
-          "cleanup_grace_period_days"
+          "cleanup_grace_period_days",
+          "hardware_transcoding_device"
         ],
         "title": "SettingsSchema",
         "description": "Schema for Settings API responses."
@@ -4952,11 +6196,109 @@
               }
             ],
             "title": "Cleanup Grace Period Days"
+          },
+          "hardware_transcoding_device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hardware Transcoding Device"
           }
         },
         "type": "object",
         "title": "SettingsUpdate",
         "description": "Schema for updating settings."
+      },
+      "StreamAccelerationSchema": {
+        "properties": {
+          "is_hardware": {
+            "type": "boolean",
+            "title": "Is Hardware"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "video_decode": {
+            "type": "string",
+            "title": "Video Decode"
+          },
+          "video_encode": {
+            "type": "string",
+            "title": "Video Encode"
+          },
+          "audio_encode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Encode"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "hw_output_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hw Output Format"
+          },
+          "video_filters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Video Filters"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "ffmpeg_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ffmpeg Command"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_hardware",
+          "summary",
+          "video_decode",
+          "video_encode"
+        ],
+        "title": "StreamAccelerationSchema",
+        "description": "Detailed transcoding acceleration data for admins."
       },
       "StreamInfo": {
         "properties": {
@@ -5143,6 +6485,46 @@
         ],
         "title": "StreamInfo",
         "description": "Information about how a media file should be streamed."
+      },
+      "StreamMediaTrackSchema": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "target_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Label"
+          },
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "is_hardware": {
+            "type": "boolean",
+            "title": "Is Hardware",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "source_label",
+          "decision"
+        ],
+        "title": "StreamMediaTrackSchema",
+        "description": "Admin-friendly stream track detail."
       },
       "SubtitleProfile": {
         "properties": {

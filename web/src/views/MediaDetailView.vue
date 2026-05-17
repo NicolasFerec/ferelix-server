@@ -238,21 +238,24 @@ onMounted(() => {
       <!-- Content -->
       <div class="container mx-auto px-6 pt-0 pb-8 -mt-56 relative z-10">
         <div class="flex flex-col md:flex-row gap-8">
-          <!-- Poster Placeholder -->
+          <!-- Poster -->
           <div class="shrink-0">
-            <div
-              class="w-48 md:w-64 aspect-2/3 bg-gray-800 rounded-lg shadow-2xl overflow-hidden flex items-center justify-center"
+            <button
+              type="button"
+              class="group relative flex aspect-2/3 w-48 cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-gray-800 shadow-2xl transition-transform duration-200 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-primary-400 md:w-64"
+              :aria-label="t('mediaDetail.play')"
+              @click="handlePlayClick"
             >
               <img
                 v-if="thumbnailUrl()"
                 :src="thumbnailUrl() || undefined"
                 :alt="getMediaTitle()"
-                class="h-full w-full object-cover"
+                class="h-full w-full object-cover transition-opacity duration-200 group-hover:opacity-55 group-focus-visible:opacity-55"
                 @error="thumbnailFailed = true"
               />
               <svg
                 v-else
-                class="w-24 h-24 text-gray-600"
+                class="h-24 w-24 text-gray-600 transition-opacity duration-200 group-hover:opacity-55 group-focus-visible:opacity-55"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -264,7 +267,19 @@ onMounted(() => {
                   d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                 />
               </svg>
-            </div>
+              <span
+                class="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:opacity-100 group-focus-visible:bg-black/45 group-focus-visible:opacity-100"
+                aria-hidden="true"
+              >
+                <span class="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-xs">
+                  <svg class="ml-1 h-8 w-8" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
+                    />
+                  </svg>
+                </span>
+              </span>
+            </button>
           </div>
 
           <!-- Info -->

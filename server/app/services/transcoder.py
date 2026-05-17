@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import shlex
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,7 @@ from app.models.transcoding import TranscodingJobStatus
 from app.services.transcoding.codecs import IMAGE_SUBTITLE_CODECS, TEXT_SUBTITLE_CODECS
 from app.services.transcoding.commands import HlsCommandBuilder, HlsCommandOptions
 from app.services.transcoding.files import remove_output_path, terminate_process
-from app.services.transcoding.hardware import HardwareAcceleration
+from app.services.transcoding.hardware import HardwareAcceleration, HardwareAccelerationStatus
 from app.services.transcoding.subtitles import extract_subtitle_to_webvtt
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,18 @@ class FFmpegTranscoder:
             "bitrate": re.compile(r"bitrate=\s*([\d.]+)kbits/s"),
         }
 
+    def set_hardware_device(self, device_id: str | None) -> None:
+        """Select the hardware device to use for future transcoding jobs."""
+        self.hw_accel.set_selected_device(device_id)
+
+    def hardware_status(self) -> HardwareAccelerationStatus:
+        """Return cached hardware acceleration detection status."""
+        return self.hw_accel.status()
+
+    def refresh_hardware_status(self) -> HardwareAccelerationStatus:
+        """Refresh hardware acceleration detection status."""
+        return self.hw_accel.refresh()
+
     async def start_hls_transcode(
         self,
         job_id: str,
@@ -70,6 +83,7 @@ class FFmpegTranscoder:
                 input_path=media_file.file_path,
                 playlist_path=str(playlist_path),
                 segment_pattern=segment_pattern,
+                source_video_codec=self._source_video_codec(media_file),
                 video_codec=video_codec,
                 audio_codec=audio_codec,
                 video_bitrate=video_bitrate,
@@ -250,6 +264,11 @@ class FFmpegTranscoder:
         video_codec = (media_file.video_tracks[0].codec or "").lower() if media_file.video_tracks else ""
         return "fmp4" if video_codec in {"hevc", "h265", "av1", "vp9"} else "mpegts"
 
+    def _source_video_codec(self, media_file: MediaFile) -> str | None:
+        if media_file.video_tracks:
+            return media_file.video_tracks[0].codec
+        return media_file.codec
+
     def _subtitle_burn_options(
         self,
         media_file: MediaFile,
@@ -287,7 +306,7 @@ class FFmpegTranscoder:
         values = {
             "status": TranscodingJobStatus.RUNNING,
             "started_at": datetime.now(UTC),
-            "ffmpeg_command": " ".join(cmd),
+            "ffmpeg_command": shlex.join(cmd),
             "output_path": str(job_dir),
             "playlist_path": str(playlist_path),
             "session_id": session_id,

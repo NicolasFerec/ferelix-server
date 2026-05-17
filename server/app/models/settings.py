@@ -1,7 +1,7 @@
 """Settings model and schemas for application configuration."""
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Integer
+from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -19,6 +19,8 @@ class Settings(Base):
     cleanup_schedule_hour: Mapped[int] = mapped_column(Integer, default=3)  # Default: 3 AM
     cleanup_schedule_minute: Mapped[int] = mapped_column(Integer, default=0)
     cleanup_grace_period_days: Mapped[int] = mapped_column(Integer, default=30)
+    # Hardware transcoding settings
+    hardware_transcoding_device: Mapped[str] = mapped_column(String, default="auto")
 
 
 class SettingsSchema(BaseModel):
@@ -31,6 +33,7 @@ class SettingsSchema(BaseModel):
     cleanup_schedule_hour: int
     cleanup_schedule_minute: int
     cleanup_grace_period_days: int
+    hardware_transcoding_device: str
 
 
 class SettingsUpdate(BaseModel):
@@ -40,3 +43,4 @@ class SettingsUpdate(BaseModel):
     cleanup_schedule_hour: int | None = None
     cleanup_schedule_minute: int | None = None
     cleanup_grace_period_days: int | None = None
+    hardware_transcoding_device: str | None = None

@@ -31,6 +31,8 @@ ENV PYTHONUNBUFFERED=1 \
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    vainfo \
+    mesa-va-drivers \
     curl \
     ca-certificates \
     openssl \

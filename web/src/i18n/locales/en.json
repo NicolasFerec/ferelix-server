@@ -75,6 +75,21 @@
             "gracePeriod": "Grace Period",
             "days": "days",
             "gracePeriodHint": "Number of days to keep deleted files before permanent deletion"
+        },
+        "hardwareTranscoding": {
+            "title": "Hardware Transcoding",
+            "description": "Ferelix tests the GPUs visible to this server and uses the best available device automatically.",
+            "device": "Device",
+            "deviceHint": "Use Auto unless you want to pin transcoding to a specific GPU.",
+            "auto": "Auto",
+            "software": "Software only",
+            "softwareActive": "Software encoder",
+            "active": "Active",
+            "refresh": "Refresh",
+            "noDevices": "No compatible hardware device was detected.",
+            "loadError": "Failed to load hardware transcoding status",
+            "decode": "decode",
+            "encode": "encode"
         }
     },
     "dashboard": {
@@ -257,6 +272,67 @@
             "scan_library": "Scan Library"
         }
     },
+    "streams": {
+        "title": "Now Playing",
+        "subtitle": "Current playback across all users, including direct play.",
+        "refresh": "Refresh",
+        "empty": "No active streams",
+        "loadFailed": "Failed to load active streams",
+        "stopFailed": "Failed to stop stream",
+        "media": "Media",
+        "playback": "Playback",
+        "acceleration": "Acceleration",
+        "client": "Client",
+        "startedAt": "Started",
+        "progress": "Progress",
+        "transcoded": "Transcoded",
+        "speed": "Speed",
+        "bitrate": "Bitrate",
+        "videoDecode": "Video decode",
+        "videoEncode": "Video encode",
+        "audioEncode": "Audio encode",
+        "device": "Device",
+        "hwFrames": "Hardware frames",
+        "filters": "Filters",
+        "ffmpegCommand": "FFmpeg command",
+        "accelerationUnknown": "Unknown",
+        "video": "Video",
+        "audio": "Audio",
+        "subtitles": "Subtitles",
+        "playing": "Playing",
+        "paused": "Paused",
+        "unknownClient": "Unknown client",
+        "lastSeen": "Seen",
+        "technicalDetails": "Technical details",
+        "hardwareShort": "hw",
+        "stop": "Stop",
+        "stopping": "Stopping...",
+        "playMethods": {
+            "directPlay": "Direct play",
+            "directStream": "Direct stream",
+            "audioTranscode": "Audio transcode",
+            "transcode": "Transcode"
+        },
+        "decisions": {
+            "directPlay": "Direct play",
+            "directStream": "Direct stream",
+            "transcode": "Transcode",
+            "burnedIn": "Burned in"
+        },
+        "status": {
+            "pending": "Pending",
+            "running": "Running",
+            "active": "Active",
+            "ended": "Ended",
+            "stopped_by_admin": "Stopped by admin"
+        },
+        "type": {
+            "hls": "Transcode",
+            "remux": "Remux",
+            "audio_transcode": "Audio transcode",
+            "progressive": "Progressive"
+        }
+    },
     "player": {
         "audio_tracks": "Audio",
         "subtitles": "Subtitles",
@@ -278,6 +354,7 @@
         "error": "Failed to load video",
         "retry": "Retry",
         "seeking_to": "Seeking to {time}...",
-        "seek_failed": "Failed to seek while transcoding"
+        "seek_failed": "Failed to seek while transcoding",
+        "kickedByAdmin": "Playback was stopped by an administrator."
     }
 }

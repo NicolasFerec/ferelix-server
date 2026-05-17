@@ -42,8 +42,9 @@ export async function startPlaybackJob(options: {
     audioStreamIndex?: number;
     subtitleStreamIndex?: number;
     startTime?: number;
+    sessionId?: string | null;
 }): Promise<TranscodingJob> {
-    const { mediaId, source, audioStreamIndex, subtitleStreamIndex, startTime } = options;
+    const { mediaId, source, audioStreamIndex, subtitleStreamIndex, startTime, sessionId } = options;
     const settings = source.TranscodeSettings;
     const transcodingType = source.TranscodingType || "full";
 
@@ -51,6 +52,7 @@ export async function startPlaybackJob(options: {
         return media.startRemux(mediaId, {
             audioStreamIndex,
             startTime: startTime || undefined,
+            sessionId,
         });
     }
 
@@ -60,6 +62,7 @@ export async function startPlaybackJob(options: {
             audioBitrate: settings?.AudioBitrate,
             audioStreamIndex,
             startTime: startTime || undefined,
+            sessionId,
         });
     }
 
@@ -73,6 +76,7 @@ export async function startPlaybackJob(options: {
         audioStreamIndex,
         subtitleStreamIndex,
         startTime: startTime || undefined,
+        sessionId,
     });
 }
 

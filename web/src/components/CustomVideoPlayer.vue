@@ -2,7 +2,7 @@
 import Hls from "hls.js";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { getAccessToken, media } from "@/api/client";
+import { getAccessToken, media, playbackSessions } from "@/api/client";
 import { useDeviceProfile } from "@/composables/useDeviceProfile";
 import {
   defaultAudioStreamIndex,
@@ -50,6 +50,9 @@ const { profile, buildProfile } = useDeviceProfile();
 const videoElement = ref<HTMLVideoElement | null>(null);
 const hlsInstance = ref<Hls | null>(null);
 const currentJobId = ref<string | null>(null);
+const playbackSessionId = ref<string | null>(null);
+const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null);
+const isEndingPlaybackSession = ref(false);
 const jobStartOffset = ref<number>(0); // Absolute time offset that the current job starts at
 const pendingSeek = ref<number | null>(null); // Seek requested while job is starting
 
@@ -224,6 +227,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  stopHeartbeat();
+  markPlaybackSessionEnded();
   cleanup();
   if (controlsTimeout.value) {
     clearTimeout(controlsTimeout.value);
@@ -266,6 +271,77 @@ function selectedBurnedSubtitleStreamIndex(): number | undefined {
   return selectedSubtitleTrack.value.stream_index;
 }
 
+async function ensurePlaybackSession() {
+  if (playbackSessionId.value || !props.mediaFile?.id) return playbackSessionId.value;
+
+  isEndingPlaybackSession.value = false;
+  const session = await playbackSessions.create({
+    mediaFileId: props.mediaFile.id,
+    durationSeconds: props.mediaFile.duration ?? null,
+    audioStreamIndex: selectedAudioStreamIndex() ?? null,
+    subtitleStreamIndex: selectedSubtitleTrack.value?.stream_index ?? null,
+  });
+  playbackSessionId.value = session.id;
+  startHeartbeat();
+  return session.id;
+}
+
+function startHeartbeat() {
+  if (heartbeatTimer.value) return;
+  heartbeatTimer.value = setInterval(() => {
+    sendHeartbeat().catch((error) => console.warn("Playback heartbeat failed:", error));
+  }, 3000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer.value) {
+    clearInterval(heartbeatTimer.value);
+    heartbeatTimer.value = null;
+  }
+}
+
+async function sendHeartbeat() {
+  if (!playbackSessionId.value || isEndingPlaybackSession.value) return;
+
+  const response = await playbackSessions.heartbeat(playbackSessionId.value, {
+    positionSeconds: displayCurrentTime.value,
+    durationSeconds: duration.value || props.mediaFile?.duration || null,
+    isPaused: !isPlaying.value,
+    playMethod: playMethod.value,
+    transcodingType: currentSource.value?.TranscodingType as string | undefined,
+    transcodingJobId: currentJobId.value,
+    audioStreamIndex: selectedAudioStreamIndex() ?? null,
+    subtitleStreamIndex: selectedSubtitleTrack.value?.stream_index ?? null,
+  });
+
+  if (response.kicked) {
+    handleAdminKick();
+  }
+}
+
+function handleAdminKick() {
+  stopHeartbeat();
+  playbackSessionId.value = null;
+  errorMessage.value = t("player.kickedByAdmin");
+  isLoading.value = false;
+
+  if (videoElement.value) {
+    videoElement.value.pause();
+    videoElement.value.removeAttribute("src");
+    videoElement.value.load();
+  }
+
+  cleanup(false);
+}
+
+function markPlaybackSessionEnded() {
+  if (!playbackSessionId.value) return;
+  const sessionId = playbackSessionId.value;
+  playbackSessionId.value = null;
+  isEndingPlaybackSession.value = true;
+  playbackSessions.end(sessionId).catch((error) => console.warn("Failed to end playback session:", error));
+}
+
 function sourceWithBurnedSubtitle(source: StreamSource): StreamSource {
   if (selectedBurnedSubtitleStreamIndex() === undefined) {
     return source;
@@ -298,6 +374,8 @@ async function initializePlayback() {
   retryCount.value = 0;
 
   try {
+    await ensurePlaybackSession();
+
     // Build device profile if not ready
     const deviceProfile = profile.value || (await buildProfile());
 
@@ -365,7 +443,10 @@ async function setupDirectPlay(url: string) {
   loadingMessage.value = "Starting direct playback...";
 
   const token = getAccessToken();
-  videoSrc.value = token ? `${url}?api_key=${token}` : url;
+  const sourceUrl = new URL(url, window.location.origin);
+  if (token) sourceUrl.searchParams.set("api_key", token);
+  if (playbackSessionId.value) sourceUrl.searchParams.set("session_id", playbackSessionId.value);
+  videoSrc.value = `${sourceUrl.pathname}${sourceUrl.search}${sourceUrl.hash}`;
   hasSourceSet.value = true;
 
   await nextTick();
@@ -375,6 +456,7 @@ async function setupDirectPlay(url: string) {
     videoElement.value.volume = volume.value > 0 ? volume.value : 1;
     videoElement.value.load();
   }
+  await sendHeartbeat();
 }
 
 async function setupHlsPlayback(source: StreamSource) {
@@ -394,9 +476,11 @@ async function setupHlsPlayback(source: StreamSource) {
       audioStreamIndex: selectedAudioStreamIndex(),
       subtitleStreamIndex: selectedBurnedSubtitleStreamIndex(),
       startTime: desiredStart,
+      sessionId: playbackSessionId.value,
     });
 
     currentJobId.value = job.id;
+    await sendHeartbeat();
 
     // Wait for transcoding to be ready and get job status
     const status = await waitForHlsReady(job.id);
@@ -449,6 +533,7 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
   if (Hls.isSupported()) {
     const hlsConfig = {
       debug: false,
+      autoStartLoad: false,
       enableWorker: true,
       testBandwidth: false,
       lowLatencyMode: false,
@@ -475,6 +560,7 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
     let pendingStartPosition = startPosition;
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hls.startLoad(startPosition ?? 0);
       isLoading.value = false;
     });
 
@@ -563,12 +649,12 @@ async function tryFallbackPlayback() {
   }
 }
 
-function cleanup() {
+function cleanup(stopCurrentJob = true) {
   // Stop HLS job if running
-  if (currentJobId.value) {
+  if (stopCurrentJob && currentJobId.value) {
     media.stopHls(currentJobId.value).catch((e) => console.warn("Failed to stop HLS:", e));
-    currentJobId.value = null;
   }
+  currentJobId.value = null;
 
   // Reset job start offset
   jobStartOffset.value = 0;
@@ -632,9 +718,11 @@ async function selectAudioTrack(track: AudioTrackOption) {
       audioStreamIndex: track.stream_index,
       subtitleStreamIndex: selectedBurnedSubtitleStreamIndex(),
       startTime: absoluteStartTime,
+      sessionId: playbackSessionId.value,
     });
 
     currentJobId.value = job.id;
+    await sendHeartbeat();
 
     const status = await waitForHlsReady(job.id);
     jobStartOffset.value = status.start_time ?? absoluteStartTime;
@@ -791,9 +879,11 @@ async function restartWithBurnedSubtitle(track: SubtitleTrackOption) {
       audioStreamIndex: selectedAudioTrack.value?.stream_index,
       subtitleStreamIndex: track.stream_index,
       startTime: absoluteStartTime,
+      sessionId: playbackSessionId.value,
     });
 
     currentJobId.value = job.id;
+    await sendHeartbeat();
     isHlsPlayback.value = true;
     playMethod.value = "Transcode";
 
@@ -942,9 +1032,11 @@ async function restartHlsAt(absoluteStart: number) {
       audioStreamIndex: audioIndex,
       subtitleStreamIndex: subtitleIndex,
       startTime: savedTime,
+      sessionId: playbackSessionId.value,
     });
 
     currentJobId.value = job.id;
+    await sendHeartbeat();
 
     // Wait for playlist and status
     const status = await waitForHlsReady(job.id);
@@ -1183,12 +1275,14 @@ function onProgress() {
 function onPlay() {
   isPlaying.value = true;
   isLoading.value = false;
+  sendHeartbeat().catch((error) => console.warn("Playback heartbeat failed:", error));
   // Show controls when play starts
   showControls();
 }
 
 function onPause() {
   isPlaying.value = false;
+  sendHeartbeat().catch((error) => console.warn("Playback heartbeat failed:", error));
   controlsVisible.value = true;
 }
 
@@ -1229,9 +1323,11 @@ async function retryWithTranscoding() {
       source: sourceWithBurnedSubtitle({ TranscodingType: "full" }),
       audioStreamIndex: selectedAudioStreamIndex(),
       subtitleStreamIndex: selectedBurnedSubtitleStreamIndex(),
+      sessionId: playbackSessionId.value,
     });
 
     currentJobId.value = job.id;
+    await sendHeartbeat();
     isHlsPlayback.value = true;
     playMethod.value = "Transcode";
 

@@ -75,6 +75,21 @@
             "gracePeriod": "Période de grâce",
             "days": "jours",
             "gracePeriodHint": "Nombre de jours pendant lesquels conserver les fichiers supprimés avant suppression définitive"
+        },
+        "hardwareTranscoding": {
+            "title": "Transcodage matériel",
+            "description": "Ferelix teste les GPU visibles par ce serveur et utilise automatiquement le meilleur périphérique disponible.",
+            "device": "Périphérique",
+            "deviceHint": "Gardez Auto sauf si vous voulez forcer le transcodage sur un GPU précis.",
+            "auto": "Auto",
+            "software": "Logiciel uniquement",
+            "softwareActive": "Encodeur logiciel",
+            "active": "Actif",
+            "refresh": "Rafraîchir",
+            "noDevices": "Aucun périphérique matériel compatible n'a été détecté.",
+            "loadError": "Échec du chargement du statut du transcodage matériel",
+            "decode": "décodage",
+            "encode": "encodage"
         }
     },
     "dashboard": {
@@ -257,6 +272,67 @@
             "scan_library": "Analyseur de bibliothèque"
         }
     },
+    "streams": {
+        "title": "En cours de lecture",
+        "subtitle": "Lectures en cours pour tous les utilisateurs, lecture directe comprise.",
+        "refresh": "Rafraîchir",
+        "empty": "Aucun stream actif",
+        "loadFailed": "Échec du chargement des streams actifs",
+        "stopFailed": "Échec de l'arrêt du stream",
+        "media": "Média",
+        "playback": "Lecture",
+        "acceleration": "Accélération",
+        "client": "Client",
+        "startedAt": "Démarré",
+        "progress": "Progression",
+        "transcoded": "Transcodé",
+        "speed": "Vitesse",
+        "bitrate": "Débit",
+        "videoDecode": "Décodage vidéo",
+        "videoEncode": "Encodage vidéo",
+        "audioEncode": "Encodage audio",
+        "device": "Périphérique",
+        "hwFrames": "Frames matérielles",
+        "filters": "Filtres",
+        "ffmpegCommand": "Commande FFmpeg",
+        "accelerationUnknown": "Inconnue",
+        "video": "Vidéo",
+        "audio": "Audio",
+        "subtitles": "Sous-titres",
+        "playing": "Lecture",
+        "paused": "Pause",
+        "unknownClient": "Client inconnu",
+        "lastSeen": "Vu",
+        "technicalDetails": "Détails techniques",
+        "hardwareShort": "hw",
+        "stop": "Arrêter",
+        "stopping": "Arrêt...",
+        "playMethods": {
+            "directPlay": "Lecture directe",
+            "directStream": "Flux direct",
+            "audioTranscode": "Transcodage audio",
+            "transcode": "Transcodage"
+        },
+        "decisions": {
+            "directPlay": "Lecture directe",
+            "directStream": "Flux direct",
+            "transcode": "Transcodage",
+            "burnedIn": "Incrustés"
+        },
+        "status": {
+            "pending": "En attente",
+            "running": "En cours",
+            "active": "Actif",
+            "ended": "Terminé",
+            "stopped_by_admin": "Arrêté par un administrateur"
+        },
+        "type": {
+            "hls": "Transcodage",
+            "remux": "Remux",
+            "audio_transcode": "Transcodage audio",
+            "progressive": "Progressif"
+        }
+    },
     "player": {
         "audio_tracks": "Audio",
         "subtitles": "Sous-titres",
@@ -278,6 +354,7 @@
         "error": "Échec du chargement de la vidéo",
         "retry": "Réessayer",
         "seeking_to": "Recherche à {time}...",
-        "seek_failed": "Échec de la recherche pendant le transcodage"
+        "seek_failed": "Échec de la recherche pendant le transcodage",
+        "kickedByAdmin": "La lecture a été arrêtée par un administrateur."
     }
 }

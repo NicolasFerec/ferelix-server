@@ -4,8 +4,9 @@ import JobsPanel from "../components/JobsPanel.vue";
 import LibraryList from "../components/LibraryList.vue";
 import MenuBar from "../components/MenuBar.vue";
 import SettingsPanel from "../components/SettingsPanel.vue";
+import StreamsPanel from "../components/StreamsPanel.vue";
 
-const activeSection = ref("libraries");
+const activeSection = ref("dashboard");
 </script>
 
 <template>
@@ -16,8 +17,20 @@ const activeSection = ref("libraries");
       <!-- Sidebar -->
       <aside class="w-64 bg-gray-800 border-r border-gray-700">
         <nav class="p-4">
-          <h2 class="text-xl font-semibold text-white mb-4">{{ $t('dashboard.title') }}</h2>
           <ul class="space-y-2">
+            <li>
+              <button
+                @click="activeSection = 'dashboard'"
+                :class="[
+                  'w-full text-left px-4 py-2 rounded-md transition-colors font-semibold',
+                  activeSection === 'dashboard'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-white hover:bg-gray-700',
+                ]"
+              >
+                {{ $t('dashboard.title') }}
+              </button>
+            </li>
             <li>
               <button
                 @click="activeSection = 'libraries'"
@@ -77,7 +90,8 @@ const activeSection = ref("libraries");
 
       <!-- Main content -->
       <main class="flex-1 overflow-y-auto p-8">
-        <LibraryList v-if="activeSection === 'libraries'" />
+        <StreamsPanel v-if="activeSection === 'dashboard'" />
+        <LibraryList v-else-if="activeSection === 'libraries'" />
         <JobsPanel v-else-if="activeSection === 'jobs'" />
         <SettingsPanel v-else-if="activeSection === 'settings'" />
         <div v-else class="text-center text-gray-400 py-12">

@@ -68,6 +68,20 @@ export FERELIX_THUMBNAIL_DIR=/tmp/ferelix-thumbnails
 
 The player uses DirectPlay when possible, HLS remux for compatible streams in unsupported containers, audio-only transcode when only audio is incompatible, and full HLS transcode as the fallback. Library scans also use ffmpeg to extract a representative thumbnail screenshot for each media card.
 
+Hardware transcoding is detected automatically from the devices visible to the Ferelix process. The Docker image includes `vainfo` and Mesa VAAPI drivers so AMD/Intel devices can report their codec capabilities from inside the container. Expose the host GPU first:
+
+```bash
+# AMD/Intel VAAPI
+--device /dev/dri:/dev/dri
+
+# NVIDIA NVENC/NVDEC
+--runtime=nvidia
+-e NVIDIA_VISIBLE_DEVICES=all
+-e NVIDIA_DRIVER_CAPABILITIES=all
+```
+
+Ferelix tests the visible FFmpeg encoders at runtime and uses `auto` by default. Admins can pin a specific detected device, or force software encoding, from Dashboard > Settings > Hardware Transcoding. The optional `FERELIX_HW_ACCEL_DEVICE` environment variable accepts the same values (`auto`, `software`, or a detected device id such as `vaapi:/dev/dri/renderD128`).
+
 ### Discover Available Commands
 
 ```bash

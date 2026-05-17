@@ -474,6 +474,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/playback-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Playback Session
+         * @description Create a playback session tracked independently from transcoding jobs.
+         */
+        post: operations["create_playback_session_api_v1_playback_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback-sessions/{session_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Heartbeat Playback Session
+         * @description Update playback position and tell the player if it has been kicked.
+         */
+        post: operations["heartbeat_playback_session_api_v1_playback_sessions__session_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback-sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End Playback Session
+         * @description Mark a playback session as ended by the player.
+         */
+        delete: operations["end_playback_session_api_v1_playback_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stream/{media_id}": {
         parameters: {
             query?: never;
@@ -995,6 +1055,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard/streams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Active Streams
+         * @description List active playback sessions across all users, including direct play.
+         */
+        get: operations["list_active_streams_api_v1_dashboard_streams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/streams/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop Active Stream
+         * @description Kick a playback session and stop its transcoder if one is attached.
+         */
+        delete: operations["stop_active_stream_api_v1_dashboard_streams__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/users": {
         parameters: {
             query?: never;
@@ -1269,6 +1369,26 @@ export interface paths {
         patch: operations["update_library_recommendation_row_api_v1_dashboard_libraries__library_id__recommendation_rows__row_id__patch"];
         trace?: never;
     };
+    "/api/v1/dashboard/hardware-transcoding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Hardware Transcoding Status
+         * @description Get detected hardware transcoding devices and capabilities.
+         */
+        get: operations["get_hardware_transcoding_status_api_v1_dashboard_hardware_transcoding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/settings": {
         parameters: {
             query?: never;
@@ -1331,6 +1451,76 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ActiveStreamSchema
+         * @description Admin view of an active playback/transcoding stream.
+         */
+        ActiveStreamSchema: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            /** Media File Id */
+            media_file_id: number;
+            /** Media File Name */
+            media_file_name?: string | null;
+            /** Media File Path */
+            media_file_path?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Duration */
+            duration?: number | null;
+            /** Play Method */
+            play_method: string;
+            /** Transcoding Type */
+            transcoding_type?: string | null;
+            /** Status */
+            status: string;
+            /** Is Paused */
+            is_paused: boolean;
+            /** Position Seconds */
+            position_seconds: number;
+            /** Progress Percent */
+            progress_percent?: number | null;
+            /** Transcoding Job Id */
+            transcoding_job_id?: string | null;
+            /** Job Type */
+            job_type?: string | null;
+            /** Job Status */
+            job_status?: string | null;
+            /** Transcoded Duration */
+            transcoded_duration?: number | null;
+            /** Current Fps */
+            current_fps?: number | null;
+            /** Current Bitrate */
+            current_bitrate?: number | null;
+            /** Video Codec */
+            video_codec?: string | null;
+            /** Audio Codec */
+            audio_codec?: string | null;
+            video?: components["schemas"]["StreamMediaTrackSchema"] | null;
+            audio?: components["schemas"]["StreamMediaTrackSchema"] | null;
+            subtitle?: components["schemas"]["StreamMediaTrackSchema"] | null;
+            /** Max Width */
+            max_width?: number | null;
+            /** Max Height */
+            max_height?: number | null;
+            /** Start Time */
+            start_time?: number | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Last Accessed At */
+            last_accessed_at?: string | null;
+            /** Last Heartbeat At */
+            last_heartbeat_at?: string | null;
+            /** Client Ip */
+            client_ip?: string | null;
+            /** User Agent */
+            user_agent?: string | null;
+            acceleration?: components["schemas"]["StreamAccelerationSchema"] | null;
+        };
         /**
          * AdminSetupRequest
          * @description Request schema for first-run admin setup.
@@ -1475,6 +1665,70 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HardwareAccelerationStatus
+         * @description Current hardware acceleration state.
+         */
+        HardwareAccelerationStatus: {
+            /** Ffmpeg Path */
+            ffmpeg_path: string;
+            /** Selected Device */
+            selected_device: string;
+            /** Active Device Id */
+            active_device_id?: string | null;
+            /** Devices */
+            devices?: components["schemas"]["HardwareDeviceInfo"][];
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * HardwareCodecCapability
+         * @description Encode/decode support for one video codec.
+         */
+        HardwareCodecCapability: {
+            /** Codec */
+            codec: string;
+            /**
+             * Can Decode
+             * @default false
+             */
+            can_decode: boolean;
+            /**
+             * Can Encode
+             * @default false
+             */
+            can_encode: boolean;
+            /**
+             * Source
+             * @default ffmpeg
+             */
+            source: string;
+        };
+        /**
+         * HardwareDeviceInfo
+         * @description Detected hardware transcoding device exposed to the admin UI.
+         */
+        HardwareDeviceInfo: {
+            /** Id */
+            id: string;
+            /** Type */
+            type: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path?: string | null;
+            /** Index */
+            index?: number | null;
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Capabilities */
+            capabilities?: components["schemas"]["HardwareCodecCapability"][];
+            /** Warnings */
+            warnings?: string[];
         };
         /**
          * HomepageRow
@@ -1750,6 +2004,115 @@ export interface components {
             ErrorCode?: string | null;
         };
         /**
+         * PlaybackSessionCreate
+         * @description Payload used by the player to create a playback session.
+         */
+        PlaybackSessionCreate: {
+            /** Media File Id */
+            media_file_id: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Audio Stream Index */
+            audio_stream_index?: number | null;
+            /** Subtitle Stream Index */
+            subtitle_stream_index?: number | null;
+        };
+        /**
+         * PlaybackSessionHeartbeat
+         * @description Periodic playback session update sent by the player.
+         */
+        PlaybackSessionHeartbeat: {
+            /**
+             * Position Seconds
+             * @default 0
+             */
+            position_seconds: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /**
+             * Is Paused
+             * @default false
+             */
+            is_paused: boolean;
+            /** Play Method */
+            play_method?: string | null;
+            /** Transcoding Type */
+            transcoding_type?: string | null;
+            /** Transcoding Job Id */
+            transcoding_job_id?: string | null;
+            /** Audio Stream Index */
+            audio_stream_index?: number | null;
+            /** Subtitle Stream Index */
+            subtitle_stream_index?: number | null;
+        };
+        /**
+         * PlaybackSessionHeartbeatResponse
+         * @description Heartbeat response, including whether the player should stop itself.
+         */
+        PlaybackSessionHeartbeatResponse: {
+            session: components["schemas"]["PlaybackSessionSchema"];
+            /**
+             * Kicked
+             * @default false
+             */
+            kicked: boolean;
+            /** Message */
+            message?: string | null;
+        };
+        /**
+         * PlaybackSessionSchema
+         * @description Playback session response.
+         */
+        PlaybackSessionSchema: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: number;
+            /** Media File Id */
+            media_file_id: number;
+            /** Transcoding Job Id */
+            transcoding_job_id?: string | null;
+            /** Play Method */
+            play_method: string;
+            /** Transcoding Type */
+            transcoding_type?: string | null;
+            status: components["schemas"]["PlaybackSessionStatus"];
+            /** Stopped Reason */
+            stopped_reason?: string | null;
+            /** Position Seconds */
+            position_seconds: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Is Paused */
+            is_paused: boolean;
+            /** Audio Stream Index */
+            audio_stream_index?: number | null;
+            /** Subtitle Stream Index */
+            subtitle_stream_index?: number | null;
+            /** Client Ip */
+            client_ip?: string | null;
+            /** User Agent */
+            user_agent?: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Last Heartbeat At
+             * Format: date-time
+             */
+            last_heartbeat_at: string;
+            /** Ended At */
+            ended_at?: string | null;
+        };
+        /**
+         * PlaybackSessionStatus
+         * @description Lifecycle state for a user playback session.
+         * @enum {string}
+         */
+        PlaybackSessionStatus: "active" | "ended" | "stopped_by_admin";
+        /**
          * RecommendationRowCreate
          * @description Schema for creating a recommendation row.
          */
@@ -1859,6 +2222,8 @@ export interface components {
             cleanup_schedule_minute: number;
             /** Cleanup Grace Period Days */
             cleanup_grace_period_days: number;
+            /** Hardware Transcoding Device */
+            hardware_transcoding_device: string;
         };
         /**
          * SettingsUpdate
@@ -1873,6 +2238,34 @@ export interface components {
             cleanup_schedule_minute?: number | null;
             /** Cleanup Grace Period Days */
             cleanup_grace_period_days?: number | null;
+            /** Hardware Transcoding Device */
+            hardware_transcoding_device?: string | null;
+        };
+        /**
+         * StreamAccelerationSchema
+         * @description Detailed transcoding acceleration data for admins.
+         */
+        StreamAccelerationSchema: {
+            /** Is Hardware */
+            is_hardware: boolean;
+            /** Summary */
+            summary: string;
+            /** Video Decode */
+            video_decode: string;
+            /** Video Encode */
+            video_encode: string;
+            /** Audio Encode */
+            audio_encode?: string | null;
+            /** Device */
+            device?: string | null;
+            /** Hw Output Format */
+            hw_output_format?: string | null;
+            /** Video Filters */
+            video_filters?: string[];
+            /** Notes */
+            notes?: string[];
+            /** Ffmpeg Command */
+            ffmpeg_command?: string | null;
         };
         /**
          * StreamInfo
@@ -1942,6 +2335,25 @@ export interface components {
             RequiredHttpHeaders: {
                 [key: string]: string;
             };
+        };
+        /**
+         * StreamMediaTrackSchema
+         * @description Admin-friendly stream track detail.
+         */
+        StreamMediaTrackSchema: {
+            /** Label */
+            label: string;
+            /** Source Label */
+            source_label: string;
+            /** Target Label */
+            target_label?: string | null;
+            /** Decision */
+            decision: string;
+            /**
+             * Is Hardware
+             * @default false
+             */
+            is_hardware: boolean;
         };
         /**
          * SubtitleProfile
@@ -2812,9 +3224,113 @@ export interface operations {
             };
         };
     };
+    create_playback_session_api_v1_playback_sessions_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaybackSessionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSessionSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_playback_session_api_v1_playback_sessions__session_id__heartbeat_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaybackSessionHeartbeat"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSessionHeartbeatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_playback_session_api_v1_playback_sessions__session_id__delete: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     stream_video_api_v1_stream__media_id__get: {
         parameters: {
             query?: {
+                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: {
@@ -2854,6 +3370,7 @@ export interface operations {
                 audio_stream_index?: number | null;
                 /** @description Start time in seconds for seeking */
                 start_time?: number | null;
+                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -2905,6 +3422,7 @@ export interface operations {
                 subtitle_stream_index?: number | null;
                 /** @description Start time in seconds for seeking */
                 start_time?: number | null;
+                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -2946,6 +3464,7 @@ export interface operations {
                 audio_stream_index?: number | null;
                 /** @description Start time in seconds for seeking */
                 start_time?: number | null;
+                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -3573,6 +4092,68 @@ export interface operations {
             };
         };
     };
+    list_active_streams_api_v1_dashboard_streams_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveStreamSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_active_stream_api_v1_dashboard_streams__session_id__delete: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_users_api_v1_dashboard_users_get: {
         parameters: {
             query?: {
@@ -4003,6 +4584,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationRowSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hardware_transcoding_status_api_v1_dashboard_hardware_transcoding_get: {
+        parameters: {
+            query?: {
+                /** @description Force hardware capability detection to run again */
+                refresh?: boolean;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareAccelerationStatus"];
                 };
             };
             /** @description Validation Error */

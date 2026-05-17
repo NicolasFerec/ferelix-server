@@ -2,8 +2,12 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Library, User
+from app.models import Library, MediaFile, PlaybackSession, TranscodingJob, User
+from app.models.playback_session import PlaybackSessionStatus
+from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
+from app.services.transcoding.hardware import HardwareAccelerationStatus, HardwareDeviceInfo
 
 
 class TestDashboardAccess:
@@ -257,6 +261,224 @@ class TestUserManagement:
         assert response.status_code == 200
         data = response.json()
         assert data["is_active"] is False
+
+
+class TestSettingsManagement:
+    """Tests for admin settings endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_get_settings_includes_hardware_transcoding_device(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+    ) -> None:
+        response = await client.get(
+            "/api/v1/dashboard/settings",
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["hardware_transcoding_device"] == "auto"
+
+    @pytest.mark.asyncio
+    async def test_update_hardware_transcoding_device(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class FakeTranscoder:
+            selected_device: str | None = None
+
+            def set_hardware_device(self, device_id: str | None) -> None:
+                self.selected_device = device_id
+
+        fake_transcoder = FakeTranscoder()
+        monkeypatch.setattr("app.routers.v1.dashboard.get_transcoder", lambda: fake_transcoder)
+
+        response = await client.patch(
+            "/api/v1/dashboard/settings",
+            headers=admin_auth_headers,
+            json={"hardware_transcoding_device": "software"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["hardware_transcoding_device"] == "software"
+        assert fake_transcoder.selected_device == "software"
+
+    @pytest.mark.asyncio
+    async def test_get_hardware_transcoding_status(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        status = HardwareAccelerationStatus(
+            ffmpeg_path="ffmpeg",
+            selected_device="auto",
+            active_device_id="vaapi:/dev/dri/renderD128",
+            devices=[
+                HardwareDeviceInfo(
+                    id="vaapi:/dev/dri/renderD128",
+                    type="vaapi",
+                    name="VAAPI renderD128",
+                    path="/dev/dri/renderD128",
+                )
+            ],
+        )
+
+        class FakeTranscoder:
+            def set_hardware_device(self, device_id: str | None) -> None:
+                assert device_id == "auto"
+
+            def hardware_status(self) -> HardwareAccelerationStatus:
+                return status
+
+        monkeypatch.setattr("app.routers.v1.dashboard.get_transcoder", lambda: FakeTranscoder())
+
+        response = await client.get(
+            "/api/v1/dashboard/hardware-transcoding",
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["active_device_id"] == "vaapi:/dev/dri/renderD128"
+
+
+class TestStreamsManagement:
+    """Tests for admin active stream endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_list_active_streams_includes_admin_acceleration_details(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        media_file = MediaFile(
+            file_path="/media/movie.mkv",
+            file_name="movie.mkv",
+            file_size=1024,
+            file_extension=".mkv",
+            duration=120.0,
+            width=3840,
+            height=2160,
+            codec="hevc",
+        )
+        db_session.add(media_file)
+        await db_session.commit()
+        await db_session.refresh(media_file)
+
+        job = TranscodingJob(
+            id="job-1",
+            media_file_id=media_file.id,
+            type=TranscodingJobType.HLS,
+            status=TranscodingJobStatus.RUNNING,
+            video_codec="h264",
+            audio_codec="aac",
+            ffmpeg_command=(
+                "ffmpeg -hide_banner -y -vaapi_device /dev/dri/renderD128 "
+                "-hwaccel vaapi -hwaccel_output_format vaapi -i /media/movie.mkv "
+                "-c:v h264_vaapi -c:a aac -vf scale_vaapi=w=1280:h=720 playlist.m3u8"
+            ),
+            client_ip="127.0.0.1",
+            user_agent="Test Player",
+        )
+        db_session.add(job)
+        playback_session = PlaybackSession(
+            id="session-1",
+            user_id=admin_user.id,
+            media_file_id=media_file.id,
+            transcoding_job_id=job.id,
+            play_method="Transcode",
+            transcoding_type="full",
+            status=PlaybackSessionStatus.ACTIVE,
+            position_seconds=42.0,
+            duration_seconds=120.0,
+            client_ip="127.0.0.1",
+            user_agent="Test Player",
+        )
+        db_session.add(playback_session)
+        await db_session.commit()
+
+        response = await client.get(
+            "/api/v1/dashboard/streams",
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == "session-1"
+        assert data[0]["transcoding_job_id"] == "job-1"
+        assert data[0]["media_file_name"] == "movie.mkv"
+        assert data[0]["username"] == admin_user.username
+        assert data[0]["video"]["source_label"] == "4K (HEVC)"
+        assert data[0]["video"]["target_label"] == "H264"
+        assert data[0]["video"]["decision"] == "Transcode"
+        assert data[0]["video"]["is_hardware"] is True
+        assert data[0]["acceleration"]["summary"] == "Full hardware video path"
+        assert data[0]["acceleration"]["device"] == "/dev/dri/renderD128"
+        assert "ffmpeg_command" in data[0]["acceleration"]
+
+    @pytest.mark.asyncio
+    async def test_admin_stop_stream_kicks_playback_session(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        auth_headers: dict[str, str],
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        media_file = MediaFile(
+            file_path="/media/direct.mkv",
+            file_name="direct.mkv",
+            file_size=1024,
+            file_extension=".mkv",
+            duration=120.0,
+        )
+        db_session.add(media_file)
+        await db_session.commit()
+        await db_session.refresh(media_file)
+
+        playback_session = PlaybackSession(
+            id="direct-session",
+            user_id=test_user.id,
+            media_file_id=media_file.id,
+            play_method="DirectPlay",
+            status=PlaybackSessionStatus.ACTIVE,
+            position_seconds=12.0,
+            duration_seconds=120.0,
+        )
+        db_session.add(playback_session)
+        await db_session.commit()
+
+        stop_response = await client.delete(
+            "/api/v1/dashboard/streams/direct-session",
+            headers=admin_auth_headers,
+        )
+        assert stop_response.status_code == 204
+
+        heartbeat_response = await client.post(
+            "/api/v1/playback-sessions/direct-session/heartbeat",
+            headers=auth_headers,
+            json={
+                "position_seconds": 15.0,
+                "duration_seconds": 120.0,
+                "is_paused": False,
+                "play_method": "DirectPlay",
+            },
+        )
+
+        assert heartbeat_response.status_code == 200
+        data = heartbeat_response.json()
+        assert data["kicked"] is True
+        assert data["session"]["status"] == "stopped_by_admin"
 
 
 class TestJobsManagement:

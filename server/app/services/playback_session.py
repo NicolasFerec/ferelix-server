@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import MediaFile, TranscodingJob
+from app.models import MediaFile, Settings, TranscodingJob
 from app.models.playback import PlayMethod, StreamInfo
 from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
 from app.services.transcoder import get_transcoder
@@ -40,6 +40,7 @@ class HlsStartOptions:
     audio_stream_index: int | None = None
     subtitle_stream_index: int | None = None
     start_time: float | None = None
+    playback_session_id: str | None = None
 
 
 class PlaybackSessionService:
@@ -111,7 +112,7 @@ class PlaybackSessionService:
         """Create and start a transcoding job for a media item."""
         client = client or ClientContext()
         media_file = await self.get_media_file(media_id)
-        session_id = str(uuid.uuid4())
+        session_id = options.playback_session_id or str(uuid.uuid4())
         job_id = str(uuid.uuid4())
 
         job = TranscodingJob(
@@ -136,6 +137,9 @@ class PlaybackSessionService:
         await self.session.refresh(job)
 
         try:
+            if options.job_type != TranscodingJobType.REMUX:
+                await self._sync_hardware_device()
+
             if options.job_type == TranscodingJobType.REMUX:
                 await self.transcoder.start_remux_hls(
                     job_id=job_id,
@@ -169,6 +173,10 @@ class PlaybackSessionService:
         except Exception:
             await self.session.refresh(job)
             raise
+
+    async def _sync_hardware_device(self) -> None:
+        settings = await self.session.get(Settings, 1)
+        self.transcoder.set_hardware_device(settings.hardware_transcoding_device if settings else "auto")
 
     async def start_from_stream_info(
         self,

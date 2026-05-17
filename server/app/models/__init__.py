@@ -17,6 +17,14 @@ from .media_file import (
     VideoTrack,
     VideoTrackSchema,
 )
+from .playback_session import (
+    PlaybackSession,
+    PlaybackSessionCreate,
+    PlaybackSessionHeartbeat,
+    PlaybackSessionHeartbeatResponse,
+    PlaybackSessionSchema,
+    PlaybackSessionStatus,
+)
 from .recommendation_row import (
     RecommendationRow,
     RecommendationRowCreate,
@@ -46,6 +54,12 @@ __all__ = [
     "LibraryUpdate",
     "MediaFile",
     "MediaFileSchema",
+    "PlaybackSession",
+    "PlaybackSessionCreate",
+    "PlaybackSessionHeartbeat",
+    "PlaybackSessionHeartbeatResponse",
+    "PlaybackSessionSchema",
+    "PlaybackSessionStatus",
     "RecommendationRow",
     "RecommendationRowCreate",
     "RecommendationRowSchema",

@@ -1,23 +1,32 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { SettingsUpdate, settings as settingsApi } from "@/api/client";
+import {
+  type HardwareAccelerationStatus,
+  type Settings,
+  type SettingsUpdate,
+  settings as settingsApi,
+} from "@/api/client";
 
 const { t } = useI18n();
 
 const loading = ref(false);
 const saving = ref(false);
+const hardwareLoading = ref(false);
 const loadError = ref("");
 const saveError = ref("");
+const hardwareError = ref("");
 const showSuccess = ref(false);
 const showError = ref(false);
 
-const originalSettings = ref(null);
+const originalSettings = ref<Settings | null>(null);
+const hardwareStatus = ref<HardwareAccelerationStatus | null>(null);
 const formData = ref({
   library_scan_interval_minutes: 120,
   cleanup_schedule_hour: 3,
   cleanup_schedule_minute: 0,
   cleanup_grace_period_days: 30,
+  hardware_transcoding_device: "auto",
 });
 
 const hasChanges = computed(() => {
@@ -28,9 +37,41 @@ const hasChanges = computed(() => {
       originalSettings.value.library_scan_interval_minutes ||
     formData.value.cleanup_schedule_hour !== originalSettings.value.cleanup_schedule_hour ||
     formData.value.cleanup_schedule_minute !== originalSettings.value.cleanup_schedule_minute ||
-    formData.value.cleanup_grace_period_days !== originalSettings.value.cleanup_grace_period_days
+    formData.value.cleanup_grace_period_days !== originalSettings.value.cleanup_grace_period_days ||
+    formData.value.hardware_transcoding_device !== originalSettings.value.hardware_transcoding_device
   );
 });
+
+const hardwareDeviceOptions = computed(() => [
+  {
+    id: "auto",
+    label: t("settings.hardwareTranscoding.auto"),
+  },
+  {
+    id: "software",
+    label: t("settings.hardwareTranscoding.software"),
+  },
+  ...(hardwareStatus.value?.devices || [])
+    .filter((device) => device.available)
+    .map((device) => ({
+      id: device.id,
+      label: device.name,
+    })),
+]);
+
+const activeHardwareDevice = computed(() => {
+  if (!hardwareStatus.value?.active_device_id) return null;
+  return hardwareStatus.value.devices.find(
+    (device) => device.id === hardwareStatus.value?.active_device_id,
+  );
+});
+
+function capabilityLabel(capability) {
+  const modes = [];
+  if (capability.can_decode) modes.push(t("settings.hardwareTranscoding.decode"));
+  if (capability.can_encode) modes.push(t("settings.hardwareTranscoding.encode"));
+  return `${capability.codec.toUpperCase()} ${modes.join(" / ")}`;
+}
 
 async function loadSettings() {
   loading.value = true;
@@ -46,12 +87,27 @@ async function loadSettings() {
       cleanup_schedule_hour: settings.cleanup_schedule_hour,
       cleanup_schedule_minute: settings.cleanup_schedule_minute,
       cleanup_grace_period_days: settings.cleanup_grace_period_days,
+      hardware_transcoding_device: settings.hardware_transcoding_device,
     };
   } catch (err) {
     console.error("Failed to load settings:", err);
     loadError.value = err.data?.detail || t("settings.loadError");
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadHardwareStatus(refresh = false) {
+  hardwareLoading.value = true;
+  hardwareError.value = "";
+
+  try {
+    hardwareStatus.value = await settingsApi.getHardwareTranscodingStatus(refresh);
+  } catch (err) {
+    console.error("Failed to load hardware transcoding status:", err);
+    hardwareError.value = err.data?.detail || t("settings.hardwareTranscoding.loadError");
+  } finally {
+    hardwareLoading.value = false;
   }
 }
 
@@ -81,9 +137,17 @@ async function saveSettings() {
     ) {
       updateData.cleanup_grace_period_days = formData.value.cleanup_grace_period_days;
     }
+    if (
+      formData.value.hardware_transcoding_device !==
+      originalSettings.value.hardware_transcoding_device
+    ) {
+      updateData.hardware_transcoding_device = formData.value.hardware_transcoding_device;
+    }
 
     const updatedSettings = await settingsApi.updateSettings(updateData);
     originalSettings.value = { ...updatedSettings };
+    formData.value.hardware_transcoding_device = updatedSettings.hardware_transcoding_device;
+    await loadHardwareStatus();
 
     showSuccess.value = true;
     setTimeout(() => {
@@ -103,6 +167,7 @@ async function saveSettings() {
 
 onMounted(() => {
   loadSettings();
+  loadHardwareStatus();
 });
 </script>
 
@@ -225,6 +290,95 @@ onMounted(() => {
             <p class="mt-1 text-xs text-gray-500">
               {{ $t('settings.cleanupJob.gracePeriodHint') }}
             </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hardware Transcoding Settings -->
+      <div class="bg-gray-800 rounded-lg p-6">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+          <div>
+            <h3 class="text-xl font-semibold text-white mb-2">
+              {{ $t('settings.hardwareTranscoding.title') }}
+            </h3>
+            <p class="text-gray-400 text-sm">
+              {{ $t('settings.hardwareTranscoding.description') }}
+            </p>
+          </div>
+          <button
+            @click="loadHardwareStatus(true)"
+            :disabled="hardwareLoading || saving"
+            class="px-4 py-2 text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-md transition-colors"
+          >
+            {{ hardwareLoading ? $t('common.loading') : $t('settings.hardwareTranscoding.refresh') }}
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">
+              {{ $t('settings.hardwareTranscoding.device') }}
+            </label>
+            <select
+              v-model="formData.hardware_transcoding_device"
+              class="w-full px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              :disabled="saving"
+            >
+              <option v-for="option in hardwareDeviceOptions" :key="option.id" :value="option.id">
+                {{ option.label }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">
+              {{ $t('settings.hardwareTranscoding.deviceHint') }}
+            </p>
+          </div>
+
+          <div v-if="hardwareError" class="text-sm text-red-400">
+            {{ hardwareError }}
+          </div>
+
+          <div v-else-if="hardwareStatus" class="space-y-3">
+            <div class="text-sm text-gray-300">
+              <span class="text-gray-500">{{ $t('settings.hardwareTranscoding.active') }}:</span>
+              <span class="ml-1">
+                {{ activeHardwareDevice?.name || $t('settings.hardwareTranscoding.softwareActive') }}
+              </span>
+            </div>
+
+            <div v-if="hardwareStatus.devices.length === 0" class="text-sm text-gray-500">
+              {{ $t('settings.hardwareTranscoding.noDevices') }}
+            </div>
+
+            <div v-for="device in hardwareStatus.devices" :key="device.id" class="border border-gray-700 rounded-md p-4">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div class="font-medium text-white">{{ device.name }}</div>
+                  <div class="text-xs text-gray-500">{{ device.path || device.id }}</div>
+                </div>
+                <span
+                  class="self-start rounded-full px-2 py-1 text-xs"
+                  :class="device.available ? 'bg-green-900/50 text-green-300' : 'bg-gray-700 text-gray-400'"
+                >
+                  {{ device.available ? $t('common.enabled') : $t('common.disabled') }}
+                </span>
+              </div>
+              <div v-if="device.capabilities.length" class="mt-3 flex flex-wrap gap-2">
+                <span
+                  v-for="capability in device.capabilities"
+                  :key="`${device.id}-${capability.codec}`"
+                  class="rounded-md bg-gray-700 px-2 py-1 text-xs text-gray-300"
+                >
+                  {{ capabilityLabel(capability) }}
+                </span>
+              </div>
+              <div v-if="device.warnings.length" class="mt-3 space-y-1 text-xs text-yellow-300">
+                <p v-for="warning in device.warnings" :key="warning">{{ warning }}</p>
+              </div>
+            </div>
+
+            <div v-if="hardwareStatus.warnings.length" class="space-y-1 text-xs text-yellow-300">
+              <p v-for="warning in hardwareStatus.warnings" :key="warning">{{ warning }}</p>
+            </div>
           </div>
         </div>
       </div>

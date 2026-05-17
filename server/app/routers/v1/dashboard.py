@@ -1,13 +1,15 @@
 """Dashboard API endpoints for admin management (v1 with router-level authentication)."""
 
-from datetime import UTC, datetime
+import shlex
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.dependencies import get_scheduler, require_admin
@@ -16,6 +18,9 @@ from app.models import (
     LibraryCreate,
     LibrarySchema,
     LibraryUpdate,
+    MediaFile,
+    PlaybackSession,
+    PlaybackSessionStatus,
     RecommendationRow,
     RecommendationRowCreate,
     RecommendationRowSchema,
@@ -23,6 +28,7 @@ from app.models import (
     Settings,
     SettingsSchema,
     SettingsUpdate,
+    TranscodingJob,
     User,
     UserSchema,
     UserUpdate,
@@ -37,6 +43,8 @@ from app.services.jobs import (
 )
 from app.services.recommendation_row import validate_filter_criteria
 from app.services.scanner import schedule_library_scan
+from app.services.transcoder import get_transcoder
+from app.services.transcoding.hardware import HardwareAccelerationStatus
 
 # Router with admin-only security at the router level
 router = APIRouter(
@@ -349,6 +357,70 @@ class JobExecutionSchema(BaseModel):
         )
 
 
+class StreamAccelerationSchema(BaseModel):
+    """Detailed transcoding acceleration data for admins."""
+
+    is_hardware: bool
+    summary: str
+    video_decode: str
+    video_encode: str
+    audio_encode: str | None = None
+    device: str | None = None
+    hw_output_format: str | None = None
+    video_filters: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    ffmpeg_command: str | None = None
+
+
+class StreamMediaTrackSchema(BaseModel):
+    """Admin-friendly stream track detail."""
+
+    label: str
+    source_label: str
+    target_label: str | None = None
+    decision: str
+    is_hardware: bool = False
+
+
+class ActiveStreamSchema(BaseModel):
+    """Admin view of an active playback/transcoding stream."""
+
+    id: str
+    user_id: int
+    username: str
+    media_file_id: int
+    media_file_name: str | None = None
+    media_file_path: str | None = None
+    thumbnail_url: str | None = None
+    duration: float | None = None
+    play_method: str
+    transcoding_type: str | None = None
+    status: str
+    is_paused: bool
+    position_seconds: float
+    progress_percent: float | None = None
+    transcoding_job_id: str | None = None
+    job_type: str | None = None
+    job_status: str | None = None
+    transcoded_duration: float | None = None
+    current_fps: float | None = None
+    current_bitrate: int | None = None
+    video_codec: str | None = None
+    audio_codec: str | None = None
+    video: StreamMediaTrackSchema | None = None
+    audio: StreamMediaTrackSchema | None = None
+    subtitle: StreamMediaTrackSchema | None = None
+    max_width: int | None = None
+    max_height: int | None = None
+    start_time: float | None = None
+    started_at: datetime | None = None
+    last_accessed_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
+    client_ip: str | None = None
+    user_agent: str | None = None
+    acceleration: StreamAccelerationSchema | None = None
+
+
 @router.get("/jobs", response_model=list[JobSchema])
 async def list_jobs(
     scheduler: Annotated[AsyncIOScheduler, Depends(get_scheduler)],
@@ -450,6 +522,355 @@ async def get_job_history_endpoint() -> list[JobExecutionSchema]:
     """
     history = get_job_history()
     return [JobExecutionSchema.from_record(record) for record in history]
+
+
+@router.get("/streams", response_model=list[ActiveStreamSchema])
+async def list_active_streams(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[ActiveStreamSchema]:
+    """List active playback sessions across all users, including direct play."""
+    active_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=45)
+    result = await session.execute(
+        select(PlaybackSession, MediaFile, User, TranscodingJob)
+        .join(MediaFile, MediaFile.id == PlaybackSession.media_file_id)
+        .join(User, User.id == PlaybackSession.user_id)
+        .join(TranscodingJob, TranscodingJob.id == PlaybackSession.transcoding_job_id, isouter=True)
+        .options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
+        .where(
+            PlaybackSession.status == PlaybackSessionStatus.ACTIVE,
+            PlaybackSession.last_heartbeat_at >= active_cutoff,
+        )
+        .order_by(PlaybackSession.last_heartbeat_at.desc(), PlaybackSession.started_at.desc())
+    )
+
+    streams = []
+    for playback_session, media_file, user, job in result.all():
+        duration = playback_session.duration_seconds or media_file.duration
+        streams.append(
+            ActiveStreamSchema(
+                id=playback_session.id,
+                user_id=user.id,
+                username=user.username,
+                media_file_id=playback_session.media_file_id,
+                media_file_name=media_file.file_name if media_file else None,
+                media_file_path=media_file.file_path if media_file else None,
+                thumbnail_url=media_file.thumbnail_url if media_file else None,
+                duration=duration,
+                play_method=playback_session.play_method,
+                transcoding_type=playback_session.transcoding_type,
+                status=playback_session.status,
+                is_paused=playback_session.is_paused,
+                position_seconds=playback_session.position_seconds,
+                progress_percent=_playback_progress(playback_session.position_seconds, duration),
+                transcoding_job_id=job.id if job else None,
+                job_type=job.type if job else None,
+                job_status=job.status if job else None,
+                transcoded_duration=job.transcoded_duration if job else None,
+                current_fps=job.current_fps if job else None,
+                current_bitrate=job.current_bitrate if job else media_file.bitrate,
+                video_codec=job.video_codec if job else media_file.codec,
+                audio_codec=job.audio_codec if job else None,
+                video=_video_track_detail(media_file, playback_session, job),
+                audio=_audio_track_detail(media_file, playback_session, job),
+                subtitle=_subtitle_track_detail(media_file, playback_session),
+                max_width=job.max_width if job else media_file.width,
+                max_height=job.max_height if job else media_file.height,
+                start_time=job.start_time if job else None,
+                started_at=playback_session.started_at,
+                last_accessed_at=job.last_accessed_at if job else None,
+                last_heartbeat_at=playback_session.last_heartbeat_at,
+                client_ip=playback_session.client_ip,
+                user_agent=playback_session.user_agent,
+                acceleration=analyze_stream_acceleration(job) if job else None,
+            )
+        )
+
+    return streams
+
+
+@router.delete("/streams/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def stop_active_stream(
+    session_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    """Kick a playback session and stop its transcoder if one is attached."""
+    playback_session = await session.get(PlaybackSession, session_id)
+    if not playback_session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playback session not found")
+
+    playback_session.status = PlaybackSessionStatus.STOPPED_BY_ADMIN
+    playback_session.stopped_reason = "admin"
+    playback_session.ended_at = datetime.now(UTC).replace(tzinfo=None)
+
+    if playback_session.transcoding_job_id:
+        await get_transcoder().stop_job(playback_session.transcoding_job_id)
+
+    await session.commit()
+
+
+def _playback_progress(position: float, duration: float | None) -> float | None:
+    if not duration or duration <= 0:
+        return None
+    return min(max((position / duration) * 100, 0.0), 100.0)
+
+
+def _video_track_detail(
+    media_file: MediaFile,
+    playback_session: PlaybackSession,
+    job: TranscodingJob | None,
+) -> StreamMediaTrackSchema | None:
+    track = media_file.video_tracks[0] if media_file.video_tracks else None
+    if not track and not media_file.codec:
+        return None
+
+    resolution = _resolution_label(
+        track.width if track else media_file.width, track.height if track else media_file.height
+    )
+    codec = (track.codec if track else media_file.codec) or "Unknown"
+    profile = f" {track.profile}" if track and track.profile else ""
+    bit_depth = f" {track.bit_depth}-bit" if track and track.bit_depth and track.bit_depth > 8 else ""
+    source_label = " ".join(part for part in [resolution, f"({_codec_label(codec)}{profile}{bit_depth})"] if part)
+    target_label = (
+        None if _is_direct_video(playback_session.play_method, job) else _codec_label(job.video_codec if job else None)
+    )
+    acceleration = analyze_stream_acceleration(job) if job and target_label else None
+    is_hardware = bool(acceleration and acceleration.is_hardware)
+    return StreamMediaTrackSchema(
+        label=source_label,
+        source_label=source_label,
+        target_label=target_label,
+        decision=_stream_decision(playback_session.play_method, job, "video"),
+        is_hardware=is_hardware,
+    )
+
+
+def _audio_track_detail(
+    media_file: MediaFile,
+    playback_session: PlaybackSession,
+    job: TranscodingJob | None,
+) -> StreamMediaTrackSchema | None:
+    track = next(
+        (item for item in media_file.audio_tracks if item.stream_index == playback_session.audio_stream_index),
+        media_file.audio_tracks[0] if media_file.audio_tracks else None,
+    )
+    if not track:
+        return None
+
+    language = track.language or "Unknown"
+    channels = f" {track.channels}.0" if track.channels else ""
+    source_label = f"{language} ({_codec_label(track.codec)}{channels})"
+    target_label = (
+        None if _is_direct_audio(playback_session.play_method, job) else _codec_label(job.audio_codec if job else None)
+    )
+    return StreamMediaTrackSchema(
+        label=source_label,
+        source_label=source_label,
+        target_label=target_label,
+        decision=_stream_decision(playback_session.play_method, job, "audio"),
+    )
+
+
+def _subtitle_track_detail(media_file: MediaFile, playback_session: PlaybackSession) -> StreamMediaTrackSchema | None:
+    if playback_session.subtitle_stream_index is None:
+        return None
+
+    track = next(
+        (item for item in media_file.subtitle_tracks if item.stream_index == playback_session.subtitle_stream_index),
+        None,
+    )
+    if not track:
+        return None
+
+    language = track.language or "Unknown"
+    source_label = f"{language} ({_codec_label(track.codec)})"
+    decision = "Burned in" if playback_session.play_method == "Transcode" else "Direct Stream"
+    target_label = "Video burn-in" if decision == "Burned in" else "WEBVTT"
+    return StreamMediaTrackSchema(
+        label=source_label,
+        source_label=source_label,
+        target_label=target_label if decision == "Burned in" else None,
+        decision=decision,
+    )
+
+
+def _resolution_label(width: int | None, height: int | None) -> str:
+    if height and height >= 2160:
+        return "4K"
+    if height:
+        return f"{height}p"
+    if width:
+        return f"{width}px"
+    return ""
+
+
+def _stream_decision(play_method: str, job: TranscodingJob | None, track_type: str) -> str:
+    if play_method == "DirectPlay":
+        return "Direct Play"
+    if play_method == "DirectStream":
+        return "Direct Stream"
+    if not job:
+        return play_method
+    if track_type == "video" and job.video_codec == "copy":
+        return "Direct Stream"
+    if track_type == "audio" and job.audio_codec == "copy":
+        return "Direct Stream"
+    return "Transcode"
+
+
+def _is_direct_video(play_method: str, job: TranscodingJob | None) -> bool:
+    return play_method in {"DirectPlay", "DirectStream"} or not job or job.video_codec == "copy"
+
+
+def _is_direct_audio(play_method: str, job: TranscodingJob | None) -> bool:
+    return play_method in {"DirectPlay", "DirectStream"} or not job or job.audio_codec == "copy"
+
+
+def _codec_label(codec: str | None) -> str:
+    if not codec:
+        return "Unknown"
+    normalized = codec.lower().replace("_vaapi", "").replace("_nvenc", "").replace("_qsv", "").replace("_amf", "")
+    labels = {
+        "aac": "AAC",
+        "ac3": "AC3",
+        "eac3": "EAC3",
+        "h264": "H264",
+        "hevc": "HEVC",
+        "h265": "HEVC",
+        "libx264": "H264",
+        "libx265": "HEVC",
+        "opus": "OPUS",
+        "srt": "SRT",
+        "webvtt": "WEBVTT",
+    }
+    return labels.get(normalized, normalized.upper())
+
+
+def analyze_stream_acceleration(job: TranscodingJob) -> StreamAccelerationSchema | None:
+    """Parse the persisted FFmpeg command into an admin-friendly acceleration summary."""
+    command = job.ffmpeg_command
+    if not command:
+        return None
+
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+
+    video_encoder = _value_after(tokens, "-c:v") or job.video_codec or "unknown"
+    audio_encoder = _value_after(tokens, "-c:a") or job.audio_codec
+    hwaccel = _value_after(tokens, "-hwaccel")
+    hw_output_format = _value_after(tokens, "-hwaccel_output_format")
+    vaapi_device = _value_after(tokens, "-vaapi_device")
+    hw_device = _value_after(tokens, "-hwaccel_device")
+    nvidia_gpu = _value_after(tokens, "-gpu")
+    video_filters = [
+        *_split_filters(_value_after(tokens, "-vf")),
+        *_split_filters(_value_after(tokens, "-filter_complex")),
+    ]
+
+    is_video_copy = video_encoder == "copy" or job.video_codec == "copy"
+    is_hardware_decode = hwaccel is not None
+    is_hardware_encode = _is_hardware_video_encoder(video_encoder)
+    notes: list[str] = []
+
+    if is_video_copy:
+        notes.append("Video stream is copied; no video decode or encode is needed.")
+    elif is_hardware_decode and is_hardware_encode:
+        notes.append("Video decode and encode are both running through hardware acceleration.")
+    elif is_hardware_encode:
+        notes.append("Video encode is hardware accelerated; source video decode is still on CPU.")
+    else:
+        notes.append("Video encode is using a software encoder.")
+
+    if any("scale_vaapi" in item for item in video_filters):
+        notes.append("Scaling is performed on the VAAPI device.")
+    elif any(item.startswith("scale=") for item in video_filters):
+        notes.append("Scaling is performed by a software filter.")
+    if "hwupload" in video_filters:
+        notes.append("Frames are uploaded from CPU memory to the hardware encoder.")
+    if any("subtitles=" in item or "overlay" in item for item in video_filters):
+        notes.append("Subtitle burn-in requires software filtering, so hardware decode may be disabled.")
+    if audio_encoder == "copy":
+        notes.append("Audio stream is copied.")
+    elif audio_encoder:
+        notes.append(f"Audio is encoded with {audio_encoder}.")
+
+    return StreamAccelerationSchema(
+        is_hardware=is_hardware_decode or is_hardware_encode,
+        summary=_acceleration_summary(is_hardware_decode, is_hardware_encode, is_video_copy),
+        video_decode="Not needed (copy)" if is_video_copy else _hwaccel_label(hwaccel),
+        video_encode="Not needed (copy)" if is_video_copy else f"{_encoder_label(video_encoder)} ({video_encoder})",
+        audio_encode=audio_encoder,
+        device=vaapi_device
+        or (f"GPU {hw_device}" if hw_device else None)
+        or (f"NVIDIA GPU {nvidia_gpu}" if nvidia_gpu else None),
+        hw_output_format=hw_output_format,
+        video_filters=video_filters,
+        notes=notes,
+        ffmpeg_command=command,
+    )
+
+
+def _value_after(tokens: list[str], flag: str) -> str | None:
+    try:
+        index = tokens.index(flag)
+    except ValueError:
+        return None
+    return tokens[index + 1] if index + 1 < len(tokens) else None
+
+
+def _split_filters(filters: str | None) -> list[str]:
+    if not filters:
+        return []
+    return [item.strip() for item in filters.replace(";", ",").split(",") if item.strip()]
+
+
+def _is_hardware_video_encoder(encoder: str) -> bool:
+    return encoder.endswith(("_vaapi", "_nvenc", "_qsv", "_amf", "_videotoolbox"))
+
+
+def _acceleration_summary(hardware_decode: bool, hardware_encode: bool, video_copy: bool) -> str:
+    if video_copy:
+        return "Video copy"
+    if hardware_decode and hardware_encode:
+        return "Full hardware video path"
+    if hardware_encode:
+        return "Hardware video encode"
+    return "Software video transcode"
+
+
+def _encoder_label(encoder: str) -> str:
+    if encoder.endswith("_vaapi"):
+        return "VAAPI hardware encode"
+    if encoder.endswith("_nvenc"):
+        return "NVIDIA NVENC hardware encode"
+    if encoder.endswith("_qsv"):
+        return "Intel QSV hardware encode"
+    if encoder.endswith("_amf"):
+        return "AMD AMF hardware encode"
+    if encoder.endswith("_videotoolbox"):
+        return "VideoToolbox hardware encode"
+    if encoder.startswith("lib"):
+        return "Software encode"
+    return "Encoder"
+
+
+def _hwaccel_label(hwaccel: str | None) -> str:
+    if hwaccel == "vaapi":
+        return "VAAPI hardware decode"
+    if hwaccel == "cuda":
+        return "NVIDIA CUDA/NVDEC hardware decode"
+    if hwaccel == "qsv":
+        return "Intel QSV hardware decode"
+    if hwaccel == "videotoolbox":
+        return "VideoToolbox hardware decode"
+    if hwaccel:
+        return f"{hwaccel.upper()} hardware decode"
+    return "Software CPU decode"
 
 
 # ============================================================================
@@ -1010,6 +1431,18 @@ async def remove_library_recommendation_row(
 # ============================================================================
 
 
+@router.get("/hardware-transcoding", response_model=HardwareAccelerationStatus)
+async def get_hardware_transcoding_status(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    refresh: bool = Query(False, description="Force hardware capability detection to run again"),
+) -> HardwareAccelerationStatus:
+    """Get detected hardware transcoding devices and capabilities."""
+    settings = await session.get(Settings, 1)
+    transcoder = get_transcoder()
+    transcoder.set_hardware_device(settings.hardware_transcoding_device if settings else "auto")
+    return transcoder.refresh_hardware_status() if refresh else transcoder.hardware_status()
+
+
 @router.get("/settings", response_model=SettingsSchema)
 async def get_settings(
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -1091,11 +1524,20 @@ async def update_settings(
             )
         settings.cleanup_grace_period_days = update_data.cleanup_grace_period_days
 
+    if update_data.hardware_transcoding_device is not None:
+        if not update_data.hardware_transcoding_device.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Hardware transcoding device cannot be empty",
+            )
+        settings.hardware_transcoding_device = update_data.hardware_transcoding_device.strip()
+
     session.add(settings)
     await session.commit()
     await session.refresh(settings)
 
     # Update scheduler jobs with new settings
     update_scheduler_jobs(scheduler, settings)
+    get_transcoder().set_hardware_device(settings.hardware_transcoding_device)
 
     return settings

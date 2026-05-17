@@ -1,5 +1,7 @@
 """Tests for hardware transcoding detection and selection."""
 
+from pathlib import Path
+
 from app.services.transcoding.hardware import HardwareAcceleration, HardwareDevice
 
 
@@ -93,6 +95,34 @@ def test_ffmpeg_vaapi_decoders_probe_h264_and_hevc(monkeypatch, tmp_path) -> Non
     )
 
     assert decoders == {"h264", "hevc"}
+
+
+def test_vaapi_device_name_uses_lspci_chip_name(monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "c3:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 23 [Radeon RX 6600]\n"
+        stderr = ""
+
+    monkeypatch.setattr("app.services.transcoding.hardware.subprocess.run", lambda *args, **kwargs: Result())
+
+    hw_accel = HardwareAcceleration()
+    monkeypatch.setattr(hw_accel, "_vaapi_pci_slot", lambda render_device: "0000:c3:00.0")
+
+    assert hw_accel._vaapi_device_name(Path("/dev/dri/renderD128")) == "VAAPI Radeon RX 6600"
+
+
+def test_pci_device_name_is_trimmed_for_readability() -> None:
+    hw_accel = HardwareAcceleration()
+
+    assert hw_accel._clean_pci_device_name("Advanced Micro Devices, Inc. [AMD/ATI] HawkPoint1 (rev d3)") == (
+        "HawkPoint1"
+    )
+    assert hw_accel._clean_pci_device_name("Intel Corporation Alder Lake-P GT2 [Iris Xe Graphics]") == (
+        "Iris Xe Graphics"
+    )
+    assert hw_accel._clean_pci_device_name("NVIDIA Corporation GA104 [GeForce RTX 3070] (rev a1)") == (
+        "GeForce RTX 3070"
+    )
 
 
 def test_nvidia_decoders_are_probed_before_being_reported(monkeypatch, tmp_path) -> None:

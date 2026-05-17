@@ -33,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     vainfo \
     mesa-va-drivers \
+    pciutils \
     curl \
     ca-certificates \
     openssl \

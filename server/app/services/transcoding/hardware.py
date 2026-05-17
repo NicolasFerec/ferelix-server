@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -422,6 +423,12 @@ class HardwareAcceleration:
         return rows
 
     def _vaapi_device_name(self, render_device: Path) -> str:
+        pci_slot = self._vaapi_pci_slot(render_device)
+        if pci_slot:
+            pci_name = self._lspci_device_name(pci_slot)
+            if pci_name:
+                return f"VAAPI {pci_name}"
+
         for by_path in sorted(Path("/dev/dri/by-path").glob("*-render")):
             try:
                 if by_path.resolve() == render_device:
@@ -429,6 +436,53 @@ class HardwareAcceleration:
             except OSError:
                 continue
         return f"VAAPI {render_device.name}"
+
+    def _vaapi_pci_slot(self, render_device: Path) -> str | None:
+        sys_device = Path("/sys/class/drm") / render_device.name / "device"
+        try:
+            pci_slot = sys_device.resolve().name
+        except OSError:
+            return None
+        return pci_slot if ":" in pci_slot and "." in pci_slot else None
+
+    def _lspci_device_name(self, pci_slot: str) -> str | None:
+        try:
+            result = subprocess.run(
+                ["lspci", "-s", pci_slot],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except Exception:
+            return None
+
+        if result.returncode != 0:
+            return None
+
+        line = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
+        if not line:
+            return None
+
+        name = line.split(": ", 1)[1].strip() if ": " in line else line
+        return self._clean_pci_device_name(name)
+
+    def _clean_pci_device_name(self, name: str) -> str:
+        cleaned = re.sub(r"\s*\(rev [^)]+\)$", "", name).strip()
+        for prefix in (
+            "Advanced Micro Devices, Inc. [AMD/ATI] ",
+            "Advanced Micro Devices, Inc. ",
+            "Intel Corporation ",
+            "NVIDIA Corporation ",
+        ):
+            if cleaned.startswith(prefix):
+                cleaned = cleaned.removeprefix(prefix).strip()
+                break
+
+        match = re.search(r"\[([^\]]+)\]$", cleaned)
+        if match:
+            cleaned = match.group(1).strip()
+
+        return cleaned
 
     def _vainfo_decoders(self, render_device: Path) -> set[str]:
         try:

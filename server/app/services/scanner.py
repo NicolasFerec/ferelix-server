@@ -90,6 +90,49 @@ def _parse_bit_depth(pix_fmt: str | None) -> int | None:
         return 8
 
 
+def _file_modified_at(file_stat: os.stat_result) -> datetime:
+    """Return a stable UTC timestamp for filesystem change detection."""
+    return datetime.fromtimestamp(file_stat.st_mtime, UTC).replace(tzinfo=None)
+
+
+def _has_scanned_metadata(media_file: MediaFile) -> bool:
+    """Return whether a media row already has ffprobe-derived metadata."""
+    return any(
+        value is not None
+        for value in (
+            media_file.duration,
+            media_file.width,
+            media_file.height,
+            media_file.codec,
+            media_file.bitrate,
+        )
+    )
+
+
+def _has_file_changed(media_file: MediaFile, file_stat: os.stat_result, modified_at: datetime) -> bool:
+    """Return whether the media file differs from the last known filesystem state."""
+    if media_file.file_size != file_stat.st_size:
+        return True
+
+    return media_file.file_modified_at is not None and media_file.file_modified_at != modified_at
+
+
+def _update_media_file_metadata(
+    media_file: MediaFile,
+    metadata: dict,
+    file_stat: os.stat_result,
+    modified_at: datetime,
+) -> None:
+    """Apply freshly extracted media metadata and filesystem state to a media row."""
+    media_file.file_size = file_stat.st_size
+    media_file.file_modified_at = modified_at
+    media_file.duration = metadata.get("duration")
+    media_file.width = metadata.get("width")
+    media_file.height = metadata.get("height")
+    media_file.codec = metadata.get("codec")
+    media_file.bitrate = metadata.get("bitrate")
+
+
 def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
     """Extract video metadata using ffprobe.
 
@@ -383,6 +426,8 @@ async def scan_library_path(  # noqa: C901
 
         file_path_str = str(file_path)
         scanned_paths.add(file_path_str)
+        file_stat = file_path.stat()
+        modified_at = _file_modified_at(file_stat)
 
         # Update progress with current file
         if job_id:
@@ -392,19 +437,31 @@ async def scan_library_path(  # noqa: C901
         existing_file = await session.scalar(select(MediaFile).where(MediaFile.file_path == file_path_str))
 
         if existing_file:
+            file_changed = _has_file_changed(existing_file, file_stat, modified_at)
+            needs_metadata_scan = file_changed or not _has_scanned_metadata(existing_file)
+            was_restored = existing_file.deleted_at is not None
+
             # Check if file was previously marked as deleted (restored!)
-            if existing_file.deleted_at is not None:
+            if was_restored:
                 logger.info(f"File restored: {file_path}")
                 existing_file.deleted_at = None
                 restored_files_count += 1
-            else:
-                updated_files_count += 1
 
-            # Extract metadata and update tracks
-            metadata = extract_video_metadata(file_path)
-            await _update_media_tracks(session, existing_file, metadata)
-            if not existing_file.thumbnail_path or not Path(existing_file.thumbnail_path).exists():
-                existing_file.thumbnail_path = generate_video_thumbnail(file_path, metadata.get("duration"))
+            if needs_metadata_scan:
+                logger.info(f"Processing updated file: {file_path}")
+                metadata = extract_video_metadata(file_path)
+                await _update_media_tracks(session, existing_file, metadata)
+                _update_media_file_metadata(existing_file, metadata, file_stat, modified_at)
+
+                thumbnail_path = generate_video_thumbnail(file_path, metadata.get("duration"), force=file_changed)
+                if thumbnail_path:
+                    existing_file.thumbnail_path = thumbnail_path
+
+                if not was_restored:
+                    updated_files_count += 1
+            else:
+                existing_file.file_size = file_stat.st_size
+                existing_file.file_modified_at = modified_at
 
             # Update scanned_at timestamp
             existing_file.scanned_at = datetime.now(UTC)
@@ -420,9 +477,10 @@ async def scan_library_path(  # noqa: C901
             media_file = MediaFile(
                 file_path=file_path_str,
                 file_name=file_name,
-                file_size=file_path.stat().st_size,
+                file_size=file_stat.st_size,
                 file_extension=file_extension,
                 thumbnail_path=thumbnail_path,
+                file_modified_at=modified_at,
                 duration=metadata.get("duration"),
                 width=metadata.get("width"),
                 height=metadata.get("height"),

@@ -21,6 +21,7 @@ class MediaFile(Base):
     file_size: Mapped[int] = mapped_column(Integer)
     file_extension: Mapped[str] = mapped_column(String)
     thumbnail_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_modified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Video metadata (extracted via ffprobe)
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)

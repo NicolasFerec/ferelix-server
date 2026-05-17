@@ -139,24 +139,42 @@ onMounted(async () => {
             <button
               @click="activeTab = 'recommended'"
               :class="[
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                'group px-1 font-medium text-sm transition-colors',
                 activeTab === 'recommended'
-                  ? 'border-primary-500 text-primary-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300',
+                  ? 'text-primary-400'
+                  : 'text-gray-400 hover:text-gray-300',
               ]"
             >
-              {{ $t('library.recommended') }}
+              <span
+                :class="[
+                  'inline-block border-b-2 py-4 transition-colors',
+                  activeTab === 'recommended'
+                    ? 'border-primary-500'
+                    : 'border-transparent group-hover:border-gray-300',
+                ]"
+              >
+                {{ $t('library.recommended') }}
+              </span>
             </button>
             <button
               @click="activeTab = 'library'"
               :class="[
-                'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                'group px-1 font-medium text-sm transition-colors',
                 activeTab === 'library'
-                  ? 'border-primary-500 text-primary-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300',
+                  ? 'text-primary-400'
+                  : 'text-gray-400 hover:text-gray-300',
               ]"
             >
-              {{ $t('library.allItems') }}
+              <span
+                :class="[
+                  'inline-block border-b-2 py-4 transition-colors',
+                  activeTab === 'library'
+                    ? 'border-primary-500'
+                    : 'border-transparent group-hover:border-gray-300',
+                ]"
+              >
+                {{ $t('library.allItems') }}
+              </span>
             </button>
           </nav>
         </div>

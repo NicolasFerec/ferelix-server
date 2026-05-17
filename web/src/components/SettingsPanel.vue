@@ -44,10 +44,6 @@ const hasChanges = computed(() => {
 
 const hardwareDeviceOptions = computed(() => [
   {
-    id: "auto",
-    label: t("settings.hardwareTranscoding.auto"),
-  },
-  {
     id: "software",
     label: t("settings.hardwareTranscoding.software"),
   },
@@ -59,11 +55,16 @@ const hardwareDeviceOptions = computed(() => [
     })),
 ]);
 
-const activeHardwareDevice = computed(() => {
-  if (!hardwareStatus.value?.active_device_id) return null;
-  return hardwareStatus.value.devices.find(
-    (device) => device.id === hardwareStatus.value?.active_device_id,
-  );
+const selectedHardwareDevice = computed({
+  get() {
+    if (formData.value.hardware_transcoding_device === "auto") {
+      return hardwareStatus.value?.active_device_id || "software";
+    }
+    return formData.value.hardware_transcoding_device;
+  },
+  set(deviceId: string) {
+    formData.value.hardware_transcoding_device = deviceId;
+  },
 });
 
 function capabilityLabel(capability) {
@@ -286,14 +287,11 @@ onMounted(() => {
 
       <!-- Hardware Transcoding Settings -->
       <div class="bg-gray-800 rounded-lg p-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
           <div>
-            <h3 class="text-xl font-semibold text-white mb-2">
+            <h3 class="text-xl font-semibold text-white">
               {{ $t('settings.hardwareTranscoding.title') }}
             </h3>
-            <p class="text-gray-400 text-sm">
-              {{ $t('settings.hardwareTranscoding.description') }}
-            </p>
           </div>
           <button
             @click="loadHardwareStatus(true)"
@@ -310,7 +308,7 @@ onMounted(() => {
               {{ $t('settings.hardwareTranscoding.device') }}
             </label>
             <select
-              v-model="formData.hardware_transcoding_device"
+              v-model="selectedHardwareDevice"
               class="w-full px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               :disabled="saving"
             >
@@ -318,9 +316,6 @@ onMounted(() => {
                 {{ option.label }}
               </option>
             </select>
-            <p class="mt-1 text-xs text-gray-500">
-              {{ $t('settings.hardwareTranscoding.deviceHint') }}
-            </p>
           </div>
 
           <div v-if="hardwareError" class="text-sm text-red-400">
@@ -328,13 +323,6 @@ onMounted(() => {
           </div>
 
           <div v-else-if="hardwareStatus" class="space-y-3">
-            <div class="text-sm text-gray-300">
-              <span class="text-gray-500">{{ $t('settings.hardwareTranscoding.active') }}:</span>
-              <span class="ml-1">
-                {{ activeHardwareDevice?.name || $t('settings.hardwareTranscoding.softwareActive') }}
-              </span>
-            </div>
-
             <div v-if="hardwareStatus.devices.length === 0" class="text-sm text-gray-500">
               {{ $t('settings.hardwareTranscoding.noDevices') }}
             </div>

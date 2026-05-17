@@ -264,14 +264,19 @@ async function handleLogout(): Promise<void> {
               v-for="item in navigationItems"
               :key="item.id"
               :to="item.to"
-              class="max-w-52 shrink-0 truncate border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+              class="group max-w-52 shrink-0 truncate px-3 text-sm font-medium transition-colors"
               :class="
                 item.active
-                  ? 'border-primary-500 text-white'
-                  : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white'
+                  ? 'text-white'
+                  : 'text-gray-300 hover:text-white'
               "
             >
-              {{ item.label }}
+              <span
+                class="inline-block max-w-full truncate border-b-2 px-1 py-2 transition-colors"
+                :class="item.active ? 'border-primary-500' : 'border-transparent group-hover:border-gray-600'"
+              >
+                {{ item.label }}
+              </span>
             </router-link>
           </nav>
           <button
@@ -303,14 +308,23 @@ async function handleLogout(): Promise<void> {
         <router-link
           v-if="isAdmin && !isMobileViewport"
           to="/dashboard"
-          class="max-w-52 truncate border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+          class="group max-w-52 truncate px-3 text-sm font-medium transition-colors"
           :class="
             route.path === '/dashboard' || route.path.startsWith('/dashboard/')
-              ? 'border-primary-500 text-white'
-              : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white'
+              ? 'text-white'
+              : 'text-gray-300 hover:text-white'
           "
         >
-          {{ $t('common.dashboard') }}
+          <span
+            class="inline-block max-w-full truncate border-b-2 px-1 py-2 transition-colors"
+            :class="
+              route.path === '/dashboard' || route.path.startsWith('/dashboard/')
+                ? 'border-primary-500'
+                : 'border-transparent group-hover:border-gray-600'
+            "
+          >
+            {{ $t('common.dashboard') }}
+          </span>
         </router-link>
         <div ref="dropdownContainer" class="relative">
           <button
@@ -400,27 +414,41 @@ async function handleLogout(): Promise<void> {
                 v-for="item in navigationItems"
                 :key="`mobile-${item.id}`"
                 :to="item.to"
-                class="block truncate border-l-2 px-3 py-2 text-sm font-medium transition-colors"
+                class="group block truncate py-2 text-sm font-medium transition-colors"
                 :class="
                   item.active
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-700 hover:text-white'
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white'
                 "
               >
-                {{ item.label }}
+                <span
+                  class="inline-block max-w-full truncate border-l-2 px-3 transition-colors"
+                  :class="item.active ? 'border-primary-500' : 'border-transparent group-hover:border-gray-700'"
+                >
+                  {{ item.label }}
+                </span>
               </router-link>
             </div>
             <router-link
               v-if="isAdmin"
               to="/dashboard"
-              class="mt-auto block border-l-2 px-3 py-3 text-sm font-medium transition-colors"
+              class="group mt-auto block py-3 text-sm font-medium transition-colors"
               :class="
                 route.path === '/dashboard' || route.path.startsWith('/dashboard/')
-                  ? 'border-primary-500 text-white'
-                  : 'border-transparent text-gray-300 hover:border-gray-700 hover:text-white'
+                  ? 'text-white'
+                  : 'text-gray-300 hover:text-white'
               "
             >
-              {{ $t('common.dashboard') }}
+              <span
+                class="inline-block max-w-full truncate border-l-2 px-3 transition-colors"
+                :class="
+                  route.path === '/dashboard' || route.path.startsWith('/dashboard/')
+                    ? 'border-primary-500'
+                    : 'border-transparent group-hover:border-gray-700'
+                "
+              >
+                {{ $t('common.dashboard') }}
+              </span>
             </router-link>
           </div>
         </nav>

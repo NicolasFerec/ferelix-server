@@ -91,17 +91,12 @@
             "gracePeriodHint": "Number of days to keep deleted files before permanent deletion"
         },
         "hardwareTranscoding": {
-            "title": "Hardware Transcoding",
-            "description": "Ferelix tests the GPUs visible to this server and uses the best available device automatically.",
+            "title": "Hardware Acceleration",
             "device": "Device",
-            "deviceHint": "Use Auto unless you want to pin transcoding to a specific GPU.",
-            "auto": "Auto",
             "software": "Software only",
-            "softwareActive": "Software encoder",
-            "active": "Active",
             "refresh": "Refresh",
             "noDevices": "No compatible hardware device was detected.",
-            "loadError": "Failed to load hardware transcoding status",
+            "loadError": "Failed to load hardware acceleration status",
             "decode": "decode",
             "encode": "encode"
         }

@@ -91,17 +91,12 @@
             "gracePeriodHint": "Nombre de jours pendant lesquels conserver les fichiers supprimés avant suppression définitive"
         },
         "hardwareTranscoding": {
-            "title": "Transcodage matériel",
-            "description": "Ferelix teste les GPU visibles par ce serveur et utilise automatiquement le meilleur périphérique disponible.",
+            "title": "Accélération matérielle",
             "device": "Périphérique",
-            "deviceHint": "Gardez Auto sauf si vous voulez forcer le transcodage sur un GPU précis.",
-            "auto": "Auto",
             "software": "Logiciel uniquement",
-            "softwareActive": "Encodeur logiciel",
-            "active": "Actif",
             "refresh": "Rafraîchir",
             "noDevices": "Aucun périphérique matériel compatible n'a été détecté.",
-            "loadError": "Échec du chargement du statut du transcodage matériel",
+            "loadError": "Échec du chargement du statut de l'accélération matérielle",
             "decode": "décodage",
             "encode": "encodage"
         }

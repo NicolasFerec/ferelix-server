@@ -48,78 +48,132 @@ watch(
               <router-link
                 :to="sectionPath('dashboard')"
                 :class="[
-                  'block w-full border-l-2 px-4 py-2 text-left font-semibold transition-colors',
+                  'group block w-full py-2 text-left font-semibold transition-colors',
                   activeSection === 'dashboard'
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white',
                 ]"
               >
-                {{ $t('dashboard.title') }}
+                <span
+                  :class="[
+                    'inline-block border-l-2 px-4 transition-colors',
+                    activeSection === 'dashboard'
+                      ? 'border-primary-500'
+                      : 'border-transparent group-hover:border-gray-600',
+                  ]"
+                >
+                  {{ $t('dashboard.title') }}
+                </span>
               </router-link>
             </li>
             <li>
               <router-link
                 :to="sectionPath('libraries')"
                 :class="[
-                  'block w-full border-l-2 px-4 py-2 text-left transition-colors',
+                  'group block w-full py-2 text-left transition-colors',
                   activeSection === 'libraries'
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white',
                 ]"
               >
-                {{ $t('dashboard.libraries') }}
+                <span
+                  :class="[
+                    'inline-block border-l-2 px-4 transition-colors',
+                    activeSection === 'libraries'
+                      ? 'border-primary-500'
+                      : 'border-transparent group-hover:border-gray-600',
+                  ]"
+                >
+                  {{ $t('dashboard.libraries') }}
+                </span>
               </router-link>
             </li>
             <li>
               <router-link
                 :to="sectionPath('jobs')"
                 :class="[
-                  'block w-full border-l-2 px-4 py-2 text-left transition-colors',
+                  'group block w-full py-2 text-left transition-colors',
                   activeSection === 'jobs'
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white',
                 ]"
               >
-                {{ $t('dashboard.jobs') }}
+                <span
+                  :class="[
+                    'inline-block border-l-2 px-4 transition-colors',
+                    activeSection === 'jobs'
+                      ? 'border-primary-500'
+                      : 'border-transparent group-hover:border-gray-600',
+                  ]"
+                >
+                  {{ $t('dashboard.jobs') }}
+                </span>
               </router-link>
             </li>
             <li>
               <router-link
                 :to="sectionPath('logs')"
                 :class="[
-                  'block w-full border-l-2 px-4 py-2 text-left transition-colors',
+                  'group block w-full py-2 text-left transition-colors',
                   activeSection === 'logs'
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white',
                 ]"
               >
-                {{ $t('dashboard.logs') }}
+                <span
+                  :class="[
+                    'inline-block border-l-2 px-4 transition-colors',
+                    activeSection === 'logs'
+                      ? 'border-primary-500'
+                      : 'border-transparent group-hover:border-gray-600',
+                  ]"
+                >
+                  {{ $t('dashboard.logs') }}
+                </span>
               </router-link>
             </li>
             <li>
               <router-link
                 :to="sectionPath('users')"
                 :class="[
-                  'block w-full border-l-2 px-4 py-2 text-left transition-colors',
+                  'group block w-full py-2 text-left transition-colors',
                   activeSection === 'users'
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white',
                 ]"
               >
-                {{ $t('dashboard.users') }}
+                <span
+                  :class="[
+                    'inline-block border-l-2 px-4 transition-colors',
+                    activeSection === 'users'
+                      ? 'border-primary-500'
+                      : 'border-transparent group-hover:border-gray-600',
+                  ]"
+                >
+                  {{ $t('dashboard.users') }}
+                </span>
               </router-link>
             </li>
             <li>
               <router-link
                 :to="sectionPath('settings')"
                 :class="[
-                  'block w-full border-l-2 px-4 py-2 text-left transition-colors',
+                  'group block w-full py-2 text-left transition-colors',
                   activeSection === 'settings'
-                    ? 'border-primary-500 text-white'
-                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
+                    ? 'text-white'
+                    : 'text-gray-300 hover:text-white',
                 ]"
               >
-                {{ $t('dashboard.settings') }}
+                <span
+                  :class="[
+                    'inline-block border-l-2 px-4 transition-colors',
+                    activeSection === 'settings'
+                      ? 'border-primary-500'
+                      : 'border-transparent group-hover:border-gray-600',
+                  ]"
+                >
+                  {{ $t('dashboard.settings') }}
+                </span>
               </router-link>
             </li>
           </ul>

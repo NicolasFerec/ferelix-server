@@ -35,14 +35,19 @@ onMounted(async () => {
             v-for="library in libraries"
             :key="library.id"
             :to="`/library/${library.id}`"
-            class="border-b-2 px-3 py-1 text-sm font-medium transition-colors"
+            class="group px-3 text-sm font-medium transition-colors"
             :class="
               isActive(library.id)
-                ? 'border-primary-500 text-white'
-                : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white'
+                ? 'text-white'
+                : 'text-gray-300 hover:text-white'
             "
           >
-            {{ library.name }}
+            <span
+              class="inline-block max-w-full truncate border-b-2 py-1 transition-colors"
+              :class="isActive(library.id) ? 'border-primary-500' : 'border-transparent group-hover:border-gray-600'"
+            >
+              {{ library.name }}
+            </span>
           </router-link>
         </div>
       </div>

@@ -270,7 +270,7 @@ class HardwareAcceleration:
             device = HardwareDevice(
                 id="nvidia:0",
                 type="nvidia",
-                name="NVIDIA GPU",
+                name=self._nvidia_device_name("NVIDIA GPU"),
                 index=0,
             )
             self._populate_nvidia_device(device, encoders_output, decoders_output)
@@ -281,7 +281,7 @@ class HardwareAcceleration:
             device = HardwareDevice(
                 id=f"nvidia:{uuid or index}",
                 type="nvidia",
-                name=name,
+                name=self._nvidia_device_name(name),
                 index=index,
             )
             self._populate_nvidia_device(device, encoders_output, decoders_output, index)
@@ -365,6 +365,8 @@ class HardwareAcceleration:
             device.decoders.update(self._vainfo_decoders(render_device))
             device.decoders.update(self._ffmpeg_vaapi_decoders(render_device, encoders_output, hwaccels_output))
             if not device.available:
+                if self._vaapi_vendor_id(render_device) == "0x10de":
+                    continue
                 device.warnings.append("VAAPI render device exists, but test encoding failed")
             devices.append(device)
 
@@ -422,12 +424,15 @@ class HardwareAcceleration:
             rows.append((index, parts[1], parts[2] if len(parts) > 2 else None))
         return rows
 
+    def _nvidia_device_name(self, name: str) -> str:
+        return f"NVENC/NVDEC - {name.removeprefix('NVIDIA ').strip()}"
+
     def _vaapi_device_name(self, render_device: Path) -> str:
         pci_slot = self._vaapi_pci_slot(render_device)
         if pci_slot:
             pci_name = self._lspci_device_name(pci_slot)
             if pci_name:
-                return f"VAAPI {pci_name}"
+                return f"VAAPI - {pci_name}"
 
         for by_path in sorted(Path("/dev/dri/by-path").glob("*-render")):
             try:
@@ -436,6 +441,13 @@ class HardwareAcceleration:
             except OSError:
                 continue
         return f"VAAPI {render_device.name}"
+
+    def _vaapi_vendor_id(self, render_device: Path) -> str | None:
+        vendor_path = Path("/sys/class/drm") / render_device.name / "device" / "vendor"
+        try:
+            return vendor_path.read_text(encoding="utf-8").strip().lower()
+        except OSError:
+            return None
 
     def _vaapi_pci_slot(self, render_device: Path) -> str | None:
         sys_device = Path("/sys/class/drm") / render_device.name / "device"

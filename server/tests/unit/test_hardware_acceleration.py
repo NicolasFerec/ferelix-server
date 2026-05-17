@@ -62,6 +62,12 @@ def test_selected_nvidia_device_adds_gpu_encoder_arg() -> None:
     assert args[-2:] == ["-gpu", "1"]
 
 
+def test_nvidia_device_name_identifies_nvenc_nvdec_backend() -> None:
+    hw_accel = HardwareAcceleration()
+
+    assert hw_accel._nvidia_device_name("NVIDIA GeForce GTX 1060 6GB") == "NVENC/NVDEC - GeForce GTX 1060 6GB"
+
+
 def test_status_warns_when_selected_device_is_not_detected() -> None:
     hw_accel = HardwareAcceleration(selected_device="vaapi:/dev/dri/renderD129")
     hw_accel.devices = []
@@ -108,7 +114,26 @@ def test_vaapi_device_name_uses_lspci_chip_name(monkeypatch) -> None:
     hw_accel = HardwareAcceleration()
     monkeypatch.setattr(hw_accel, "_vaapi_pci_slot", lambda render_device: "0000:c3:00.0")
 
-    assert hw_accel._vaapi_device_name(Path("/dev/dri/renderD128")) == "VAAPI Radeon RX 6600"
+    assert hw_accel._vaapi_device_name(Path("/dev/dri/renderD128")) == "VAAPI - Radeon RX 6600"
+
+
+def test_unavailable_nvidia_vaapi_render_device_is_hidden(monkeypatch, tmp_path) -> None:
+    render_device = tmp_path / "renderD128"
+    render_device.touch()
+
+    hw_accel = HardwareAcceleration()
+    monkeypatch.setattr("app.services.transcoding.hardware.Path.glob", lambda self, pattern: [render_device])
+    monkeypatch.setattr(hw_accel, "_test_vaapi_encoder", lambda *args, **kwargs: False)
+    monkeypatch.setattr(hw_accel, "_vainfo_decoders", lambda render_device: set())
+    monkeypatch.setattr(hw_accel, "_ffmpeg_vaapi_decoders", lambda *args, **kwargs: set())
+    monkeypatch.setattr(hw_accel, "_vaapi_vendor_id", lambda render_device: "0x10de")
+
+    devices = hw_accel._detect_vaapi_devices(
+        encoders_output="h264_vaapi",
+        hwaccels_output="vaapi",
+    )
+
+    assert devices == []
 
 
 def test_pci_device_name_is_trimmed_for_readability() -> None:

@@ -2,9 +2,11 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { jobs as jobsApi } from "@/api/client";
+import { useToast } from "@/composables/useToast";
 import DashboardTable from "./DashboardTable.vue";
 
 const { t, locale } = useI18n();
+const toast = useToast();
 
 const jobs = ref([]);
 const jobHistory = ref([]);
@@ -12,10 +14,6 @@ const loading = ref(false);
 const error = ref("");
 const triggeringJobs = ref(new Set());
 const cancellingJobs = ref(new Set());
-const showSuccess = ref(false);
-const showError = ref(false);
-const successMessage = ref("");
-const errorMessage = ref("");
 let pollInterval = null;
 
 // Date formatter using browser's Intl API
@@ -283,29 +281,15 @@ function stopPolling() {
 
 async function triggerJob(jobId) {
   addTriggering(jobId);
-  showSuccess.value = false;
-  showError.value = false;
 
   try {
     await jobsApi.triggerJob(jobId);
     // Reload jobs to get updated status
     await loadJobs();
-    successMessage.value = t("jobs.triggerSuccess");
-    showSuccess.value = true;
-
-    // Hide success message after 3 seconds
-    setTimeout(() => {
-      showSuccess.value = false;
-    }, 3000);
+    toast.success(t("jobs.triggerSuccess"));
   } catch (err) {
     console.error("Failed to trigger job:", err);
-    errorMessage.value = err.data?.detail || t("jobs.triggerFailed");
-    showError.value = true;
-
-    // Hide error message after 5 seconds
-    setTimeout(() => {
-      showError.value = false;
-    }, 5000);
+    toast.error(err.data?.detail || t("jobs.triggerFailed"));
   } finally {
     removeTriggering(jobId);
   }
@@ -313,29 +297,15 @@ async function triggerJob(jobId) {
 
 async function cancelJob(jobId) {
   addCancelling(jobId);
-  showSuccess.value = false;
-  showError.value = false;
 
   try {
     await jobsApi.cancelJob(jobId);
     // Reload jobs to get updated status
     await loadJobs();
-    successMessage.value = t("jobs.cancelSuccess");
-    showSuccess.value = true;
-
-    // Hide success message after 3 seconds
-    setTimeout(() => {
-      showSuccess.value = false;
-    }, 3000);
+    toast.success(t("jobs.cancelSuccess"));
   } catch (err) {
     console.error("Failed to cancel job:", err);
-    errorMessage.value = err.data?.detail || t("jobs.cancelFailed");
-    showError.value = true;
-
-    // Hide error message after 5 seconds
-    setTimeout(() => {
-      showError.value = false;
-    }, 5000);
+    toast.error(err.data?.detail || t("jobs.cancelFailed"));
   } finally {
     removeCancelling(jobId);
   }
@@ -559,22 +529,6 @@ onBeforeUnmount(() => {
             </tr>
           </tbody>
       </DashboardTable>
-    </div>
-
-    <!-- Success notification -->
-    <div
-      v-if="showSuccess"
-      class="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-md shadow-lg z-50"
-    >
-      {{ successMessage }}
-    </div>
-
-    <!-- Error notification -->
-    <div
-      v-if="showError"
-      class="fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-md shadow-lg z-50"
-    >
-      {{ errorMessage }}
     </div>
   </div>
 </template>

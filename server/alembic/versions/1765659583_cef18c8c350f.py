@@ -90,6 +90,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["media_file_id"],
             ["mediafile.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -122,6 +123,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["user_id"],
             ["user.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -139,6 +141,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["media_file_id"],
             ["mediafile.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -158,6 +161,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["media_file_id"],
             ["mediafile.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
     )

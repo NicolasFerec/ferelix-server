@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import Base, Library, User
@@ -23,6 +24,13 @@ test_engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",
     echo=False,
 )
+
+
+@event.listens_for(test_engine.sync_engine, "connect")
+def _set_sqlite_foreign_keys(dbapi_connection: Any, _connection_record: Any) -> None:
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 test_session_maker = async_sessionmaker(
     test_engine,

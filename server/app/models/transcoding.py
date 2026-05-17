@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -36,7 +36,7 @@ class TranscodingJob(Base):
     __tablename__ = "transcoding_job"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    media_file_id: Mapped[int] = mapped_column(Integer, index=True)
+    media_file_id: Mapped[int] = mapped_column(Integer, ForeignKey("mediafile.id", ondelete="CASCADE"), index=True)
 
     # Job configuration
     type: Mapped[str] = mapped_column(String)  # TranscodingJobType enum values

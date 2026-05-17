@@ -31,6 +31,33 @@
     }
 }
 
+@keyframes toast-progress {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+
+.animate-toast-progress {
+    animation-name: toast-progress;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+}
+
+.ferelix-hide-scrollbar {
+    scrollbar-width: none;
+}
+
+.ferelix-hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.ferelix-nav-overflow-fade {
+    mask-image: linear-gradient(to right, transparent, black 2rem, black calc(100% - 2rem), transparent);
+}
+
 @layer base {
     body {
         @apply bg-gray-900 text-white;

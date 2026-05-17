@@ -16,6 +16,14 @@ const displayInfo = computed(() => {
   return getMediaTitleInfo(props.mediaFile.file_name);
 });
 
+const watchProgressPercent = computed(() => {
+  const view = props.mediaFile.user_view;
+  const duration = view?.duration_seconds || props.mediaFile.duration;
+  if (!view || !duration || duration <= 0) return 0;
+  if (view.watched) return 100;
+  return Math.min(Math.max((view.position_seconds / duration) * 100, 0), 100);
+});
+
 function handleClick(): void {
   router.push({
     name: "media-detail",
@@ -96,6 +104,9 @@ function formatDuration(seconds: number): string {
       <div
         class="media-card__selection-ring pointer-events-none absolute inset-0 rounded-lg"
       ></div>
+      <div v-if="watchProgressPercent > 0" class="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
+        <div class="h-full bg-primary-500" :style="{ width: `${watchProgressPercent}%` }"></div>
+      </div>
     </div>
   </div>
 </template>

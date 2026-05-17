@@ -35,11 +35,11 @@ onMounted(async () => {
             v-for="library in libraries"
             :key="library.id"
             :to="`/library/${library.id}`"
-            class="px-3 py-1 text-sm font-medium rounded-md transition-colors"
+            class="border-b-2 px-3 py-1 text-sm font-medium transition-colors"
             :class="
               isActive(library.id)
-                ? 'text-white bg-primary-600 hover:bg-primary-700'
-                : 'text-gray-300 hover:text-white hover:bg-gray-700'
+                ? 'border-primary-500 text-white'
+                : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white'
             "
           >
             {{ library.name }}

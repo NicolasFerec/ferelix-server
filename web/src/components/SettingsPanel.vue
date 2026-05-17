@@ -7,8 +7,10 @@ import {
   type SettingsUpdate,
   settings as settingsApi,
 } from "@/api/client";
+import { useToast } from "@/composables/useToast";
 
 const { t } = useI18n();
+const toast = useToast();
 
 const loading = ref(false);
 const saving = ref(false);
@@ -16,8 +18,6 @@ const hardwareLoading = ref(false);
 const loadError = ref("");
 const saveError = ref("");
 const hardwareError = ref("");
-const showSuccess = ref(false);
-const showError = ref(false);
 
 const originalSettings = ref<Settings | null>(null);
 const hardwareStatus = ref<HardwareAccelerationStatus | null>(null);
@@ -76,8 +76,6 @@ function capabilityLabel(capability) {
 async function loadSettings() {
   loading.value = true;
   loadError.value = "";
-  showSuccess.value = false;
-  showError.value = false;
 
   try {
     const settings = await settingsApi.getSettings();
@@ -114,8 +112,6 @@ async function loadHardwareStatus(refresh = false) {
 async function saveSettings() {
   saving.value = true;
   saveError.value = "";
-  showSuccess.value = false;
-  showError.value = false;
 
   try {
     const updateData: SettingsUpdate = {};
@@ -149,17 +145,11 @@ async function saveSettings() {
     formData.value.hardware_transcoding_device = updatedSettings.hardware_transcoding_device;
     await loadHardwareStatus();
 
-    showSuccess.value = true;
-    setTimeout(() => {
-      showSuccess.value = false;
-    }, 3000);
+    toast.success(t("settings.saveSuccess"));
   } catch (err) {
     console.error("Failed to save settings:", err);
     saveError.value = err.data?.detail || t("settings.saveError");
-    showError.value = true;
-    setTimeout(() => {
-      showError.value = false;
-    }, 5000);
+    toast.error(saveError.value);
   } finally {
     saving.value = false;
   }
@@ -400,22 +390,6 @@ onMounted(() => {
           {{ saving ? $t('settings.saving') : $t('common.save') }}
         </button>
       </div>
-    </div>
-
-    <!-- Success notification -->
-    <div
-      v-if="showSuccess"
-      class="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-md shadow-lg z-50"
-    >
-      {{ $t('settings.saveSuccess') }}
-    </div>
-
-    <!-- Error notification -->
-    <div
-      v-if="showError"
-      class="fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-md shadow-lg z-50"
-    >
-      {{ saveError || $t('settings.saveError') }}
     </div>
   </div>
 </template>

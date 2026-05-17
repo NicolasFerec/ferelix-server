@@ -5,6 +5,7 @@ import LibraryList from "../components/LibraryList.vue";
 import MenuBar from "../components/MenuBar.vue";
 import SettingsPanel from "../components/SettingsPanel.vue";
 import StreamsPanel from "../components/StreamsPanel.vue";
+import UserManagementPanel from "../components/UserManagementPanel.vue";
 
 const activeSection = ref("dashboard");
 </script>
@@ -17,15 +18,15 @@ const activeSection = ref("dashboard");
       <!-- Sidebar -->
       <aside class="w-64 bg-gray-800 border-r border-gray-700">
         <nav class="p-4">
-          <ul class="space-y-2">
+          <ul class="space-y-1">
             <li>
               <button
                 @click="activeSection = 'dashboard'"
                 :class="[
-                  'w-full text-left px-4 py-2 rounded-md transition-colors font-semibold',
+                  'w-full border-l-2 px-4 py-2 text-left font-semibold transition-colors',
                   activeSection === 'dashboard'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-white hover:bg-gray-700',
+                    ? 'border-primary-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
                 ]"
               >
                 {{ $t('dashboard.title') }}
@@ -35,10 +36,10 @@ const activeSection = ref("dashboard");
               <button
                 @click="activeSection = 'libraries'"
                 :class="[
-                  'w-full text-left px-4 py-2 rounded-md transition-colors',
+                  'w-full border-l-2 px-4 py-2 text-left transition-colors',
                   activeSection === 'libraries'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+                    ? 'border-primary-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
                 ]"
               >
                 {{ $t('dashboard.libraries') }}
@@ -48,10 +49,10 @@ const activeSection = ref("dashboard");
               <button
                 @click="activeSection = 'jobs'"
                 :class="[
-                  'w-full text-left px-4 py-2 rounded-md transition-colors',
+                  'w-full border-l-2 px-4 py-2 text-left transition-colors',
                   activeSection === 'jobs'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+                    ? 'border-primary-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
                 ]"
               >
                 {{ $t('dashboard.jobs') }}
@@ -61,12 +62,11 @@ const activeSection = ref("dashboard");
               <button
                 @click="activeSection = 'users'"
                 :class="[
-                  'w-full text-left px-4 py-2 rounded-md transition-colors',
+                  'w-full border-l-2 px-4 py-2 text-left transition-colors',
                   activeSection === 'users'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+                    ? 'border-primary-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
                 ]"
-                disabled
               >
                 {{ $t('dashboard.users') }}
               </button>
@@ -75,10 +75,10 @@ const activeSection = ref("dashboard");
               <button
                 @click="activeSection = 'settings'"
                 :class="[
-                  'w-full text-left px-4 py-2 rounded-md transition-colors',
+                  'w-full border-l-2 px-4 py-2 text-left transition-colors',
                   activeSection === 'settings'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+                    ? 'border-primary-500 text-white'
+                    : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white',
                 ]"
               >
                 {{ $t('dashboard.settings') }}
@@ -93,6 +93,7 @@ const activeSection = ref("dashboard");
         <StreamsPanel v-if="activeSection === 'dashboard'" />
         <LibraryList v-else-if="activeSection === 'libraries'" />
         <JobsPanel v-else-if="activeSection === 'jobs'" />
+        <UserManagementPanel v-else-if="activeSection === 'users'" />
         <SettingsPanel v-else-if="activeSection === 'settings'" />
         <div v-else class="text-center text-gray-400 py-12">
           {{ $t('dashboard.comingSoon') }}

@@ -46,6 +46,7 @@ def upgrade() -> None:
         sa.Column("last_accessed_at", sa.DateTime(), nullable=False),
         sa.Column("auto_cleanup", sa.Boolean(), nullable=False),
         sa.Column("keep_segments", sa.Boolean(), nullable=False),
+        sa.ForeignKeyConstraint(["media_file_id"], ["mediafile.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

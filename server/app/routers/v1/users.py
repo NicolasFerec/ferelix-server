@@ -1,14 +1,17 @@
 """User profile endpoints (authenticated users)."""
 
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_active_user
 from app.models import User, UserSchema, UserUpdate
+from app.services.profile_images import delete_profile_image, save_profile_image
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -25,6 +28,54 @@ async def get_current_user_info(
     Returns:
         Current user's profile
     """
+    return current_user
+
+
+@router.get("/{user_id}/profile-image")
+async def get_profile_image(
+    user_id: int,
+    _current_user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> FileResponse:
+    """Serve a user profile image to authenticated users."""
+    user = await session.get(User, user_id)
+    if not user or not user.profile_image_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile image not found")
+    if not Path(user.profile_image_path).exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile image not found")
+
+    return FileResponse(
+        user.profile_image_path,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@router.put("/me/profile-image", response_model=UserSchema)
+async def upload_current_user_profile_image(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    image: Annotated[UploadFile, File()],
+) -> User:
+    """Upload or replace the current user's profile image."""
+    previous_image_path = current_user.profile_image_path
+    current_user.profile_image_path = await save_profile_image(current_user.id, image)
+    await session.commit()
+    await session.refresh(current_user)
+    delete_profile_image(previous_image_path)
+    return current_user
+
+
+@router.delete("/me/profile-image", response_model=UserSchema)
+async def delete_current_user_profile_image(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> User:
+    """Remove the current user's profile image."""
+    previous_image_path = current_user.profile_image_path
+    current_user.profile_image_path = None
+    await session.commit()
+    await session.refresh(current_user)
+    delete_profile_image(previous_image_path)
     return current_user
 
 
@@ -60,7 +111,7 @@ async def update_current_user(
         current_user.username = user_update.username
 
     # Handle email update (can be None to clear email, or a string)
-    if user_update.email is not None:
+    if "email" in user_update.model_fields_set:
         # Normalize email: convert empty string to None, strip whitespace
         email_value = (
             user_update.email.strip() if isinstance(user_update.email, str) and user_update.email.strip() else None

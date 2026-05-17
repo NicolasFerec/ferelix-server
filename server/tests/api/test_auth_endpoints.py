@@ -1,10 +1,22 @@
 """API tests for authentication endpoints."""
 
+from io import BytesIO
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
+from app.services import profile_images
+
+
+def make_png_bytes(width: int = 20, height: int = 12) -> bytes:
+    """Create a small valid PNG image for upload tests."""
+    buffer = BytesIO()
+    Image.new("RGB", (width, height), (40, 100, 220)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class TestRegister:
@@ -69,6 +81,28 @@ class TestRegister:
 
         assert response.status_code == 400
         assert "already registered" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_register_cannot_create_admin(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Test public registration always creates reader accounts."""
+        response = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "notadmin",
+                "email": "notadmin@example.com",
+                "password": "password123",
+                "role": "admin",
+                "is_admin": True,
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["role"] == "reader"
+        assert data["is_admin"] is False
 
 
 class TestLogin:
@@ -239,3 +273,45 @@ class TestLogout:
         )
 
         assert response.status_code == 401
+
+
+class TestCurrentUserProfileImage:
+    """Tests for current-user profile image endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_upload_and_delete_current_user_profile_image(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        auth_headers: dict[str, str],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test users can manage their own profile image."""
+        monkeypatch.setattr(profile_images, "DEFAULT_PROFILE_IMAGE_DIR", str(tmp_path))
+
+        upload_response = await client.put(
+            "/api/v1/users/me/profile-image",
+            headers=auth_headers,
+            files={"image": ("avatar.png", make_png_bytes(), "image/png")},
+        )
+
+        assert upload_response.status_code == 200
+        data = upload_response.json()
+        assert data["profile_image_url"] == f"/api/v1/users/{test_user.id}/profile-image"
+
+        image_response = await client.get(
+            data["profile_image_url"],
+            headers=auth_headers,
+        )
+        assert image_response.status_code == 200
+        assert image_response.headers["content-type"] == "image/jpeg"
+        assert image_response.content.startswith(b"\xff\xd8")
+
+        delete_response = await client.delete(
+            "/api/v1/users/me/profile-image",
+            headers=auth_headers,
+        )
+
+        assert delete_response.status_code == 200
+        assert delete_response.json()["profile_image_url"] is None

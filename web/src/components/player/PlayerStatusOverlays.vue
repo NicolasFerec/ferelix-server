@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import type { PlaybackMethod } from "@/services/playerUi";
-
 defineProps<{
   isLoading: boolean;
   loadingMessage: string;
   errorMessage: string;
-  playMethod: PlaybackMethod;
 }>();
 
 defineEmits<{
@@ -36,12 +33,5 @@ defineEmits<{
     >
       {{ $t('player.retry') }}
     </button>
-  </div>
-
-  <div
-    v-if="!isLoading && !errorMessage"
-    class="absolute top-4 left-4 px-2 py-1 bg-black/50 rounded text-xs text-white/70"
-  >
-    {{ playMethod }}{{ playMethod === 'DirectStream' ? ' (Remux)' : '' }}
   </div>
 </template>

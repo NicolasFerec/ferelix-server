@@ -455,7 +455,7 @@ async def scan_library_path(  # noqa: C901
         await session.commit()
         logger.debug(f"Final commit: {pending_changes} changes committed")
 
-    # Find files in database that weren't scanned (soft delete them)
+    # Find files in database that weren't scanned (soft delete them).
     # Only do this if scan wasn't cancelled
     deleted_files_count = 0
     if not was_cancelled:

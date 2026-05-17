@@ -23,7 +23,6 @@ def upgrade() -> None:
         "settings",
         sa.Column("hardware_transcoding_device", sa.String(), nullable=False, server_default="auto"),
     )
-    op.alter_column("settings", "hardware_transcoding_device", server_default=None)
 
 
 def downgrade() -> None:

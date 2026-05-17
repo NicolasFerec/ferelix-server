@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onMounted, type Ref, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { type HomepageRow, libraries as libraryApi } from "@/api/client";
+import { type HomepageRow, libraries as libraryApi, type MediaFile, media } from "@/api/client";
 import MediaRow from "../components/MediaRow.vue";
 import MenuBar from "../components/MenuBar.vue";
 
 const { t } = useI18n();
 
 const rows: Ref<HomepageRow[]> = ref([]);
+const continueWatchingItems: Ref<MediaFile[]> = ref([]);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string> = ref("");
 
@@ -31,7 +32,12 @@ async function loadRows(): Promise<void> {
   error.value = "";
 
   try {
-    rows.value = await libraryApi.getHomepageRows();
+    const [homepageRows, continueItems] = await Promise.all([
+      libraryApi.getHomepageRows(),
+      media.getContinueWatching(),
+    ]);
+    rows.value = homepageRows;
+    continueWatchingItems.value = continueItems;
   } catch (err) {
     console.error("Failed to load homepage rows:", err);
     error.value = t("home.loadFailed");
@@ -65,10 +71,15 @@ onMounted(async () => {
       </div>
 
       <div v-else>
-        <div v-if="rows.length === 0" class="text-center text-gray-400 py-12">
+        <div v-if="rows.length === 0 && continueWatchingItems.length === 0" class="text-center text-gray-400 py-12">
           <p>{{ $t('home.noRows') }}</p>
         </div>
         <div v-else>
+          <MediaRow
+            v-if="continueWatchingItems.length > 0"
+            :displayName="$t('home.continueWatching')"
+            :items="continueWatchingItems"
+          />
           <MediaRow
             v-for="row in rows"
             :key="`${row.playlist_id}-${row.library_id}`"

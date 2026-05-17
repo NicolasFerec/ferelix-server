@@ -7,7 +7,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AudioTrack, Library, MediaFile, User, VideoTrack
+from app.models import AudioTrack, Library, MediaFile, MediaView, User, VideoTrack
 
 
 @pytest.fixture
@@ -204,6 +204,7 @@ class TestGetMediaFile:
         assert data["file_name"] == test_media_file.file_name
         assert "video_tracks" in data
         assert "audio_tracks" in data
+        assert data["user_view"] is None
 
     @pytest.mark.asyncio
     async def test_get_media_file_not_found(
@@ -219,6 +220,142 @@ class TestGetMediaFile:
         )
 
         assert response.status_code == 404
+
+
+class TestMediaViews:
+    """Tests for per-user media view state."""
+
+    @pytest.mark.asyncio
+    async def test_patch_media_view_updates_progress(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        auth_headers: dict[str, str],
+        test_media_file: MediaFile,
+    ) -> None:
+        """Test manual watch-state updates."""
+        response = await client.patch(
+            f"/api/v1/media/{test_media_file.id}/view",
+            headers=auth_headers,
+            json={
+                "position_seconds": 1200,
+                "duration_seconds": 7200,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["media_file_id"] == test_media_file.id
+        assert data["position_seconds"] == 1200
+        assert data["watched"] is False
+
+        media_response = await client.get(
+            f"/api/v1/media/{test_media_file.id}",
+            headers=auth_headers,
+        )
+        assert media_response.status_code == 200
+        assert media_response.json()["user_view"]["position_seconds"] == 1200
+
+    @pytest.mark.asyncio
+    async def test_playback_heartbeat_marks_media_watched(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        auth_headers: dict[str, str],
+        test_media_file: MediaFile,
+    ) -> None:
+        """Test playback sessions persist watch progress."""
+        create_response = await client.post(
+            "/api/v1/playback-sessions",
+            headers=auth_headers,
+            json={
+                "media_file_id": test_media_file.id,
+                "duration_seconds": 7200,
+            },
+        )
+        assert create_response.status_code == 200
+        session_id = create_response.json()["id"]
+
+        heartbeat_response = await client.post(
+            f"/api/v1/playback-sessions/{session_id}/heartbeat",
+            headers=auth_headers,
+            json={
+                "position_seconds": 7150,
+                "duration_seconds": 7200,
+                "is_paused": False,
+                "play_method": "DirectPlay",
+            },
+        )
+        assert heartbeat_response.status_code == 200
+
+        media_response = await client.get(
+            f"/api/v1/media/{test_media_file.id}",
+            headers=auth_headers,
+        )
+        data = media_response.json()["user_view"]
+        assert data["play_count"] == 1
+        assert data["position_seconds"] == 7150
+        assert data["watched"] is True
+
+    @pytest.mark.asyncio
+    async def test_continue_watching_returns_started_unfinished_media(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict[str, str],
+        test_media_file: MediaFile,
+    ) -> None:
+        """Test continue watching excludes finished media and includes progress."""
+        view = MediaView(
+            user_id=test_user.id,
+            media_file_id=test_media_file.id,
+            position_seconds=1200,
+            duration_seconds=7200,
+            watched=False,
+            play_count=1,
+        )
+        db_session.add(view)
+        await db_session.commit()
+
+        response = await client.get(
+            "/api/v1/media-files/continue-watching",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [item["id"] for item in data] == [test_media_file.id]
+        assert data[0]["user_view"]["position_seconds"] == 1200
+
+    @pytest.mark.asyncio
+    async def test_continue_watching_excludes_watched_media(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict[str, str],
+        test_media_file: MediaFile,
+    ) -> None:
+        """Test continue watching does not return completed media."""
+        view = MediaView(
+            user_id=test_user.id,
+            media_file_id=test_media_file.id,
+            position_seconds=7150,
+            duration_seconds=7200,
+            watched=True,
+            play_count=1,
+        )
+        db_session.add(view)
+        await db_session.commit()
+
+        response = await client.get(
+            "/api/v1/media-files/continue-watching",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
 
 
 class TestPlaybackInfo:

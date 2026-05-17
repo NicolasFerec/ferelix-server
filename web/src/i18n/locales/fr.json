@@ -21,7 +21,19 @@
         "actions": "Actions",
         "go": "Aller",
         "select": "Sélectionner",
-        "optional": "Optionnel"
+        "optional": "Optionnel",
+        "close": "Fermer",
+        "menu": "Menu",
+        "userMenu": "Menu utilisateur",
+        "previous": "Précédent",
+        "next": "Suivant"
+    },
+    "imageUpload": {
+        "chooseImage": "Choisir une image",
+        "removeImage": "Supprimer l'image",
+        "zoom": "Zoom",
+        "cropPreview": "Aperçu du recadrage",
+        "invalidImage": "Cette image ne peut pas être utilisée."
     },
     "login": {
         "title": "Connexion à Ferelix",
@@ -101,6 +113,44 @@
         "jobs": "Tâches",
         "comingSoon": "Bientôt disponible..."
     },
+    "users": {
+        "title": "Utilisateurs",
+        "subtitle": "Créez les comptes et choisissez qui peut accéder au tableau de bord admin.",
+        "create": "Créer un utilisateur",
+        "edit": "Modifier l'utilisateur",
+        "createAction": "Créer",
+        "creating": "Création...",
+        "username": "Nom d'utilisateur",
+        "email": "Email",
+        "password": "Mot de passe",
+        "passwordPlaceholder": "Conserver",
+        "profileImage": "Image de profil",
+        "changeProfileImage": "Choisir une image",
+        "removeProfileImage": "Supprimer l'image",
+        "role": "Rôle",
+        "language": "Langue",
+        "status": "Statut",
+        "active": "Actif",
+        "inactive": "Inactif",
+        "saving": "Enregistrement...",
+        "deleting": "Suppression...",
+        "empty": "Aucun utilisateur",
+        "requiredFields": "Le nom d'utilisateur et le mot de passe sont requis.",
+        "currentAdminRoleLocked": "Vous ne pouvez pas modifier votre propre rôle admin.",
+        "currentAdminDeleteLocked": "Vous ne pouvez pas supprimer votre propre compte admin.",
+        "loadFailed": "Échec du chargement des utilisateurs",
+        "createSuccess": "Utilisateur créé avec succès",
+        "createFailed": "Échec de la création de l'utilisateur",
+        "updateSuccess": "Utilisateur mis à jour avec succès",
+        "updateFailed": "Échec de la mise à jour de l'utilisateur",
+        "deleteSuccess": "Utilisateur supprimé avec succès",
+        "deleteFailed": "Échec de la suppression de l'utilisateur",
+        "confirmDelete": "Supprimer {username} ?",
+        "roles": {
+            "reader": "Lecteur",
+            "admin": "Admin"
+        }
+    },
     "libraries": {
         "title": "Bibliothèques",
         "add": "Ajouter une bibliothèque",
@@ -152,7 +202,8 @@
         "noLibraries": "Aucune bibliothèque configurée pour le moment",
         "loadingMediaFiles": "Chargement des fichiers multimédias...",
         "loadFailed": "Échec du chargement de la bibliothèque. Veuillez réessayer.",
-        "noRows": "Aucune ligne disponible. Configurez les listes de lecture pour afficher le contenu."
+        "noRows": "Aucune ligne disponible. Configurez les listes de lecture pour afficher le contenu.",
+        "continueWatching": "Continuer de regarder"
     },
     "recommendationRows": {
         "title": "Lignes de recommandation",
@@ -179,6 +230,9 @@
         "specialRowInfo": "Ceci est une ligne de recommandation spéciale. Les critères de filtrage et la bibliothèque ne peuvent pas être modifiés.",
         "noRows": "Aucune ligne de recommandation configurée",
         "loadFailed": "Échec du chargement des lignes de recommandation",
+        "createSuccess": "Ligne de recommandation créée avec succès",
+        "updateSuccess": "Ligne de recommandation mise à jour avec succès",
+        "deleteSuccess": "Ligne de recommandation supprimée avec succès",
         "saveFailed": "Échec de l'enregistrement de la ligne de recommandation",
         "updateFailed": "Échec de la mise à jour de la ligne de recommandation",
         "deleteFailed": "Échec de la suppression de la ligne de recommandation",
@@ -198,6 +252,9 @@
         "back": "Retour",
         "backHome": "Retour à l'accueil",
         "play": "Lire",
+        "resume": "Reprendre",
+        "watched": "Vu",
+        "progress": "Progression",
         "fileInformation": "Informations du fichier",
         "fields": {
             "file": "Fichier",
@@ -278,6 +335,7 @@
         "refresh": "Rafraîchir",
         "empty": "Aucun stream actif",
         "loadFailed": "Échec du chargement des streams actifs",
+        "stopSuccess": "Stream arrêté",
         "stopFailed": "Échec de l'arrêt du stream",
         "media": "Média",
         "playback": "Lecture",

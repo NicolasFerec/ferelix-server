@@ -82,7 +82,7 @@ async def register(
         username=user_data.username,
         email=user_data.email,
         password=user_data.password,
-        is_admin=user_data.is_admin,
+        is_admin=False,
         is_active=True,
         language=user_data.language,
     )

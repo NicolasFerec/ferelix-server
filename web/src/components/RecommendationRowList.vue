@@ -2,10 +2,12 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { libraries as libraryApi, recommendationRows as rowApi } from "@/api/client";
+import { useToast } from "@/composables/useToast";
 import RecommendationRowForm from "./RecommendationRowForm.vue";
 import RecommendationRowItem from "./RecommendationRowItem.vue";
 
 const { t } = useI18n();
+const toast = useToast();
 
 const rows = ref([]);
 const libraries = ref([]);
@@ -52,7 +54,7 @@ function handleEdit(row) {
 
 async function handleDelete(row) {
   if (row.is_special) {
-    alert(t("recommendationRows.cannotDeleteSpecial"));
+    toast.warn(t("recommendationRows.cannotDeleteSpecial"));
     return;
   }
 
@@ -63,13 +65,15 @@ async function handleDelete(row) {
   try {
     await rowApi.deleteRow(row.id);
     await loadRows();
+    toast.success(t("recommendationRows.deleteSuccess"));
   } catch (err) {
     console.error("Failed to delete recommendation row:", err);
-    alert(err.data?.detail || t("recommendationRows.deleteFailed"));
+    toast.error(err.data?.detail || t("recommendationRows.deleteFailed"));
   }
 }
 
 function handleSaved() {
+  toast.success(editingRow.value ? t("recommendationRows.updateSuccess") : t("recommendationRows.createSuccess"));
   showForm.value = false;
   editingRow.value = null;
   loadRows();

@@ -79,7 +79,7 @@ async def create_first_admin(
     if await is_setup_complete():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Setup already complete. Use the registration endpoint to create additional users.",
+            detail="Setup already complete. Use the admin dashboard to create additional users.",
         )
 
     # Create first admin user

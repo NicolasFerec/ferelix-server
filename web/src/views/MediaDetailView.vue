@@ -53,6 +53,17 @@ const subtitleTrackOptions = computed<DropdownOption[]>(() => [
     label: getSubtitleTrackLabel(track),
   })),
 ]);
+const resumePosition = computed(() => getResumePosition());
+const primaryPlayLabel = computed(() =>
+  resumePosition.value > 0 ? t("mediaDetail.resume") : t("mediaDetail.play"),
+);
+const watchProgressPercent = computed(() => {
+  const view = mediaFile.value?.user_view;
+  const duration = view?.duration_seconds || mediaFile.value?.duration;
+  if (!view || !duration || duration <= 0) return 0;
+  if (view.watched) return 100;
+  return Math.min(Math.max((view.position_seconds / duration) * 100, 0), 100);
+});
 
 async function loadMedia(): Promise<void> {
   loading.value = true;
@@ -173,6 +184,14 @@ function handlePlayClick(): void {
   }
 }
 
+function getResumePosition(): number {
+  const view = mediaFile.value?.user_view;
+  const duration = view?.duration_seconds || mediaFile.value?.duration;
+  if (!view || view.watched || !duration || duration <= 0) return 0;
+  if (view.position_seconds < 10 || view.position_seconds >= duration - 10) return 0;
+  return view.position_seconds;
+}
+
 function getMediaTitle(): string {
   return displayInfo.value.title;
 }
@@ -279,6 +298,9 @@ onMounted(() => {
                   </svg>
                 </span>
               </span>
+              <div v-if="watchProgressPercent > 0" class="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60">
+                <div class="h-full bg-primary-500" :style="{ width: `${watchProgressPercent}%` }"></div>
+              </div>
             </button>
           </div>
 
@@ -296,13 +318,17 @@ onMounted(() => {
                     d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
                   />
                 </svg>
-                {{ t("mediaDetail.play") }}
+                {{ primaryPlayLabel }}
               </button>
             </div>
             <div class="flex items-center gap-4 mb-6 text-gray-300">
               <span v-if="mediaFile.duration">{{ formatDuration(mediaFile.duration) }}</span>
               <span v-if="mediaFile.duration && displayInfo.year">•</span>
               <span v-if="displayInfo.year">{{ displayInfo.year }}</span>
+              <span v-if="mediaFile.user_view?.watched">•</span>
+              <span v-if="mediaFile.user_view?.watched">{{ t("mediaDetail.watched") }}</span>
+              <span v-else-if="resumePosition > 0">•</span>
+              <span v-if="resumePosition > 0">{{ t("mediaDetail.resume") }} {{ formatDuration(resumePosition) }}</span>
             </div>
 
             <div class="max-w-2xl space-y-2 text-sm">

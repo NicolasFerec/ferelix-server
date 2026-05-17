@@ -1,5 +1,6 @@
 """API endpoints for managing media library and files (v1 with authentication)."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -17,6 +18,9 @@ from app.models import (
     LibrarySchema,
     MediaFile,
     MediaFileSchema,
+    MediaView,
+    MediaViewSchema,
+    MediaViewUpdate,
     RecommendationRow,
     User,
 )
@@ -120,16 +124,16 @@ async def get_libraries(
 @router.get("/libraries/{library_id}/items", response_model=list[MediaFileSchema])
 async def get_library_items(
     library_id: int,
-    _user: Annotated[User, Depends(get_current_active_user)],
+    user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     skip: int = 0,
     limit: int = 100,
-) -> list[MediaFile]:
+) -> list[MediaFileSchema]:
     """Get items (media files) from a specific library.
 
     Args:
         library_id: Library path ID
-        _user: Authenticated user (dependency)
+        user: Authenticated user
         session: Database session
         skip: Number of records to skip
         limit: Maximum number of records to return
@@ -164,21 +168,22 @@ async def get_library_items(
         .offset(skip)
         .limit(limit)
     )
-    return list(result.scalars().all())
+    media_files = list(result.scalars().all())
+    return await media_files_with_user_views(session, user.id, media_files)
 
 
 # Media File endpoints (authenticated users)
 @router.get("/media-files", response_model=list[MediaFileSchema])
 async def get_media_files(
-    _user: Annotated[User, Depends(get_current_active_user)],
+    user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
     skip: int = 0,
     limit: int = 100,
-) -> list[MediaFile]:
+) -> list[MediaFileSchema]:
     """Get all discovered media files.
 
     Args:
-        _user: Authenticated user (dependency)
+        user: Authenticated user
         session: Database session
         skip: Number of records to skip
         limit: Maximum number of records to return
@@ -198,21 +203,57 @@ async def get_media_files(
         .offset(skip)
         .limit(limit)
     )
-    return list(result.scalars().all())
+    media_files = list(result.scalars().all())
+    return await media_files_with_user_views(session, user.id, media_files)
+
+
+@router.get("/media-files/continue-watching", response_model=list[MediaFileSchema])
+async def get_continue_watching_media_files(
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    limit: int = 24,
+) -> list[MediaFileSchema]:
+    """Get media files started by the current user but not completed."""
+    normalized_limit = min(max(limit, 1), 100)
+    query_limit = normalized_limit * 3
+    result = await session.execute(
+        select(MediaFile, MediaView)
+        .join(MediaView, MediaView.media_file_id == MediaFile.id)
+        .options(
+            selectinload(MediaFile.video_tracks),
+            selectinload(MediaFile.audio_tracks),
+            selectinload(MediaFile.subtitle_tracks),
+        )
+        .where(
+            MediaView.user_id == user.id,
+            MediaFile.deleted_at.is_(None),
+            MediaView.watched.is_(False),
+            MediaView.position_seconds > 10,
+        )
+        .order_by(MediaView.last_viewed_at.desc())
+        .limit(query_limit)
+    )
+
+    items = [
+        media_file_with_user_view(media_file, view)
+        for media_file, view in result.all()
+        if is_media_in_progress(view, media_file.duration)
+    ]
+    return items[:normalized_limit]
 
 
 # Media item endpoints (authenticated users)
 @router.get("/media/{media_id}", response_model=MediaFileSchema)
 async def get_media_file(
     media_id: int,
-    _user: Annotated[User, Depends(get_current_active_user)],
+    user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> MediaFileSchema:
     """Get a specific media file by ID with track information.
 
     Args:
         media_id: Media file ID
-        _user: Authenticated user (dependency)
+        user: Authenticated user
         session: Database session
 
     Returns:
@@ -238,7 +279,57 @@ async def get_media_file(
             detail="Media file not found",
         )
 
-    return MediaFileSchema.model_validate(media_file)
+    view = await get_user_media_view(session, user.id, media_id)
+    return media_file_with_user_view(media_file, view)
+
+
+@router.get("/media/{media_id}/view", response_model=MediaViewSchema)
+async def get_media_view(
+    media_id: int,
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> MediaView:
+    """Get the current user's saved watch state for a media file."""
+    await require_media_file(session, media_id)
+    view = await get_user_media_view(session, user.id, media_id)
+    if not view:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media view not found")
+    return view
+
+
+@router.patch("/media/{media_id}/view", response_model=MediaViewSchema)
+async def update_media_view(
+    media_id: int,
+    payload: MediaViewUpdate,
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> MediaView:
+    """Update the current user's saved watch state for a media file."""
+    await require_media_file(session, media_id)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    view = await get_user_media_view(session, user.id, media_id)
+    if not view:
+        view = MediaView(user_id=user.id, media_file_id=media_id)
+        session.add(view)
+        await session.flush()
+
+    view.position_seconds = max(payload.position_seconds, 0.0)
+    view.duration_seconds = payload.duration_seconds
+    view.last_viewed_at = now
+
+    if payload.watched is not None:
+        view.watched = payload.watched
+    elif is_media_watched(view.position_seconds, payload.duration_seconds):
+        view.watched = True
+
+    if view.watched:
+        view.completed_at = view.completed_at or now
+    else:
+        view.completed_at = None
+
+    await session.commit()
+    await session.refresh(view)
+    return view
 
 
 @router.get("/media/{media_id}/thumbnail")
@@ -276,7 +367,7 @@ async def get_media_thumbnail(
 # Homepage rows endpoint
 @router.get("/homepage/rows", response_model=list[HomepageRow])
 async def get_homepage_rows(
-    _user: Annotated[User, Depends(get_current_active_user)],
+    user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[HomepageRow]:
     """Get all visible rows for homepage.
@@ -284,7 +375,7 @@ async def get_homepage_rows(
     Returns playlists that are visible on homepage, with their filtered media files.
 
     Args:
-        _user: Authenticated user (dependency)
+        user: Authenticated user
         session: Database session
 
     Returns:
@@ -329,7 +420,7 @@ async def get_homepage_rows(
             "library_name": library.name,
             "name": recommendation_row.name,
             "display_name": display_name,
-            "items": [MediaFileSchema.model_validate(mf) for mf in media_files],
+            "items": await media_files_with_user_views(session, user.id, media_files),
         })
 
     # Auto-prefix duplicate names with library name
@@ -366,14 +457,14 @@ async def get_homepage_rows(
 @router.get("/libraries/{library_id}/rows", response_model=list[HomepageRow])
 async def get_library_rows(
     library_id: int,
-    _user: Annotated[User, Depends(get_current_active_user)],
+    user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[HomepageRow]:
     """Get rows for a specific library (for Library View "Recommended" tab).
 
     Args:
         library_id: Library ID
-        _user: Authenticated user (dependency)
+        user: Authenticated user
         session: Database session
 
     Returns:
@@ -438,11 +529,69 @@ async def get_library_rows(
                 library_name=library.name,
                 name=recommendation_row.name,
                 display_name=display_name,
-                items=[MediaFileSchema.model_validate(mf) for mf in media_files],
+                items=await media_files_with_user_views(session, user.id, media_files),
             )
         )
 
     return rows
+
+
+async def require_media_file(session: AsyncSession, media_id: int) -> MediaFile:
+    media_file = await session.get(MediaFile, media_id)
+    if not media_file or media_file.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
+    return media_file
+
+
+async def get_user_media_view(session: AsyncSession, user_id: int, media_id: int) -> MediaView | None:
+    return await session.scalar(
+        select(MediaView).where(
+            MediaView.user_id == user_id,
+            MediaView.media_file_id == media_id,
+        )
+    )
+
+
+async def media_files_with_user_views(
+    session: AsyncSession,
+    user_id: int,
+    media_files: list[MediaFile],
+) -> list[MediaFileSchema]:
+    media_ids = [media_file.id for media_file in media_files if media_file.id is not None]
+    if not media_ids:
+        return [MediaFileSchema.model_validate(media_file) for media_file in media_files]
+
+    result = await session.execute(
+        select(MediaView).where(
+            MediaView.user_id == user_id,
+            MediaView.media_file_id.in_(media_ids),
+        )
+    )
+    views_by_media_id = {view.media_file_id: view for view in result.scalars().all()}
+    return [media_file_with_user_view(media_file, views_by_media_id.get(media_file.id)) for media_file in media_files]
+
+
+def media_file_with_user_view(media_file: MediaFile, view: MediaView | None) -> MediaFileSchema:
+    schema = MediaFileSchema.model_validate(media_file)
+    schema.user_view = MediaViewSchema.model_validate(view) if view else None
+    return schema
+
+
+def is_media_watched(position_seconds: float, duration_seconds: float | None) -> bool:
+    if not duration_seconds or duration_seconds <= 0:
+        return False
+    if position_seconds >= duration_seconds * 0.9:
+        return True
+    return duration_seconds >= 120 and duration_seconds - position_seconds <= 60
+
+
+def is_media_in_progress(view: MediaView, media_duration: float | None) -> bool:
+    duration = view.duration_seconds or media_duration
+    if view.watched or view.position_seconds <= 10:
+        return False
+    if not duration or duration <= 0:
+        return True
+    return not is_media_watched(view.position_seconds, duration)
 
 
 @router.post("/start-stream/{media_id}")

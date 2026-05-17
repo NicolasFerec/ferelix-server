@@ -1,13 +1,25 @@
 """API tests for dashboard endpoints."""
 
+from io import BytesIO
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Library, MediaFile, PlaybackSession, TranscodingJob, User
+from app.models import AudioTrack, Library, MediaFile, MediaView, PlaybackSession, RefreshToken, TranscodingJob, User
 from app.models.playback_session import PlaybackSessionStatus
 from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
+from app.services import profile_images
 from app.services.transcoding.hardware import HardwareAccelerationStatus, HardwareDeviceInfo
+
+
+def make_png_bytes(width: int = 20, height: int = 12) -> bytes:
+    """Create a small valid PNG image for upload tests."""
+    buffer = BytesIO()
+    Image.new("RGB", (width, height), (220, 40, 80)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class TestDashboardAccess:
@@ -226,6 +238,32 @@ class TestUserManagement:
         assert len(data) >= 2
 
     @pytest.mark.asyncio
+    async def test_create_admin_user(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+    ) -> None:
+        """Test creating a new admin user."""
+        response = await client.post(
+            "/api/v1/dashboard/users",
+            headers=admin_auth_headers,
+            json={
+                "username": "created-admin",
+                "email": "created-admin@example.com",
+                "password": "password123",
+                "role": "admin",
+                "language": "en",
+            },
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["username"] == "created-admin"
+        assert data["role"] == "admin"
+        assert data["is_admin"] is True
+
+    @pytest.mark.asyncio
     async def test_get_user_by_id(
         self,
         client: AsyncClient,
@@ -261,6 +299,257 @@ class TestUserManagement:
         assert response.status_code == 200
         data = response.json()
         assert data["is_active"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_user_role(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        test_user: User,
+    ) -> None:
+        """Test promoting a reader to admin."""
+        response = await client.patch(
+            f"/api/v1/dashboard/users/{test_user.id}",
+            headers=admin_auth_headers,
+            json={"role": "admin"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "admin"
+        assert data["is_admin"] is True
+
+    @pytest.mark.asyncio
+    async def test_cannot_remove_current_admin_role(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+    ) -> None:
+        """Test admins cannot remove their own admin role."""
+        response = await client.patch(
+            f"/api/v1/dashboard/users/{admin_user.id}",
+            headers=admin_auth_headers,
+            json={"role": "reader"},
+        )
+
+        assert response.status_code == 400
+        assert "admin role" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_cannot_delete_current_admin_account(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+    ) -> None:
+        """Test admins cannot delete their own account."""
+        response = await client.delete(
+            f"/api/v1/dashboard/users/{admin_user.id}",
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 400
+        assert "own account" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_upload_and_delete_user_profile_image(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        test_user: User,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test admins can manage user profile images."""
+        monkeypatch.setattr(profile_images, "DEFAULT_PROFILE_IMAGE_DIR", str(tmp_path))
+
+        upload_response = await client.put(
+            f"/api/v1/dashboard/users/{test_user.id}/profile-image",
+            headers=admin_auth_headers,
+            files={"image": ("avatar.png", make_png_bytes(), "image/png")},
+        )
+
+        assert upload_response.status_code == 200
+        data = upload_response.json()
+        assert data["profile_image_url"] == f"/api/v1/users/{test_user.id}/profile-image"
+
+        image_response = await client.get(
+            data["profile_image_url"],
+            headers=admin_auth_headers,
+        )
+        assert image_response.status_code == 200
+        assert image_response.headers["content-type"] == "image/jpeg"
+        assert image_response.content.startswith(b"\xff\xd8")
+
+        delete_response = await client.delete(
+            f"/api/v1/dashboard/users/{test_user.id}/profile-image",
+            headers=admin_auth_headers,
+        )
+
+        assert delete_response.status_code == 200
+        assert delete_response.json()["profile_image_url"] is None
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_user_profile_image(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        test_user: User,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test profile images must be valid decodable images."""
+        monkeypatch.setattr(profile_images, "DEFAULT_PROFILE_IMAGE_DIR", str(tmp_path))
+
+        response = await client.put(
+            f"/api/v1/dashboard/users/{test_user.id}/profile-image",
+            headers=admin_auth_headers,
+            files={"image": ("avatar.png", b"fake-png", "image/png")},
+        )
+
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_delete_user_removes_profile_image_file(
+        self,
+        client: AsyncClient,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        test_user: User,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test deleting a user also removes their stored profile image."""
+        monkeypatch.setattr(profile_images, "DEFAULT_PROFILE_IMAGE_DIR", str(tmp_path))
+
+        upload_response = await client.put(
+            f"/api/v1/dashboard/users/{test_user.id}/profile-image",
+            headers=admin_auth_headers,
+            files={"image": ("avatar.png", make_png_bytes(), "image/png")},
+        )
+        assert upload_response.status_code == 200
+        stored_files = list(tmp_path.glob("*.jpg"))
+        assert len(stored_files) == 1
+
+        delete_response = await client.delete(
+            f"/api/v1/dashboard/users/{test_user.id}",
+            headers=admin_auth_headers,
+        )
+
+        assert delete_response.status_code == 204
+        assert not stored_files[0].exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_user_removes_dependent_rows(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        admin_user: User,
+        admin_auth_headers: dict[str, str],
+        test_user: User,
+    ) -> None:
+        """Test hard-deleting a user removes dependent session data."""
+        media_file = MediaFile(
+            file_path="/tmp/delete-user-dependencies.mp4",
+            file_name="delete-user-dependencies.mp4",
+            file_size=1024,
+            file_extension=".mp4",
+        )
+        db_session.add(media_file)
+        await db_session.flush()
+
+        refresh_token = RefreshToken(
+            user_id=test_user.id,
+            token="dependent-refresh-token",
+            expires_at=test_user.created_at,
+        )
+        playback_session = PlaybackSession(
+            user_id=test_user.id,
+            media_file_id=media_file.id,
+        )
+        media_view = MediaView(
+            user_id=test_user.id,
+            media_file_id=media_file.id,
+            position_seconds=120,
+            duration_seconds=7200,
+        )
+        db_session.add_all([refresh_token, playback_session, media_view])
+        await db_session.commit()
+        refresh_token_id = refresh_token.id
+        playback_session_id = playback_session.id
+        media_view_id = media_view.id
+
+        response = await client.delete(
+            f"/api/v1/dashboard/users/{test_user.id}",
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 204
+        db_session.expire_all()
+        assert await db_session.get(User, test_user.id) is None
+        assert await db_session.get(RefreshToken, refresh_token_id) is None
+        assert await db_session.get(PlaybackSession, playback_session_id) is None
+        assert await db_session.get(MediaView, media_view_id) is None
+
+    @pytest.mark.asyncio
+    async def test_permanent_media_delete_keeps_user_view_history(
+        self,
+        db_session: AsyncSession,
+        test_user: User,
+    ) -> None:
+        """Test hard-deleting media cascades file-bound data but preserves user activity."""
+        media_file = MediaFile(
+            file_path="/tmp/delete-media-cascade.mp4",
+            file_name="delete-media-cascade.mp4",
+            file_size=1024,
+            file_extension=".mp4",
+        )
+        db_session.add(media_file)
+        await db_session.flush()
+
+        audio_track = AudioTrack(
+            media_file_id=media_file.id,
+            stream_index=1,
+            codec="aac",
+            is_default=True,
+        )
+        playback_session = PlaybackSession(
+            user_id=test_user.id,
+            media_file_id=media_file.id,
+        )
+        transcoding_job = TranscodingJob(
+            media_file_id=media_file.id,
+            type=TranscodingJobType.HLS,
+            status=TranscodingJobStatus.COMPLETED,
+        )
+        media_view = MediaView(
+            user_id=test_user.id,
+            media_file_id=media_file.id,
+            position_seconds=120,
+            duration_seconds=7200,
+        )
+        db_session.add_all([audio_track, playback_session, transcoding_job, media_view])
+        await db_session.commit()
+        audio_track_id = audio_track.id
+        playback_session_id = playback_session.id
+        transcoding_job_id = transcoding_job.id
+        media_view_id = media_view.id
+
+        await db_session.delete(media_file)
+        await db_session.commit()
+
+        db_session.expire_all()
+        assert await db_session.get(AudioTrack, audio_track_id) is None
+        assert await db_session.get(PlaybackSession, playback_session_id) is None
+        assert await db_session.get(TranscodingJob, transcoding_job_id) is None
+
+        stored_view = await db_session.get(MediaView, media_view_id)
+        assert stored_view is not None
+        assert stored_view.media_file_id is None
 
 
 class TestSettingsManagement:

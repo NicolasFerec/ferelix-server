@@ -39,8 +39,8 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("last_heartbeat_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("ended_at", sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(["media_file_id"], ["mediafile.id"]),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
+        sa.ForeignKeyConstraint(["media_file_id"], ["mediafile.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_playback_session_last_heartbeat_at"), "playback_session", ["last_heartbeat_at"])

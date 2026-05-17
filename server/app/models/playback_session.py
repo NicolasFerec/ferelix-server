@@ -25,8 +25,8 @@ class PlaybackSession(Base):
     __tablename__ = "playback_session"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
-    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id", ondelete="CASCADE"), index=True)
     transcoding_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
 
     play_method: Mapped[str] = mapped_column(String, default="unknown")

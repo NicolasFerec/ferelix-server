@@ -1,23 +1,34 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { auth, type UserUpdate } from "@/api/client";
+import { auth, getAccessToken, type User, type UserUpdate } from "@/api/client";
+import ImageUploadEditor from "@/components/ImageUploadEditor.vue";
+import { useToast } from "@/composables/useToast";
+import { useUser } from "@/composables/useUser";
 import MenuBar from "../components/MenuBar.vue";
 
 const { locale, t } = useI18n();
 const router = useRouter();
+const toast = useToast();
+const { user: currentUser, updateUser } = useUser();
 
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref("");
-const success = ref(false);
+const profileUploader = ref<InstanceType<typeof ImageUploadEditor> | null>(null);
+const hasPendingProfileImage = ref(false);
+const shouldRemoveProfileImage = ref(false);
 const formData = ref({
   username: "",
   email: "",
   password: "",
   confirmPassword: "",
   language: "en",
+});
+const profileImageUrl = computed(() => {
+  if (shouldRemoveProfileImage.value) return null;
+  return authenticatedProfileImageUrl(currentUser.value);
 });
 
 async function loadUserData() {
@@ -26,8 +37,9 @@ async function loadUserData() {
 
   try {
     const user = await auth.getCurrentUser();
+    updateUser(user);
     formData.value.username = user.username;
-    formData.value.email = user.email;
+    formData.value.email = user.email ?? "";
     formData.value.language = user.language || "en";
     // Set i18n locale based on user preference
     locale.value = user.language || "en";
@@ -42,7 +54,6 @@ async function loadUserData() {
 
 async function handleSubmit() {
   error.value = "";
-  success.value = false;
 
   // Validate password match if password is provided
   if (formData.value.password && formData.value.password !== formData.value.confirmPassword) {
@@ -64,28 +75,73 @@ async function handleSubmit() {
       updateData.password = formData.value.password;
     }
 
-    await auth.updateCurrentUser(updateData);
+    let savedUser = await auth.updateCurrentUser(updateData);
+
+    if (hasPendingProfileImage.value) {
+      const editedFile = await profileUploader.value?.getEditedFile();
+      if (editedFile) {
+        savedUser = await auth.uploadCurrentUserProfileImage(editedFile);
+      }
+    } else if (shouldRemoveProfileImage.value && savedUser.profile_image_url) {
+      savedUser = await auth.deleteCurrentUserProfileImage();
+    }
 
     // Update i18n locale
     locale.value = formData.value.language;
+    updateUser(savedUser);
 
-    success.value = true;
+    toast.success(t("settings.updateSuccess"));
+    hasPendingProfileImage.value = false;
+    shouldRemoveProfileImage.value = false;
+    profileUploader.value?.resetSelection();
 
     // Clear password fields
     formData.value.password = "";
     formData.value.confirmPassword = "";
 
-    // Hide success message after 3 seconds
-    setTimeout(() => {
-      success.value = false;
-    }, 3000);
+    leaveSettings();
   } catch (err: unknown) {
     console.error("Failed to update user:", err);
     const apiErr = err as { data?: { detail?: string } };
-    error.value = apiErr.data?.detail || t("settings.updateFailed");
+    const message = apiErr.data?.detail || t("settings.updateFailed");
+    error.value = message;
+    toast.error(message);
   } finally {
     submitting.value = false;
   }
+}
+
+function markProfileImageSelected(): void {
+  hasPendingProfileImage.value = true;
+  shouldRemoveProfileImage.value = false;
+}
+
+function removeProfileImage(): void {
+  hasPendingProfileImage.value = false;
+  shouldRemoveProfileImage.value = true;
+}
+
+function authenticatedProfileImageUrl(user: User | null): string | null {
+  if (!user?.profile_image_url) return null;
+  const token = getAccessToken();
+  if (!token) return user.profile_image_url;
+
+  const url = new URL(user.profile_image_url, window.location.origin);
+  url.searchParams.set("api_key", token);
+  return `${url.pathname}${url.search}`;
+}
+
+function userInitial(): string {
+  return (currentUser.value?.username || formData.value.username || "?").slice(0, 1).toUpperCase();
+}
+
+function leaveSettings(): void {
+  if (window.history.state?.back) {
+    router.back();
+    return;
+  }
+
+  router.push("/");
 }
 
 onMounted(() => {
@@ -94,7 +150,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-900">
+  <div class="settings-view min-h-screen bg-gray-900">
     <MenuBar />
 
     <main class="container mx-auto px-6 py-8 max-w-2xl">
@@ -115,17 +171,22 @@ onMounted(() => {
           </div>
         </div>
 
-        <div v-if="success" class="rounded-md bg-green-900 bg-opacity-50 p-4">
-          <div class="flex">
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-green-300">
-                {{ $t('settings.updateSuccess') }}
-              </h3>
-            </div>
-          </div>
-        </div>
-
         <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-2">
+              {{ $t('users.profileImage') }}
+            </label>
+            <ImageUploadEditor
+              ref="profileUploader"
+              :current-image-url="profileImageUrl"
+              :fallback-initial="userInitial()"
+              mask="circle"
+              :aspect-ratio="1"
+              @selected="markProfileImageSelected"
+              @remove="removeProfileImage"
+            />
+          </div>
+
           <div>
             <label for="username" class="block text-sm font-medium text-gray-300 mb-2">
               {{ $t('settings.username') }}
@@ -205,12 +266,13 @@ onMounted(() => {
           >
             {{ submitting ? $t('common.loading') : $t('common.save') }}
           </button>
-          <router-link
-            to="/"
+          <button
+            type="button"
             class="flex-1 flex justify-center py-2 px-4 border border-gray-700 text-sm font-medium rounded-md text-gray-300 bg-gray-800 hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            @click="leaveSettings"
           >
             {{ $t('common.cancel') }}
-          </router-link>
+          </button>
         </div>
       </form>
     </main>

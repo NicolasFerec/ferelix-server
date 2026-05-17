@@ -5,9 +5,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +30,8 @@ from app.models import (
     SettingsUpdate,
     TranscodingJob,
     User,
+    UserCreate,
+    UserRole,
     UserSchema,
     UserUpdate,
 )
@@ -41,6 +43,7 @@ from app.services.jobs import (
     get_job_state,
     get_job_states,
 )
+from app.services.profile_images import delete_profile_image, save_profile_image
 from app.services.recommendation_row import validate_filter_criteria
 from app.services.scanner import schedule_library_scan
 from app.services.transcoder import get_transcoder
@@ -899,6 +902,42 @@ async def list_users(
     return list(users)
 
 
+@router.post("/users", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: UserCreate,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> User:
+    """Create a user account from the admin dashboard."""
+    existing = await session.scalar(select(User).where(func.lower(User.username) == func.lower(user_data.username)))
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered",
+        )
+
+    email = _normalize_email(user_data.email)
+    if email:
+        existing_email = await session.scalar(select(User).where(User.email == email))
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+
+    user = User(
+        username=user_data.username,
+        email=email,
+        password=user_data.password,
+        is_admin=_is_admin_payload(user_data.role, user_data.is_admin),
+        is_active=True,
+        language=user_data.language,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
 @router.get("/users/{user_id}", response_model=UserSchema)
 async def get_user(
     user_id: int,
@@ -929,6 +968,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     user_update: UserUpdate,
+    admin: Annotated[User, Depends(require_admin)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     """Update user by ID (admin only).
@@ -950,26 +990,107 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+    was_active_admin = user.is_admin and user.is_active
 
-    if user_update.email is not None:
+    if user_update.username is not None:
+        existing = await session.scalar(
+            select(User).where(
+                func.lower(User.username) == func.lower(user_update.username),
+                User.id != user_id,
+            )
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already in use",
+            )
+        user.username = user_update.username
+
+    if "email" in user_update.model_fields_set:
+        email = _normalize_email(user_update.email)
         # Check if email is already taken by another user
-        existing = await session.scalar(select(User).where(User.email == user_update.email, User.id != user_id))
+        existing = await session.scalar(select(User).where(User.email == email, User.id != user_id))
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already in use",
             )
-        user.email = user_update.email
+        user.email = email
 
     if user_update.password is not None:
         user.password = user_update.password
 
+    if user_update.language is not None:
+        user.language = user_update.language
+
+    requested_admin = _requested_admin_flag(user_update.role, user_update.is_admin)
+    if requested_admin is not None:
+        if user_id == admin.id and not requested_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove your own admin role",
+            )
+        user.is_admin = requested_admin
+
     if user_update.is_active is not None:
+        if user_id == admin.id and not user_update.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate your own account",
+            )
         user.is_active = user_update.is_active
 
+    await ensure_active_admin_remains(session, user, was_active_admin=was_active_admin)
+
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await session.commit()
     await session.refresh(user)
 
+    return user
+
+
+@router.put("/users/{user_id}/profile-image", response_model=UserSchema)
+async def upload_user_profile_image(
+    user_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    image: Annotated[UploadFile, File()],
+) -> User:
+    """Upload or replace a user's profile image."""
+    user = await session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    previous_image_path = user.profile_image_path
+    user.profile_image_path = await save_profile_image(user.id, image)
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    await session.commit()
+    await session.refresh(user)
+    delete_profile_image(previous_image_path)
+    return user
+
+
+@router.delete("/users/{user_id}/profile-image", response_model=UserSchema)
+async def delete_user_profile_image(
+    user_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> User:
+    """Remove a user's profile image."""
+    user = await session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    previous_image_path = user.profile_image_path
+    user.profile_image_path = None
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    await session.commit()
+    await session.refresh(user)
+    delete_profile_image(previous_image_path)
     return user
 
 
@@ -1002,9 +1123,53 @@ async def delete_user(
             detail="User not found",
         )
 
+    await ensure_active_admin_remains(session, user, was_active_admin=user.is_admin and user.is_active)
+
+    previous_image_path = user.profile_image_path
     await session.delete(user)
     await session.commit()
+    delete_profile_image(previous_image_path)
 
+
+def _normalize_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    normalized = email.strip()
+    return normalized or None
+
+
+def _is_admin_payload(role: UserRole, legacy_is_admin: bool) -> bool:
+    return role == UserRole.ADMIN or legacy_is_admin
+
+
+def _requested_admin_flag(role: UserRole | None, legacy_is_admin: bool | None) -> bool | None:
+    if role is not None:
+        return role == UserRole.ADMIN
+    return legacy_is_admin
+
+
+async def ensure_active_admin_remains(
+    session: AsyncSession,
+    user: User,
+    *,
+    was_active_admin: bool,
+) -> None:
+    """Prevent user mutations that would leave the server without an active admin."""
+    if not was_active_admin or (user.is_admin and user.is_active):
+        return
+
+    remaining_admin_count = await session.scalar(
+        select(func.count(User.id)).where(
+            User.id != user.id,
+            User.is_admin == True,  # noqa: E712
+            User.is_active == True,  # noqa: E712
+        )
+    )
+    if not remaining_admin_count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one active admin is required",
+        )
 
 # ============================================================================
 # Recommendation Row Management Endpoints (Admin Only)

@@ -55,6 +55,7 @@ const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null);
 const isEndingPlaybackSession = ref(false);
 const jobStartOffset = ref<number>(0); // Absolute time offset that the current job starts at
 const pendingSeek = ref<number | null>(null); // Seek requested while job is starting
+const pendingInitialSeek = ref<number | null>(null);
 
 // Playback state
 const videoSrc = ref("");
@@ -342,6 +343,14 @@ function markPlaybackSessionEnded() {
   playbackSessions.end(sessionId).catch((error) => console.warn("Failed to end playback session:", error));
 }
 
+function getResumePosition(): number {
+  const view = props.mediaFile?.user_view;
+  const mediaDuration = view?.duration_seconds || props.mediaFile?.duration;
+  if (!view || view.watched || !mediaDuration || mediaDuration <= 0) return 0;
+  if (view.position_seconds < 10 || view.position_seconds >= mediaDuration - 10) return 0;
+  return view.position_seconds;
+}
+
 function sourceWithBurnedSubtitle(source: StreamSource): StreamSource {
   if (selectedBurnedSubtitleStreamIndex() === undefined) {
     return source;
@@ -392,6 +401,11 @@ async function initializePlayback() {
     const source = sourceWithBurnedSubtitle(playbackInfo.MediaSources[0] as StreamSource);
     currentSource.value = source as StreamSource;
     playMethod.value = source.PlayMethod as PlaybackMethod;
+    const resumeSeconds = getResumePosition();
+    if (resumeSeconds > 0) {
+      currentTime.value = resumeSeconds;
+      pendingInitialSeek.value = resumeSeconds;
+    }
 
     // Store available resolutions and transcode reasons
     const rawResolutions = source.AvailableResolutions as Array<Record<string, unknown>>;
@@ -479,6 +493,7 @@ async function setupHlsPlayback(source: StreamSource) {
       sessionId: playbackSessionId.value,
     });
 
+    pendingInitialSeek.value = null;
     currentJobId.value = job.id;
     await sendHeartbeat();
 
@@ -1233,6 +1248,11 @@ function onLoadedMetadata() {
       selectNativeAudioTrack(selectedAudioTrack.value);
     }
 
+    if (!isHlsPlayback.value && pendingInitialSeek.value !== null) {
+      videoElement.value.currentTime = pendingInitialSeek.value;
+      pendingInitialSeek.value = null;
+    }
+
     // Ensure controls are visible when metadata loads
     showControls();
   }
@@ -1492,7 +1512,6 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
       :is-loading="isLoading"
       :loading-message="loadingMessage"
       :error-message="errorMessage"
-      :play-method="playMethod"
       @retry="initializePlayback"
     />
 

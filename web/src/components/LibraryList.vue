@@ -2,11 +2,13 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { type Library, libraries as libraryApi } from "@/api/client";
+import { useToast } from "@/composables/useToast";
 import DashboardTable from "./DashboardTable.vue";
 import LibraryForm from "./LibraryForm.vue";
 import LibraryItem from "./LibraryItem.vue";
 
 const { t } = useI18n();
+const toast = useToast();
 
 const libraries = ref<Library[]>([]);
 const loading = ref(false);
@@ -42,19 +44,21 @@ async function handleDelete(library: Library) {
   try {
     await libraryApi.deleteLibrary(library.id);
     await loadLibraries();
+    toast.success(t("libraries.deleteSuccess"));
   } catch (err: unknown) {
     console.error("Failed to delete library:", err);
     const apiErr = err as { data?: { detail?: string } };
-    alert(apiErr.data?.detail || t("libraries.deleteFailed"));
+    toast.error(apiErr.data?.detail || t("libraries.deleteFailed"));
   }
 }
 
 function handleScan(_library: Library) {
   // Show success message - scan is async, user can check Jobs panel for progress
-  alert(t("libraries.scanStarted"));
+  toast.primary(t("libraries.scanStarted"));
 }
 
 function handleSaved() {
+  toast.success(editingLibrary.value ? t("libraries.updateSuccess") : t("libraries.createSuccess"));
   showForm.value = false;
   editingLibrary.value = null;
   loadLibraries();

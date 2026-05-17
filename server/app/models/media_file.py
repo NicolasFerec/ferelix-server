@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, fu
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .media_view import MediaViewSchema
 
 
 class MediaFile(Base):
@@ -35,10 +36,14 @@ class MediaFile(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     # Relationships
-    video_tracks: Mapped[list[VideoTrack]] = relationship(back_populates="media_file", cascade="all, delete-orphan")
-    audio_tracks: Mapped[list[AudioTrack]] = relationship(back_populates="media_file", cascade="all, delete-orphan")
+    video_tracks: Mapped[list[VideoTrack]] = relationship(
+        back_populates="media_file", cascade="all, delete-orphan", passive_deletes=True
+    )
+    audio_tracks: Mapped[list[AudioTrack]] = relationship(
+        back_populates="media_file", cascade="all, delete-orphan", passive_deletes=True
+    )
     subtitle_tracks: Mapped[list[SubtitleTrack]] = relationship(
-        back_populates="media_file", cascade="all, delete-orphan"
+        back_populates="media_file", cascade="all, delete-orphan", passive_deletes=True
     )
 
     @property
@@ -69,6 +74,7 @@ class MediaFileSchema(BaseModel):
     updated_at: datetime
     scanned_at: datetime
     deleted_at: datetime | None = None
+    user_view: MediaViewSchema | None = None
     video_tracks: list[VideoTrackSchema] = []
     audio_tracks: list[AudioTrackSchema] = []
     subtitle_tracks: list[SubtitleTrackSchema] = []
@@ -80,7 +86,7 @@ class VideoTrack(Base):
     __tablename__ = "video_track"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"))
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id", ondelete="CASCADE"))
     stream_index: Mapped[int] = mapped_column(Integer)
     codec: Mapped[str] = mapped_column(String)
     width: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -117,7 +123,7 @@ class AudioTrack(Base):
     __tablename__ = "audio_track"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"))
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id", ondelete="CASCADE"))
     stream_index: Mapped[int] = mapped_column(Integer)
     codec: Mapped[str] = mapped_column(String)
     language: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -139,7 +145,7 @@ class SubtitleTrack(Base):
     __tablename__ = "subtitle_track"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id"))
+    media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id", ondelete="CASCADE"))
     stream_index: Mapped[int] = mapped_column(Integer)
     codec: Mapped[str] = mapped_column(String)
     language: Mapped[str | None] = mapped_column(String, nullable=True)

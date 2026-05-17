@@ -210,6 +210,50 @@ export interface paths {
         patch: operations["update_current_user_api_v1_users_me_patch"];
         trace?: never;
     };
+    "/api/v1/users/{user_id}/profile-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Profile Image
+         * @description Serve a user profile image to authenticated users.
+         */
+        get: operations["get_profile_image_api_v1_users__user_id__profile_image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/profile-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload Current User Profile Image
+         * @description Upload or replace the current user's profile image.
+         */
+        put: operations["upload_current_user_profile_image_api_v1_users_me_profile_image_put"];
+        post?: never;
+        /**
+         * Delete Current User Profile Image
+         * @description Remove the current user's profile image.
+         */
+        delete: operations["delete_current_user_profile_image_api_v1_users_me_profile_image_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/playback-info/{media_id}": {
         parameters: {
             query?: never;
@@ -288,7 +332,7 @@ export interface paths {
          *
          *     Args:
          *         library_id: Library path ID
-         *         _user: Authenticated user (dependency)
+         *         user: Authenticated user
          *         session: Database session
          *         skip: Number of records to skip
          *         limit: Maximum number of records to return
@@ -320,7 +364,7 @@ export interface paths {
          * @description Get all discovered media files.
          *
          *     Args:
-         *         _user: Authenticated user (dependency)
+         *         user: Authenticated user
          *         session: Database session
          *         skip: Number of records to skip
          *         limit: Maximum number of records to return
@@ -329,6 +373,26 @@ export interface paths {
          *         List of media files
          */
         get: operations["get_media_files_api_v1_media_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media-files/continue-watching": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Continue Watching Media Files
+         * @description Get media files started by the current user but not completed.
+         */
+        get: operations["get_continue_watching_media_files_api_v1_media_files_continue_watching_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -350,7 +414,7 @@ export interface paths {
          *
          *     Args:
          *         media_id: Media file ID
-         *         _user: Authenticated user (dependency)
+         *         user: Authenticated user
          *         session: Database session
          *
          *     Returns:
@@ -366,6 +430,30 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media/{media_id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Media View
+         * @description Get the current user's saved watch state for a media file.
+         */
+        get: operations["get_media_view_api_v1_media__media_id__view_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Media View
+         * @description Update the current user's saved watch state for a media file.
+         */
+        patch: operations["update_media_view_api_v1_media__media_id__view_patch"];
         trace?: never;
     };
     "/api/v1/media/{media_id}/thumbnail": {
@@ -402,7 +490,7 @@ export interface paths {
          *     Returns playlists that are visible on homepage, with their filtered media files.
          *
          *     Args:
-         *         _user: Authenticated user (dependency)
+         *         user: Authenticated user
          *         session: Database session
          *
          *     Returns:
@@ -430,7 +518,7 @@ export interface paths {
          *
          *     Args:
          *         library_id: Library ID
-         *         _user: Authenticated user (dependency)
+         *         user: Authenticated user
          *         session: Database session
          *
          *     Returns:
@@ -1116,7 +1204,11 @@ export interface paths {
          */
         get: operations["list_users_api_v1_dashboard_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User
+         * @description Create a user account from the admin dashboard.
+         */
+        post: operations["create_user_api_v1_dashboard_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1178,6 +1270,30 @@ export interface paths {
          *         HTTPException: If user not found
          */
         patch: operations["update_user_api_v1_dashboard_users__user_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/dashboard/users/{user_id}/profile-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload User Profile Image
+         * @description Upload or replace a user's profile image.
+         */
+        put: operations["upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put"];
+        post?: never;
+        /**
+         * Delete User Profile Image
+         * @description Remove a user's profile image.
+         */
+        delete: operations["delete_user_profile_image_api_v1_dashboard_users__user_id__profile_image_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/dashboard/recommendation-rows": {
@@ -1562,6 +1678,22 @@ export interface components {
             /** Sample Rate */
             sample_rate?: number | null;
         };
+        /** Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put */
+        Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put: {
+            /**
+             * Image
+             * Format: binary
+             */
+            image: string;
+        };
+        /** Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put */
+        Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put: {
+            /**
+             * Image
+             * Format: binary
+             */
+            image: string;
+        };
         /**
          * CodecProfile
          * @description Profile defining codec constraints and limitations.
@@ -1928,6 +2060,7 @@ export interface components {
             scanned_at: string;
             /** Deleted At */
             deleted_at?: string | null;
+            user_view?: components["schemas"]["MediaViewSchema"] | null;
             /**
              * Video Tracks
              * @default []
@@ -1943,6 +2076,53 @@ export interface components {
              * @default []
              */
             subtitle_tracks: components["schemas"]["SubtitleTrackSchema"][];
+        };
+        /**
+         * MediaViewSchema
+         * @description API representation of a user's watch state for one media file.
+         */
+        MediaViewSchema: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number;
+            /** Media File Id */
+            media_file_id: number | null;
+            /** Position Seconds */
+            position_seconds: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Watched */
+            watched: boolean;
+            /** Play Count */
+            play_count: number;
+            /**
+             * First Viewed At
+             * Format: date-time
+             */
+            first_viewed_at: string;
+            /**
+             * Last Viewed At
+             * Format: date-time
+             */
+            last_viewed_at: string;
+            /** Completed At */
+            completed_at?: string | null;
+        };
+        /**
+         * MediaViewUpdate
+         * @description Manual watch-state update payload.
+         */
+        MediaViewUpdate: {
+            /**
+             * Position Seconds
+             * @default 0
+             */
+            position_seconds: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Watched */
+            watched?: boolean | null;
         };
         /**
          * PlayMethod
@@ -2525,6 +2705,8 @@ export interface components {
             email: string | null;
             /** Password */
             password: string;
+            /** @default reader */
+            role: components["schemas"]["UserRole"];
             /**
              * Is Admin
              * @default false
@@ -2537,6 +2719,12 @@ export interface components {
             language: string;
         };
         /**
+         * UserRole
+         * @description Application roles currently supported by Ferelix.
+         * @enum {string}
+         */
+        UserRole: "reader" | "admin";
+        /**
          * UserSchema
          * @description Schema for User API responses (excludes password).
          */
@@ -2547,6 +2735,9 @@ export interface components {
             username: string;
             /** Email */
             email: string | null;
+            /** Profile Image Url */
+            profile_image_url?: string | null;
+            role: components["schemas"]["UserRole"];
             /** Is Admin */
             is_admin: boolean;
             /** Is Active */
@@ -2575,8 +2766,11 @@ export interface components {
             email?: string | null;
             /** Password */
             password?: string | null;
+            role?: components["schemas"]["UserRole"] | null;
             /** Language */
             language?: string | null;
+            /** Is Admin */
+            is_admin?: boolean | null;
             /** Is Active */
             is_active?: boolean | null;
         };
@@ -2919,6 +3113,105 @@ export interface operations {
             };
         };
     };
+    get_profile_image_api_v1_users__user_id__profile_image_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_current_user_profile_image_api_v1_users_me_profile_image_put: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_current_user_profile_image_api_v1_users_me_profile_image_delete: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_playback_info_api_v1_playback_info__media_id__post: {
         parameters: {
             query?: {
@@ -3055,6 +3348,38 @@ export interface operations {
             };
         };
     };
+    get_continue_watching_media_files_api_v1_media_files_continue_watching_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaFileSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_media_file_api_v1_media__media_id__get: {
         parameters: {
             query?: {
@@ -3075,6 +3400,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaFileSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_media_view_api_v1_media__media_id__view_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaViewSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_media_view_api_v1_media__media_id__view_patch: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaViewUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaViewSchema"];
                 };
             };
             /** @description Validation Error */
@@ -4187,6 +4582,41 @@ export interface operations {
             };
         };
     };
+    create_user_api_v1_dashboard_users_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_user_api_v1_dashboard_users__user_id__get: {
         parameters: {
             query?: {
@@ -4267,6 +4697,76 @@ export interface operations {
                 "application/json": components["schemas"]["UserUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_profile_image_api_v1_dashboard_users__user_id__profile_image_delete: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

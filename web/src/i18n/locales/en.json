@@ -21,7 +21,19 @@
         "actions": "Actions",
         "go": "Go",
         "select": "Select",
-        "optional": "Optional"
+        "optional": "Optional",
+        "close": "Close",
+        "menu": "Menu",
+        "userMenu": "User menu",
+        "previous": "Previous",
+        "next": "Next"
+    },
+    "imageUpload": {
+        "chooseImage": "Choose image",
+        "removeImage": "Remove image",
+        "zoom": "Zoom",
+        "cropPreview": "Crop preview",
+        "invalidImage": "This image cannot be used."
     },
     "login": {
         "title": "Sign in to Ferelix",
@@ -101,6 +113,44 @@
         "jobs": "Jobs",
         "comingSoon": "Coming soon..."
     },
+    "users": {
+        "title": "Users",
+        "subtitle": "Create accounts and choose who can access the admin dashboard.",
+        "create": "Create user",
+        "edit": "Edit user",
+        "createAction": "Create",
+        "creating": "Creating...",
+        "username": "Username",
+        "email": "Email",
+        "password": "Password",
+        "passwordPlaceholder": "Keep current",
+        "profileImage": "Profile image",
+        "changeProfileImage": "Choose image",
+        "removeProfileImage": "Remove image",
+        "role": "Role",
+        "language": "Language",
+        "status": "Status",
+        "active": "Active",
+        "inactive": "Inactive",
+        "saving": "Saving...",
+        "deleting": "Deleting...",
+        "empty": "No users yet",
+        "requiredFields": "Username and password are required.",
+        "currentAdminRoleLocked": "You cannot change your own admin role.",
+        "currentAdminDeleteLocked": "You cannot delete your own admin account.",
+        "loadFailed": "Failed to load users",
+        "createSuccess": "User created successfully",
+        "createFailed": "Failed to create user",
+        "updateSuccess": "User updated successfully",
+        "updateFailed": "Failed to update user",
+        "deleteSuccess": "User deleted successfully",
+        "deleteFailed": "Failed to delete user",
+        "confirmDelete": "Delete {username}?",
+        "roles": {
+            "reader": "Reader",
+            "admin": "Admin"
+        }
+    },
     "libraries": {
         "title": "Libraries",
         "add": "Add Library",
@@ -152,7 +202,8 @@
         "noLibraries": "No library configured yet",
         "loadingMediaFiles": "Loading media files...",
         "loadFailed": "Failed to load media files. Please try again.",
-        "noRows": "No rows available. Configure playlists to display content."
+        "noRows": "No rows available. Configure playlists to display content.",
+        "continueWatching": "Continue watching"
     },
     "recommendationRows": {
         "title": "Recommendation Rows",
@@ -179,6 +230,9 @@
         "specialRowInfo": "This is a special recommendation row. Filter criteria and library cannot be modified.",
         "noRows": "No recommendation rows configured",
         "loadFailed": "Failed to load recommendation rows",
+        "createSuccess": "Recommendation row created successfully",
+        "updateSuccess": "Recommendation row updated successfully",
+        "deleteSuccess": "Recommendation row deleted successfully",
         "saveFailed": "Failed to save recommendation row",
         "updateFailed": "Failed to update recommendation row",
         "deleteFailed": "Failed to delete recommendation row",
@@ -198,6 +252,9 @@
         "back": "Go back",
         "backHome": "Back to home",
         "play": "Play",
+        "resume": "Resume",
+        "watched": "Watched",
+        "progress": "Progress",
         "fileInformation": "File Information",
         "fields": {
             "file": "File",
@@ -278,6 +335,7 @@
         "refresh": "Refresh",
         "empty": "No active streams",
         "loadFailed": "Failed to load active streams",
+        "stopSuccess": "Stream stopped",
         "stopFailed": "Failed to stop stream",
         "media": "Media",
         "playback": "Playback",

@@ -17,6 +17,7 @@ from .media_file import (
     VideoTrack,
     VideoTrackSchema,
 )
+from .media_view import MediaView, MediaViewSchema, MediaViewUpdate
 from .playback_session import (
     PlaybackSession,
     PlaybackSessionCreate,
@@ -42,7 +43,7 @@ from .transcoding import (
     TranscodingJobSchema,
     TranscodingProgressUpdate,
 )
-from .user import User, UserCreate, UserSchema, UserUpdate
+from .user import User, UserCreate, UserRole, UserSchema, UserUpdate
 
 __all__ = [
     "AudioTrack",
@@ -54,6 +55,9 @@ __all__ = [
     "LibraryUpdate",
     "MediaFile",
     "MediaFileSchema",
+    "MediaView",
+    "MediaViewSchema",
+    "MediaViewUpdate",
     "PlaybackSession",
     "PlaybackSessionCreate",
     "PlaybackSessionHeartbeat",
@@ -75,6 +79,7 @@ __all__ = [
     "TranscodingProgressUpdate",
     "User",
     "UserCreate",
+    "UserRole",
     "UserSchema",
     "UserUpdate",
     "VideoTrack",

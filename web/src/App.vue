@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { useI18n } from "vue-i18n";
+import ToastViewport from "@/components/ToastViewport.vue";
 import { useUser } from "@/composables/useUser";
 
 const { locale } = useI18n();
@@ -18,5 +19,6 @@ onMounted(async () => {
 <template>
   <div id="app" class="min-h-screen bg-gray-900">
     <router-view />
+    <ToastViewport />
   </div>
 </template>

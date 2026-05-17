@@ -2,8 +2,10 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { type ActiveStream, media, streams as streamsApi } from "@/api/client";
+import { useToast } from "@/composables/useToast";
 
 const { t, locale } = useI18n();
+const toast = useToast();
 
 const streams = ref<ActiveStream[]>([]);
 const loading = ref(false);
@@ -37,9 +39,12 @@ async function stopStream(streamId: string) {
   try {
     await streamsApi.stopStream(streamId);
     await loadStreams(false);
+    toast.success(t("streams.stopSuccess"));
   } catch (err) {
     console.error("Failed to stop stream:", err);
-    error.value = err.data?.detail || t("streams.stopFailed");
+    const message = err.data?.detail || t("streams.stopFailed");
+    error.value = message;
+    toast.error(message);
   } finally {
     const updated = new Set(stoppingStreams.value);
     updated.delete(streamId);

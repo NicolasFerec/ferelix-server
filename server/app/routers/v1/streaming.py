@@ -15,6 +15,7 @@ from app.database import get_session
 from app.dependencies import get_current_active_user
 from app.models import (
     MediaFile,
+    MediaView,
     PlaybackSession,
     PlaybackSessionCreate,
     PlaybackSessionHeartbeat,
@@ -124,6 +125,7 @@ async def create_playback_session(
         user_agent=request.headers.get("user-agent"),
     )
     session.add(playback_session)
+    await record_media_view_started(session, user.id, payload.media_file_id, payload.duration_seconds)
     await session.commit()
     await session.refresh(playback_session)
     return PlaybackSessionSchema.model_validate(playback_session)
@@ -161,6 +163,13 @@ async def heartbeat_playback_session(
     playback_session.audio_stream_index = payload.audio_stream_index
     playback_session.subtitle_stream_index = payload.subtitle_stream_index
     playback_session.last_heartbeat_at = datetime.now(UTC).replace(tzinfo=None)
+    await record_media_view_progress(
+        session,
+        user.id,
+        playback_session.media_file_id,
+        playback_session.position_seconds,
+        playback_session.duration_seconds,
+    )
 
     await session.commit()
     await session.refresh(playback_session)
@@ -178,7 +187,74 @@ async def end_playback_session(
     if playback_session.status == PlaybackSessionStatus.ACTIVE:
         playback_session.status = PlaybackSessionStatus.ENDED
         playback_session.ended_at = datetime.now(UTC).replace(tzinfo=None)
+        await record_media_view_progress(
+            session,
+            user.id,
+            playback_session.media_file_id,
+            playback_session.position_seconds,
+            playback_session.duration_seconds,
+        )
         await session.commit()
+
+
+async def record_media_view_started(
+    session: AsyncSession,
+    user_id: int,
+    media_file_id: int,
+    duration_seconds: float | None,
+) -> MediaView:
+    """Create or update watch state when playback starts."""
+    view = await get_or_create_media_view(session, user_id, media_file_id)
+    view.play_count += 1
+    if duration_seconds is not None:
+        view.duration_seconds = duration_seconds
+    view.last_viewed_at = datetime.now(UTC).replace(tzinfo=None)
+    return view
+
+
+async def record_media_view_progress(
+    session: AsyncSession,
+    user_id: int,
+    media_file_id: int,
+    position_seconds: float,
+    duration_seconds: float | None,
+) -> MediaView:
+    """Persist a user's latest watch position."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    view = await get_or_create_media_view(session, user_id, media_file_id)
+    view.position_seconds = max(position_seconds, 0.0)
+    view.duration_seconds = duration_seconds
+    view.last_viewed_at = now
+
+    if is_media_watched(view.position_seconds, duration_seconds):
+        view.watched = True
+        view.completed_at = view.completed_at or now
+
+    return view
+
+
+async def get_or_create_media_view(session: AsyncSession, user_id: int, media_file_id: int) -> MediaView:
+    view = await session.scalar(
+        select(MediaView).where(
+            MediaView.user_id == user_id,
+            MediaView.media_file_id == media_file_id,
+        )
+    )
+    if view:
+        return view
+
+    view = MediaView(user_id=user_id, media_file_id=media_file_id)
+    session.add(view)
+    await session.flush()
+    return view
+
+
+def is_media_watched(position_seconds: float, duration_seconds: float | None) -> bool:
+    if not duration_seconds or duration_seconds <= 0:
+        return False
+    if position_seconds >= duration_seconds * 0.9:
+        return True
+    return duration_seconds >= 120 and duration_seconds - position_seconds <= 60
 
 
 @router.get("/stream/{media_id}")

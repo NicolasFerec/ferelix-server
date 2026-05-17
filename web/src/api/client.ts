@@ -15,7 +15,10 @@ export type LibraryCreate = components["schemas"]["LibraryCreate"];
 export type LibraryUpdate = components["schemas"]["LibraryUpdate"];
 export type MediaFile = components["schemas"]["MediaFileSchema"];
 export type User = components["schemas"]["UserSchema"];
+export type UserCreate = components["schemas"]["UserCreate"];
 export type UserUpdate = components["schemas"]["UserUpdate"];
+export type MediaView = components["schemas"]["MediaViewSchema"];
+export type MediaViewUpdate = components["schemas"]["MediaViewUpdate"];
 export type Job = components["schemas"]["JobSchema"];
 export type JobExecution = components["schemas"]["JobExecutionSchema"];
 export type ActiveStream = components["schemas"]["ActiveStreamSchema"];
@@ -269,10 +272,56 @@ export const auth = {
         }
         return data;
     },
+
+    /**
+     * Upload current user's cropped profile image
+     */
+    async uploadCurrentUserProfileImage(image: File): Promise<User> {
+        const formData = new FormData();
+        formData.append("image", image);
+        const accessToken = getAccessToken();
+        const response = await fetch("/api/v1/users/me/profile-image", {
+            method: "PUT",
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+            body: formData,
+        });
+        if (!response.ok) {
+            throw new Error("Failed to upload profile image");
+        }
+        return (await response.json()) as User;
+    },
+
+    /**
+     * Delete current user's profile image
+     */
+    async deleteCurrentUserProfileImage(): Promise<User> {
+        const accessToken = getAccessToken();
+        const response = await fetch("/api/v1/users/me/profile-image", {
+            method: "DELETE",
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        });
+        if (!response.ok) {
+            throw new Error("Failed to delete profile image");
+        }
+        return (await response.json()) as User;
+    },
 };
 
 // Export media-related functions
 export const media = {
+    /**
+     * Get media files the current user started but has not finished
+     */
+    async getContinueWatching(limit = 24): Promise<MediaFile[]> {
+        const { data, error } = await client.GET("/api/v1/media-files/continue-watching", {
+            params: { query: { limit } },
+        });
+        if (error || !data) {
+            throw new Error("Failed to get continue watching media");
+        }
+        return data;
+    },
+
     /**
      * Get media file by ID
      */
@@ -695,6 +744,72 @@ export const streams = {
         if (error) {
             throw new Error("Failed to stop stream");
         }
+    },
+};
+
+// Export admin user-management functions
+export const dashboardUsers = {
+    async listUsers(): Promise<User[]> {
+        const { data, error } = await client.GET("/api/v1/dashboard/users");
+        if (error || !data) {
+            throw new Error("Failed to get users");
+        }
+        return data;
+    },
+
+    async createUser(userData: UserCreate): Promise<User> {
+        const { data, error } = await client.POST("/api/v1/dashboard/users", {
+            body: userData,
+        });
+        if (error || !data) {
+            throw new Error("Failed to create user");
+        }
+        return data;
+    },
+
+    async updateUser(id: number, userData: UserUpdate): Promise<User> {
+        const { data, error } = await client.PATCH("/api/v1/dashboard/users/{user_id}", {
+            params: { path: { user_id: id } },
+            body: userData,
+        });
+        if (error || !data) {
+            throw new Error("Failed to update user");
+        }
+        return data;
+    },
+
+    async deleteUser(id: number): Promise<void> {
+        const { error } = await client.DELETE("/api/v1/dashboard/users/{user_id}", {
+            params: { path: { user_id: id } },
+        });
+        if (error) {
+            throw new Error("Failed to delete user");
+        }
+    },
+
+    async uploadProfileImage(id: number, image: File): Promise<User> {
+        const formData = new FormData();
+        formData.append("image", image);
+        const accessToken = getAccessToken();
+        const response = await fetch(`/api/v1/dashboard/users/${id}/profile-image`, {
+            method: "PUT",
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+            body: formData,
+        });
+        if (!response.ok) {
+            throw new Error("Failed to upload profile image");
+        }
+        return (await response.json()) as User;
+    },
+
+    async deleteProfileImage(id: number): Promise<User> {
+        const { data, error } = await client.DELETE("/api/v1/dashboard/users/{user_id}/profile-image", {
+            params: { path: { user_id: id } },
+        });
+        if (error || !data) {
+            throw new Error("Failed to delete profile image");
+        }
+        return data;
     },
 };
 

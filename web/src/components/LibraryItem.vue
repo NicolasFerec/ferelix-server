@@ -8,6 +8,7 @@ import {
   type RecommendationRowUpdate,
   recommendationRows as rowApi,
 } from "@/api/client";
+import { useToast } from "@/composables/useToast";
 import DashboardTable from "./DashboardTable.vue";
 import RecommendationRowForm from "./RecommendationRowForm.vue";
 
@@ -18,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits(["edit", "delete", "scan"]);
 
 const { t } = useI18n();
+const toast = useToast();
 
 const expanded = ref(false);
 const scanning = ref(false);
@@ -66,7 +68,7 @@ async function loadRecommendationRows() {
   } catch (err: unknown) {
     console.error("Failed to load recommendation rows:", err);
     const apiErr = err as { data?: { detail?: string } };
-    alert(apiErr.data?.detail || t("recommendationRows.loadFailed"));
+    toast.error(apiErr.data?.detail || t("recommendationRows.loadFailed"));
   } finally {
     loadingRows.value = false;
   }
@@ -100,7 +102,7 @@ async function handleToggleVisibility(row: RecommendationRow, type: string, chec
   } catch (err: unknown) {
     console.error("Failed to update visibility:", err);
     const apiErr = err as { data?: { detail?: string } };
-    alert(apiErr.data?.detail || t("recommendationRows.updateFailed"));
+    toast.error(apiErr.data?.detail || t("recommendationRows.updateFailed"));
   } finally {
     updatingVisibility.value = null;
   }
@@ -118,7 +120,7 @@ function handleEditRow(row: RecommendationRow) {
 
 async function handleDeleteRow(row: RecommendationRow) {
   if (row.is_special) {
-    alert(t("recommendationRows.cannotDeleteSpecial"));
+    toast.warn(t("recommendationRows.cannotDeleteSpecial"));
     return;
   }
 
@@ -132,11 +134,12 @@ async function handleDeleteRow(row: RecommendationRow) {
   } catch (err: unknown) {
     console.error("Failed to delete recommendation row:", err);
     const apiErr = err as { data?: { detail?: string } };
-    alert(apiErr.data?.detail || t("recommendationRows.deleteFailed"));
+    toast.error(apiErr.data?.detail || t("recommendationRows.deleteFailed"));
   }
 }
 
 function handleRowSaved() {
+  toast.success(editingRow.value ? t("recommendationRows.updateSuccess") : t("recommendationRows.createSuccess"));
   showRowForm.value = false;
   editingRow.value = null;
   loadRecommendationRows();
@@ -151,7 +154,7 @@ async function handleScan() {
   } catch (err: unknown) {
     console.error("Failed to scan library:", err);
     const apiErr = err as { data?: { detail?: string } };
-    alert(apiErr.data?.detail || t("libraries.scanFailed"));
+    toast.error(apiErr.data?.detail || t("libraries.scanFailed"));
   } finally {
     scanning.value = false;
   }

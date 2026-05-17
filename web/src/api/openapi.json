@@ -375,6 +375,186 @@
         }
       }
     },
+    "/api/v1/users/{user_id}/profile-image": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Profile Image",
+        "description": "Serve a user profile image to authenticated users.",
+        "operationId": "get_profile_image_api_v1_users__user_id__profile_image_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/profile-image": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Upload Current User Profile Image",
+        "description": "Upload or replace the current user's profile image.",
+        "operationId": "upload_current_user_profile_image_api_v1_users_me_profile_image_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete Current User Profile Image",
+        "description": "Remove the current user's profile image.",
+        "operationId": "delete_current_user_profile_image_api_v1_users_me_profile_image_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/playback-info/{media_id}": {
       "post": {
         "tags": [
@@ -514,7 +694,7 @@
           "media"
         ],
         "summary": "Get Library Items",
-        "description": "Get items (media files) from a specific library.\n\nArgs:\n    library_id: Library path ID\n    _user: Authenticated user (dependency)\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files from the library\n\nRaises:\n    HTTPException: If library not found",
+        "description": "Get items (media files) from a specific library.\n\nArgs:\n    library_id: Library path ID\n    user: Authenticated user\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files from the library\n\nRaises:\n    HTTPException: If library not found",
         "operationId": "get_library_items_api_v1_libraries__library_id__items_get",
         "security": [
           {
@@ -602,7 +782,7 @@
           "media"
         ],
         "summary": "Get Media Files",
-        "description": "Get all discovered media files.\n\nArgs:\n    _user: Authenticated user (dependency)\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files",
+        "description": "Get all discovered media files.\n\nArgs:\n    user: Authenticated user\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files",
         "operationId": "get_media_files_api_v1_media_files_get",
         "security": [
           {
@@ -675,13 +855,82 @@
         }
       }
     },
+    "/api/v1/media-files/continue-watching": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Continue Watching Media Files",
+        "description": "Get media files started by the current user but not completed.",
+        "operationId": "get_continue_watching_media_files_api_v1_media_files_continue_watching_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 24,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MediaFileSchema"
+                  },
+                  "title": "Response Get Continue Watching Media Files Api V1 Media Files Continue Watching Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/media/{media_id}": {
       "get": {
         "tags": [
           "media"
         ],
         "summary": "Get Media File",
-        "description": "Get a specific media file by ID with track information.\n\nArgs:\n    media_id: Media file ID\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    Media file details with tracks\n\nRaises:\n    HTTPException: If media file not found or is deleted",
+        "description": "Get a specific media file by ID with track information.\n\nArgs:\n    media_id: Media file ID\n    user: Authenticated user\n    session: Database session\n\nReturns:\n    Media file details with tracks\n\nRaises:\n    HTTPException: If media file not found or is deleted",
         "operationId": "get_media_file_api_v1_media__media_id__get",
         "security": [
           {
@@ -722,6 +971,142 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MediaFileSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media/{media_id}/view": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Media View",
+        "description": "Get the current user's saved watch state for a media file.",
+        "operationId": "get_media_view_api_v1_media__media_id__view_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaViewSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Update Media View",
+        "description": "Update the current user's saved watch state for a media file.",
+        "operationId": "update_media_view_api_v1_media__media_id__view_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaViewUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaViewSchema"
                 }
               }
             }
@@ -807,7 +1192,7 @@
           "media"
         ],
         "summary": "Get Homepage Rows",
-        "description": "Get all visible rows for homepage.\n\nReturns playlists that are visible on homepage, with their filtered media files.\n\nArgs:\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    List of homepage rows with media files",
+        "description": "Get all visible rows for homepage.\n\nReturns playlists that are visible on homepage, with their filtered media files.\n\nArgs:\n    user: Authenticated user\n    session: Database session\n\nReturns:\n    List of homepage rows with media files",
         "operationId": "get_homepage_rows_api_v1_homepage_rows_get",
         "security": [
           {
@@ -866,7 +1251,7 @@
           "media"
         ],
         "summary": "Get Library Rows",
-        "description": "Get rows for a specific library (for Library View \"Recommended\" tab).\n\nArgs:\n    library_id: Library ID\n    _user: Authenticated user (dependency)\n    session: Database session\n\nReturns:\n    List of rows with media files for the library\n\nRaises:\n    HTTPException: If library not found or is disabled",
+        "description": "Get rows for a specific library (for Library View \"Recommended\" tab).\n\nArgs:\n    library_id: Library ID\n    user: Authenticated user\n    session: Database session\n\nReturns:\n    List of rows with media files for the library\n\nRaises:\n    HTTPException: If library not found or is disabled",
         "operationId": "get_library_rows_api_v1_libraries__library_id__rows_get",
         "security": [
           {
@@ -3142,6 +3527,69 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Create User",
+        "description": "Create a user account from the admin dashboard.",
+        "operationId": "create_user_api_v1_dashboard_users_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/dashboard/users/{user_id}": {
@@ -3321,6 +3769,142 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/users/{user_id}/profile-image": {
+      "put": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Upload User Profile Image",
+        "description": "Upload or replace a user's profile image.",
+        "operationId": "upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Delete User Profile Image",
+        "description": "Remove a user's profile image.",
+        "operationId": "delete_user_profile_image_api_v1_dashboard_users__user_id__profile_image_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSchema"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4607,6 +5191,34 @@
         "title": "AudioTrackSchema",
         "description": "Schema for AudioTrack API responses."
       },
+      "Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "title": "Image"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put"
+      },
+      "Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "binary",
+            "title": "Image"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put"
+      },
       "CodecProfile": {
         "properties": {
           "Type": {
@@ -5478,6 +6090,16 @@
             ],
             "title": "Deleted At"
           },
+          "user_view": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MediaViewSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "video_tracks": {
             "items": {
               "$ref": "#/components/schemas/VideoTrackSchema"
@@ -5515,6 +6137,121 @@
         ],
         "title": "MediaFileSchema",
         "description": "Schema for MediaFile API responses."
+      },
+      "MediaViewSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "media_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media File Id"
+          },
+          "position_seconds": {
+            "type": "number",
+            "title": "Position Seconds"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "watched": {
+            "type": "boolean",
+            "title": "Watched"
+          },
+          "play_count": {
+            "type": "integer",
+            "title": "Play Count"
+          },
+          "first_viewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Viewed At"
+          },
+          "last_viewed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Viewed At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "media_file_id",
+          "position_seconds",
+          "watched",
+          "play_count",
+          "first_viewed_at",
+          "last_viewed_at"
+        ],
+        "title": "MediaViewSchema",
+        "description": "API representation of a user's watch state for one media file."
+      },
+      "MediaViewUpdate": {
+        "properties": {
+          "position_seconds": {
+            "type": "number",
+            "title": "Position Seconds",
+            "default": 0.0
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "watched": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watched"
+          }
+        },
+        "type": "object",
+        "title": "MediaViewUpdate",
+        "description": "Manual watch-state update payload."
       },
       "PlayMethod": {
         "type": "string",
@@ -6957,6 +7694,10 @@
             "type": "string",
             "title": "Password"
           },
+          "role": {
+            "$ref": "#/components/schemas/UserRole",
+            "default": "reader"
+          },
           "is_admin": {
             "type": "boolean",
             "title": "Is Admin",
@@ -6976,6 +7717,15 @@
         ],
         "title": "UserCreate",
         "description": "Schema for creating a new user."
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "reader",
+          "admin"
+        ],
+        "title": "UserRole",
+        "description": "Application roles currently supported by Ferelix."
       },
       "UserSchema": {
         "properties": {
@@ -6997,6 +7747,20 @@
               }
             ],
             "title": "Email"
+          },
+          "profile_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Image Url"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
           },
           "is_admin": {
             "type": "boolean",
@@ -7026,6 +7790,7 @@
           "id",
           "username",
           "email",
+          "role",
           "is_admin",
           "is_active",
           "language",
@@ -7070,6 +7835,16 @@
             ],
             "title": "Password"
           },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "language": {
             "anyOf": [
               {
@@ -7080,6 +7855,17 @@
               }
             ],
             "title": "Language"
+          },
+          "is_admin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Admin"
           },
           "is_active": {
             "anyOf": [

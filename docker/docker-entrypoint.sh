@@ -50,8 +50,11 @@ done
 # -------------------------------
 echo "Setting up /config directory..."
 mkdir -p /config
+mkdir -p /config/images/profile
 chown -R ferelix:ferelix /config
 chmod 755 /config
+chmod 755 /config/images
+chmod 755 /config/images/profile
 
 # -------------------------------
 # Extract and prepare database directory

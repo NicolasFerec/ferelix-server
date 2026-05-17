@@ -1,8 +1,8 @@
 <template>
   <div v-if="isVisible" class="info-panel">
     <div class="info-panel-header">
-      <h3>Playback Information</h3>
-      <button @click="$emit('toggle')" class="close-btn" title="Close info panel">
+      <h3>{{ $t("player.info.title") }}</h3>
+      <button @click="$emit('toggle')" class="close-btn" :title="$t('player.info.close')">
         ✕
       </button>
     </div>
@@ -10,75 +10,75 @@
     <div class="info-panel-content">
       <!-- Playback Method -->
       <div class="info-section">
-        <h4>Playback Method</h4>
-        <div class="info-value">{{ playbackInfo?.playMethod || 'Unknown' }}</div>
+        <h4>{{ $t("player.info.playbackMethod") }}</h4>
+        <div class="info-value">{{ playbackInfo?.playMethod || $t("common.unknown") }}</div>
         <div v-if="playbackInfo?.isRemuxOnly" class="info-detail">
-          Container conversion only, no re-encoding
+          {{ $t("player.info.remuxOnly") }}
         </div>
       </div>
 
       <!-- Media Information -->
       <div v-if="mediaInfo" class="info-section">
-        <h4>Media Information</h4>
+        <h4>{{ $t("player.info.mediaInformation") }}</h4>
         <div class="info-row">
-          <span class="label">Original Resolution:</span>
+          <span class="label">{{ $t("player.info.originalResolution") }}</span>
           <span class="value">{{ mediaInfo.originalResolution }}</span>
         </div>
         <div v-if="mediaInfo.currentResolution && mediaInfo.currentResolution !== mediaInfo.originalResolution" class="info-row">
-          <span class="label">Current Resolution:</span>
+          <span class="label">{{ $t("player.info.currentResolution") }}</span>
           <span class="value">{{ mediaInfo.currentResolution }}</span>
         </div>
         <div v-if="mediaInfo.duration" class="info-row">
-          <span class="label">Duration:</span>
+          <span class="label">{{ $t("player.info.duration") }}</span>
           <span class="value">{{ formatDuration(mediaInfo.duration) }}</span>
         </div>
         <div v-if="mediaInfo.bitrate" class="info-row">
-          <span class="label">Bitrate:</span>
+          <span class="label">{{ $t("player.info.bitrate") }}</span>
           <span class="value">{{ formatBitrate(mediaInfo.bitrate) }}</span>
         </div>
       </div>
 
       <!-- Video Codec Information -->
       <div v-if="codecInfo?.video" class="info-section">
-        <h4>Video</h4>
+        <h4>{{ $t("player.info.video") }}</h4>
         <div class="info-row">
-          <span class="label">Codec:</span>
+          <span class="label">{{ $t("player.info.codec") }}</span>
           <span class="value">{{ codecInfo.video.codec }}</span>
         </div>
         <div v-if="codecInfo.video.profile" class="info-row">
-          <span class="label">Profile:</span>
+          <span class="label">{{ $t("player.info.profile") }}</span>
           <span class="value">{{ codecInfo.video.profile }}</span>
         </div>
         <div v-if="codecInfo.video.level" class="info-row">
-          <span class="label">Level:</span>
+          <span class="label">{{ $t("player.info.level") }}</span>
           <span class="value">{{ codecInfo.video.level }}</span>
         </div>
         <div v-if="codecInfo.video.bitDepth" class="info-row">
-          <span class="label">Bit Depth:</span>
-          <span class="value">{{ codecInfo.video.bitDepth }}-bit</span>
+          <span class="label">{{ $t("player.info.bitDepth") }}</span>
+          <span class="value">{{ $t("player.info.bitDepthValue", { depth: codecInfo.video.bitDepth }) }}</span>
         </div>
       </div>
 
       <!-- Audio Codec Information -->
       <div v-if="codecInfo?.audio" class="info-section">
-        <h4>Audio</h4>
+        <h4>{{ $t("player.info.audio") }}</h4>
         <div class="info-row">
-          <span class="label">Codec:</span>
+          <span class="label">{{ $t("player.info.codec") }}</span>
           <span class="value">{{ codecInfo.audio.codec }}</span>
         </div>
         <div v-if="codecInfo.audio.channels" class="info-row">
-          <span class="label">Channels:</span>
+          <span class="label">{{ $t("player.info.channels") }}</span>
           <span class="value">{{ formatChannels(codecInfo.audio.channels) }}</span>
         </div>
         <div v-if="codecInfo.audio.sampleRate" class="info-row">
-          <span class="label">Sample Rate:</span>
+          <span class="label">{{ $t("player.info.sampleRate") }}</span>
           <span class="value">{{ codecInfo.audio.sampleRate }} Hz</span>
         </div>
       </div>
 
       <!-- Transcode Reasons -->
       <div v-if="transcodeReasons && transcodeReasons.length > 0" class="info-section">
-        <h4>Transcode Reasons</h4>
+        <h4>{{ $t("player.info.transcodeReasons") }}</h4>
         <ul class="reason-list">
           <li v-for="reason in transcodeReasons" :key="reason" class="reason-item">
             {{ reason }}
@@ -88,9 +88,9 @@
 
       <!-- Active Job Information -->
       <div v-if="currentJobId" class="info-section">
-        <h4>Transcoding Job</h4>
+        <h4>{{ $t("player.info.transcodingJob") }}</h4>
         <div class="info-row">
-          <span class="label">Job ID:</span>
+          <span class="label">{{ $t("player.info.jobId") }}</span>
           <span class="value">{{ currentJobId }}</span>
         </div>
       </div>
@@ -99,7 +99,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 interface PlaybackInfo {
   playMethod: string;
@@ -127,7 +129,7 @@ interface CodecInfo {
   };
 }
 
-const props = defineProps<{
+defineProps<{
   isVisible: boolean;
   playbackInfo?: PlaybackInfo;
   mediaInfo?: MediaInfo;
@@ -146,9 +148,9 @@ const formatDuration = (seconds: number): string => {
   const remainingSeconds = Math.floor(seconds % 60);
 
   if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`;
   }
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 };
 
 const formatBitrate = (bitrate: number): string => {
@@ -161,12 +163,12 @@ const formatBitrate = (bitrate: number): string => {
 
 const formatChannels = (channels: number): string => {
   const channelMap: Record<number, string> = {
-    1: '1.0 (Mono)',
-    2: '2.0 (Stereo)',
-    6: '5.1 (Surround)',
-    8: '7.1 (Surround)',
+    1: "1.0 (Mono)",
+    2: "2.0 (Stereo)",
+    6: "5.1 (Surround)",
+    8: "7.1 (Surround)",
   };
-  return channelMap[channels] || `${channels} channels`;
+  return channelMap[channels] || t("player.info.channelsValue", { channels });
 };
 </script>
 

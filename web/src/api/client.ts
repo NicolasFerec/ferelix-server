@@ -36,6 +36,9 @@ export type PlaybackSession = components["schemas"]["PlaybackSessionSchema"];
 export type PlaybackSessionHeartbeatResponse = components["schemas"]["PlaybackSessionHeartbeatResponse"];
 export type StreamInfo = components["schemas"]["StreamInfo"];
 export type TranscodingJob = components["schemas"]["TranscodingJobSchema"];
+export type LogLine = components["schemas"]["LogLineSchema"];
+export type LogsResponse = components["schemas"]["LogsResponse"];
+export type LogsConfig = components["schemas"]["LogsConfigResponse"];
 
 /**
  * Get access token from localStorage
@@ -754,6 +757,48 @@ export const streams = {
         if (error) {
             throw new Error("Failed to stop stream");
         }
+    },
+};
+
+export const serverLogs = {
+    async getConfig(): Promise<LogsConfig> {
+        const { data, error } = await client.GET("/api/v1/dashboard/logs/config");
+        if (error || !data) {
+            throw new Error("Failed to get server logs configuration");
+        }
+        return data;
+    },
+
+    async getLogs(options?: {
+        maxLines?: number;
+        allLines?: boolean;
+        levels?: string[];
+        channels?: string[];
+    }): Promise<LogsResponse> {
+        const { data, error } = await client.GET("/api/v1/dashboard/logs", {
+            params: {
+                query: {
+                    max_lines: options?.maxLines ?? 1000,
+                    all_lines: options?.allLines ?? false,
+                    levels: options?.levels,
+                    channels: options?.channels,
+                },
+            },
+        });
+        if (error || !data) {
+            throw new Error("Failed to get server logs");
+        }
+        return data;
+    },
+
+    async tail(offset: number, options?: { levels?: string[]; channels?: string[] }): Promise<LogsResponse> {
+        const { data, error } = await client.GET("/api/v1/dashboard/logs/tail", {
+            params: { query: { offset, levels: options?.levels, channels: options?.channels } },
+        });
+        if (error || !data) {
+            throw new Error("Failed to tail server logs");
+        }
+        return data;
     },
 };
 

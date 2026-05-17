@@ -43,6 +43,7 @@ from app.services.jobs import (
     get_job_state,
     get_job_states,
 )
+from app.services.logging_config import LogsConfigResponse, LogsResponse, logs_config, read_logs, tail_logs
 from app.services.profile_images import delete_profile_image, save_profile_image
 from app.services.recommendation_row import validate_filter_criteria
 from app.services.scanner import schedule_library_scan
@@ -613,6 +614,49 @@ async def stop_active_stream(
         await get_transcoder().stop_job(playback_session.transcoding_job_id)
 
     await session.commit()
+
+
+@router.get("/logs", response_model=LogsResponse)
+async def get_server_logs(
+    max_lines: Annotated[int, Query(ge=1, le=50000)] = 1000,
+    all_lines: bool = False,
+    levels: Annotated[list[str] | None, Query()] = None,
+    channels: Annotated[list[str] | None, Query()] = None,
+) -> LogsResponse:
+    """Read server logs from persistent log files."""
+    return read_logs(
+        None if all_lines else max_lines,
+        levels=_normalize_log_filter(levels),
+        channels=_normalize_log_filter(channels, uppercase=False),
+    )
+
+
+@router.get("/logs/config", response_model=LogsConfigResponse)
+async def get_server_logs_config() -> LogsConfigResponse:
+    """Return server log viewer configuration."""
+    return logs_config()
+
+
+@router.get("/logs/tail", response_model=LogsResponse)
+async def tail_server_logs(
+    offset: Annotated[int, Query(ge=0)] = 0,
+    levels: Annotated[list[str] | None, Query()] = None,
+    channels: Annotated[list[str] | None, Query()] = None,
+) -> LogsResponse:
+    """Read new server log entries from the active log file."""
+    return tail_logs(
+        offset,
+        levels=_normalize_log_filter(levels),
+        channels=_normalize_log_filter(channels, uppercase=False),
+    )
+
+
+def _normalize_log_filter(values: list[str] | None, *, uppercase: bool = True) -> set[str] | None:
+    if not values:
+        return None
+
+    normalized = {item.strip().upper() if uppercase else item.strip().lower() for item in values if item.strip()}
+    return normalized or None
 
 
 def _playback_progress(position: float, duration: float | None) -> float | None:

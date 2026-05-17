@@ -1183,6 +1183,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Server Logs
+         * @description Read server logs from persistent log files.
+         */
+        get: operations["get_server_logs_api_v1_dashboard_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/logs/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Server Logs Config
+         * @description Return server log viewer configuration.
+         */
+        get: operations["get_server_logs_config_api_v1_dashboard_logs_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/logs/tail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tail Server Logs
+         * @description Read new server log entries from the active log file.
+         */
+        get: operations["tail_server_logs_api_v1_dashboard_logs_tail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/users": {
         parameters: {
             query?: never;
@@ -2005,6 +2065,26 @@ export interface components {
             enabled?: boolean | null;
         };
         /**
+         * LogLineSchema
+         * @description One server log line exposed to admins.
+         */
+        LogLineSchema: {
+            /** Number */
+            number: number;
+            /** Text */
+            text: string;
+            /** Message */
+            message: string;
+            /** Channel */
+            channel?: string | null;
+            /** Logger */
+            logger?: string | null;
+            /** Level */
+            level?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        };
+        /**
          * LoginRequest
          * @description Request schema for user login.
          */
@@ -2015,6 +2095,37 @@ export interface components {
             password: string;
             /** Device Info */
             device_info?: string | null;
+        };
+        /**
+         * LogsConfigResponse
+         * @description Server logs dashboard configuration.
+         */
+        LogsConfigResponse: {
+            /** Levels */
+            levels: string[];
+            /** File Level */
+            file_level: string;
+            /** Max Bytes */
+            max_bytes: number;
+            /** Backup Count */
+            backup_count: number;
+        };
+        /**
+         * LogsResponse
+         * @description Server logs response.
+         */
+        LogsResponse: {
+            /** Lines */
+            lines: components["schemas"]["LogLineSchema"][];
+            /** Next Offset */
+            next_offset: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Path */
+            path: string;
         };
         /**
          * MediaFileSchema
@@ -4537,6 +4648,106 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_server_logs_api_v1_dashboard_logs_get: {
+        parameters: {
+            query?: {
+                max_lines?: number;
+                all_lines?: boolean;
+                levels?: string[] | null;
+                channels?: string[] | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_server_logs_config_api_v1_dashboard_logs_config_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tail_server_logs_api_v1_dashboard_logs_tail_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                levels?: string[] | null;
+                channels?: string[] | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogsResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

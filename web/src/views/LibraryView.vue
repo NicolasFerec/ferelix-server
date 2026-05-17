@@ -41,7 +41,7 @@ function getDisplayName(row) {
 async function loadLibrary() {
   const libraryId = currentLibraryId.value;
   if (!libraryId) {
-    error.value = "Invalid library ID";
+    error.value = t("library.invalidId");
     return;
   }
 
@@ -49,11 +49,11 @@ async function loadLibrary() {
     const libraries = await libraryApi.getLibraries();
     library.value = libraries.find((lib) => lib.id === libraryId);
     if (!library.value) {
-      error.value = "Library not found";
+      error.value = t("library.notFound");
     }
   } catch (err) {
     console.error("Failed to load library:", err);
-    error.value = "Failed to load library";
+    error.value = t("library.loadFailed");
   }
 }
 
@@ -95,7 +95,7 @@ async function loadData() {
     }
   } catch (err) {
     console.error("Failed to load data:", err);
-    error.value = "Failed to load data";
+    error.value = t("library.loadFailed");
   } finally {
     loading.value = false;
   }

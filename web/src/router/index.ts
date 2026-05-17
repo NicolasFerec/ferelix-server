@@ -49,7 +49,7 @@ const routes: RouteRecordRaw[] = [
         component: UserSettingsView,
     },
     {
-        path: "/dashboard",
+        path: "/dashboard/:section?",
         name: "dashboard",
         component: DashboardView,
     },
@@ -64,7 +64,7 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
     const publicPages = ["/login", "/setup"];
     const authRequired = !publicPages.includes(to.path);
-    const adminPages = ["/dashboard"];
+    const isAdminPage = to.path === "/dashboard" || to.path.startsWith("/dashboard/");
 
     // Check authentication
     if (authRequired && !isAuthenticated()) {
@@ -73,7 +73,7 @@ router.beforeEach(async (to, _from, next) => {
     }
 
     // Check admin access for admin-only pages
-    if (adminPages.includes(to.path)) {
+    if (isAdminPage) {
         try {
             const user = await auth.getCurrentUser();
             if (!user || !user.is_admin) {

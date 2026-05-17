@@ -36,7 +36,7 @@ async function loadRows() {
       const library = libraries.value.find((lib) => lib.id === row.library_id);
       return {
         ...row,
-        library_name: library?.name || "Unknown",
+        library_name: library?.name || t("common.unknown"),
       };
     });
   } catch (err) {

@@ -161,7 +161,8 @@ const playbackInfo = computed(() => {
 
 const mediaInfo = computed(() => {
   const videoTrack = props.mediaFile?.video_tracks?.[0];
-  const originalResolution = videoTrack ? `${videoTrack.width || 'Unknown'}x${videoTrack.height || 'Unknown'}` : 'Unknown';
+  const unknown = t("common.unknown");
+  const originalResolution = videoTrack ? `${videoTrack.width || unknown}x${videoTrack.height || unknown}` : unknown;
   const currentResolution = selectedResolution.value && !selectedResolution.value.is_original
     ? `${selectedResolution.value.width}x${selectedResolution.value.height}`
     : originalResolution;
@@ -170,28 +171,28 @@ const mediaInfo = computed(() => {
     originalResolution,
     currentResolution,
     duration: duration.value,
-    bitrate: props.mediaFile?.bitrate
+    bitrate: props.mediaFile?.bitrate,
   };
 });
 
 const codecInfo = computed(() => {
   const videoTrack = props.mediaFile?.video_tracks?.[0];
-  const audioTrack = selectedAudioTrack.value ?
-    props.mediaFile?.audio_tracks?.find(t => t.id === selectedAudioTrack.value?.id) :
-    props.mediaFile?.audio_tracks?.[0];
+  const audioTrack = selectedAudioTrack.value
+    ? props.mediaFile?.audio_tracks?.find((track) => track.id === selectedAudioTrack.value?.id)
+    : props.mediaFile?.audio_tracks?.[0];
 
   return {
     video: videoTrack ? {
-      codec: videoTrack.codec || 'Unknown',
+      codec: videoTrack.codec || t("common.unknown"),
       profile: videoTrack.profile,
       level: videoTrack.level,
-      bitDepth: videoTrack.bit_depth
+      bitDepth: videoTrack.bit_depth,
     } : null,
     audio: audioTrack ? {
-      codec: audioTrack.codec || 'Unknown',
+      codec: audioTrack.codec || t("common.unknown"),
       channels: audioTrack.channels,
-      sampleRate: audioTrack.sample_rate
-    } : null
+      sampleRate: audioTrack.sample_rate,
+    } : null,
   };
 });
 
@@ -438,7 +439,9 @@ async function initializePlayback() {
     }
   } catch (error) {
     console.error("Playback initialization failed:", error);
-    errorMessage.value = `Failed to start playback: ${error instanceof Error ? error.message : "Unknown error"}`;
+    errorMessage.value = t("player.start_failed", {
+      error: error instanceof Error ? error.message : t("common.unknown"),
+    });
     isLoading.value = false;
 
     // Try fallback to direct stream
@@ -616,7 +619,7 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
                 setTimeout(() => initializePlayback(), backoffDelay);
               } else {
                 console.error("Max retries reached, giving up");
-                errorMessage.value = "Playback failed after multiple retries. Please try again later.";
+                errorMessage.value = t("player.retry_failed");
                 cleanup();
               }
             } else {
@@ -627,7 +630,7 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
             hls.recoverMediaError();
             break;
           default:
-            errorMessage.value = `Playback error: ${data.details}`;
+            errorMessage.value = t("player.playback_error", { error: data.details });
             cleanup();
         }
       } else {
@@ -749,7 +752,7 @@ async function selectAudioTrack(track: AudioTrackOption) {
     // Note: Backend handles startTime, so playback starts from the right position
   } catch (error) {
     console.error("Audio track switch failed:", error);
-    errorMessage.value = "Failed to switch audio track";
+    errorMessage.value = t("player.audio_switch_failed");
     isLoading.value = false;
   }
 }
@@ -913,7 +916,7 @@ async function restartWithBurnedSubtitle(track: SubtitleTrackOption) {
     await setupHlsPlayer(playlistUrl, relativePosition);
   } catch (error) {
     console.error("Subtitle burn failed:", error);
-    errorMessage.value = "Failed to burn subtitles";
+    errorMessage.value = t("player.subtitle_burn_failed");
     isLoading.value = false;
   }
 }
@@ -1359,7 +1362,7 @@ async function retryWithTranscoding() {
     await loadSelectedTextSubtitle();
   } catch (error) {
     console.error("Transcode fallback failed:", error);
-    errorMessage.value = "Playback failed. This format may not be supported.";
+    errorMessage.value = t("player.unsupported_format");
     isLoading.value = false;
   }
 }
@@ -1476,7 +1479,7 @@ async function restartPlaybackWithResolution(requestedResolution: { width: numbe
 
   } catch (error) {
     console.error("Resolution switch failed:", error);
-    errorMessage.value = "Failed to switch resolution";
+    errorMessage.value = t("player.resolution_switch_failed");
     isLoading.value = false;
   }
 }

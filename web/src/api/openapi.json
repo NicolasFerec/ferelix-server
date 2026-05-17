@@ -3450,6 +3450,280 @@
         }
       }
     },
+    "/api/v1/dashboard/logs": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Server Logs",
+        "description": "Read server logs from persistent log files.",
+        "operationId": "get_server_logs_api_v1_dashboard_logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "max_lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50000,
+              "minimum": 1,
+              "default": 1000,
+              "title": "Max Lines"
+            }
+          },
+          {
+            "name": "all_lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "All Lines"
+            }
+          },
+          {
+            "name": "levels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Levels"
+            }
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channels"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/logs/config": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Server Logs Config",
+        "description": "Return server log viewer configuration.",
+        "operationId": "get_server_logs_config_api_v1_dashboard_logs_config_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogsConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/logs/tail": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Tail Server Logs",
+        "description": "Read new server log entries from the active log file.",
+        "operationId": "tail_server_logs_api_v1_dashboard_logs_tail_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "levels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Levels"
+            }
+          },
+          {
+            "name": "channels",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channels"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/dashboard/users": {
       "get": {
         "tags": [
@@ -5938,6 +6212,74 @@
         "title": "LibraryUpdate",
         "description": "Schema for updating a library."
       },
+      "LogLineSchema": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "logger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logger"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "text",
+          "message"
+        ],
+        "title": "LogLineSchema",
+        "description": "One server log line exposed to admins."
+      },
       "LoginRequest": {
         "properties": {
           "username": {
@@ -5967,6 +6309,70 @@
         ],
         "title": "LoginRequest",
         "description": "Request schema for user login."
+      },
+      "LogsConfigResponse": {
+        "properties": {
+          "levels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Levels"
+          },
+          "file_level": {
+            "type": "string",
+            "title": "File Level"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "title": "Max Bytes"
+          },
+          "backup_count": {
+            "type": "integer",
+            "title": "Backup Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "levels",
+          "file_level",
+          "max_bytes",
+          "backup_count"
+        ],
+        "title": "LogsConfigResponse",
+        "description": "Server logs dashboard configuration."
+      },
+      "LogsResponse": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LogLineSchema"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "next_offset": {
+            "type": "integer",
+            "title": "Next Offset"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines",
+          "next_offset",
+          "path"
+        ],
+        "title": "LogsResponse",
+        "description": "Server logs response."
       },
       "MediaFileSchema": {
         "properties": {

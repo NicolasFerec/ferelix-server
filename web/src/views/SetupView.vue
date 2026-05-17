@@ -88,7 +88,7 @@ async function handleSetup(): Promise<void> {
 
         <div class="rounded-md shadow-xs space-y-3">
           <div>
-            <label for="username" class="sr-only">Username</label>
+            <label for="username" class="sr-only">{{ $t('setup.username') }}</label>
             <input
               id="username"
               v-model="username"
@@ -100,7 +100,7 @@ async function handleSetup(): Promise<void> {
             />
           </div>
           <div>
-            <label for="password" class="sr-only">Password</label>
+            <label for="password" class="sr-only">{{ $t('setup.password') }}</label>
             <input
               id="password"
               v-model="password"
@@ -112,7 +112,7 @@ async function handleSetup(): Promise<void> {
             />
           </div>
           <div>
-            <label for="confirmPassword" class="sr-only">Confirm Password</label>
+            <label for="confirmPassword" class="sr-only">{{ $t('setup.confirmPassword') }}</label>
             <input
               id="confirmPassword"
               v-model="confirmPassword"

@@ -25,6 +25,8 @@
         "close": "Fermer",
         "menu": "Menu",
         "userMenu": "Menu utilisateur",
+        "user": "Utilisateur",
+        "unknown": "Inconnu",
         "previous": "Précédent",
         "next": "Suivant"
     },
@@ -111,7 +113,48 @@
         "users": "Utilisateurs",
         "settings": "Paramètres",
         "jobs": "Tâches",
+        "logs": "Logs",
         "comingSoon": "Bientôt disponible..."
+    },
+    "logs": {
+        "title": "Logs serveur",
+        "subtitle": "Consultez l'historique disponible et suivez les nouvelles lignes en direct.",
+        "refresh": "Rafraîchir",
+        "live": "Live",
+        "following": "Suivi actif",
+        "paused": "Suivi en pause",
+        "autoscroll": "Autoscroll",
+        "copy": "Copier",
+        "copySuccess": "Logs copiés",
+        "copyFailed": "Impossible de copier les logs",
+        "loadFailed": "Échec du chargement des logs",
+        "empty": "Aucune ligne de log disponible",
+        "search": "Rechercher",
+        "searchNoResults": "Aucune ligne ne correspond à la recherche",
+        "levels": "Niveaux",
+        "channels": "Canaux",
+        "allLevels": "Tous",
+        "noLevels": "Aucun",
+        "allChannels": "Tous",
+        "noChannels": "Aucun",
+        "selectAll": "Tout sélectionner",
+        "clearAll": "Tout désélectionner",
+        "channelNames": {
+            "web": "Web",
+            "api": "API",
+            "auth": "Auth",
+            "scheduler": "Scheduleur",
+            "scanner": "Scan",
+            "transcode": "Transcode",
+            "database": "Base",
+            "server": "Serveur"
+        },
+        "ranges": {
+            "last500": "500 dernières lignes",
+            "last2000": "2 000 dernières lignes",
+            "last10000": "10 000 dernières lignes",
+            "all": "Tout l'historique disponible"
+        }
     },
     "users": {
         "title": "Utilisateurs",
@@ -158,7 +201,9 @@
         "delete": "Supprimer la bibliothèque",
         "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette bibliothèque ?",
         "name": "Nom",
+        "namePlaceholder": "Ma bibliothèque",
         "path": "Chemin",
+        "pathPlaceholder": "/chemin/vers/bibliotheque",
         "typeLabel": "Type",
         "type": {
             "movie": "Films",
@@ -243,7 +288,10 @@
     },
     "library": {
         "recommended": "Recommandé",
-        "allItems": "Tous les éléments"
+        "allItems": "Tous les éléments",
+        "invalidId": "Identifiant de bibliothèque invalide",
+        "notFound": "Bibliothèque introuvable",
+        "loadFailed": "Échec du chargement de la bibliothèque"
     },
     "mediaDetail": {
         "loading": "Chargement du média...",
@@ -412,7 +460,38 @@
         "error": "Échec du chargement de la vidéo",
         "retry": "Réessayer",
         "seeking_to": "Recherche à {time}...",
+        "start_failed": "Échec du démarrage de la lecture : {error}",
+        "retry_failed": "La lecture a échoué après plusieurs tentatives. Veuillez réessayer plus tard.",
+        "playback_error": "Erreur de lecture : {error}",
+        "audio_switch_failed": "Échec du changement de piste audio",
+        "subtitle_burn_failed": "Échec de l'incrustation des sous-titres",
+        "unsupported_format": "Échec de la lecture. Ce format n'est peut-être pas pris en charge.",
+        "resolution_switch_failed": "Échec du changement de résolution",
         "seek_failed": "Échec de la recherche pendant le transcodage",
-        "kickedByAdmin": "La lecture a été arrêtée par un administrateur."
+        "kickedByAdmin": "La lecture a été arrêtée par un administrateur.",
+        "info": {
+            "title": "Informations de lecture",
+            "close": "Fermer les informations",
+            "playbackMethod": "Mode de lecture",
+            "remuxOnly": "Conversion du conteneur uniquement, sans réencodage",
+            "mediaInformation": "Informations du média",
+            "originalResolution": "Résolution originale :",
+            "currentResolution": "Résolution actuelle :",
+            "duration": "Durée :",
+            "bitrate": "Débit :",
+            "video": "Vidéo",
+            "audio": "Audio",
+            "codec": "Codec :",
+            "profile": "Profil :",
+            "level": "Niveau :",
+            "bitDepth": "Profondeur :",
+            "bitDepthValue": "{depth} bits",
+            "channels": "Canaux :",
+            "channelsValue": "{channels} canaux",
+            "sampleRate": "Échantillonnage :",
+            "transcodeReasons": "Raisons du transcodage",
+            "transcodingJob": "Tâche de transcodage",
+            "jobId": "ID de tâche :"
+        }
     }
 }

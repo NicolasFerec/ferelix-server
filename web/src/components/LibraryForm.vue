@@ -120,7 +120,7 @@ function handlePathSelect(path) {
               type="text"
               required
               class="w-full px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
-              placeholder="My Library"
+              :placeholder="$t('libraries.namePlaceholder')"
             />
           </div>
 
@@ -135,7 +135,7 @@ function handlePathSelect(path) {
                 type="text"
                 required
                 class="flex-1 px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
-                placeholder="/path/to/library"
+                :placeholder="$t('libraries.pathPlaceholder')"
               />
               <button
                 type="button"

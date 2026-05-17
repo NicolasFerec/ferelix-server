@@ -22,10 +22,10 @@ async function loadLibraryName() {
   try {
     const libraries = await libraryApi.getAllLibraries();
     const library = libraries.find((lib) => lib.id === props.row.library_id);
-    library_name.value = library?.name || "Unknown";
+    library_name.value = library?.name || t("common.unknown");
   } catch (err) {
     console.error("Failed to load library name:", err);
-    library_name.value = "Unknown";
+    library_name.value = t("common.unknown");
   }
 }
 

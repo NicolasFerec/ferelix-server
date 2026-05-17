@@ -347,6 +347,7 @@ class FFmpegTranscoder:
             return str(playlist_path)
         except Exception as exc:
             await self._mark_job_failed(job_id, str(exc))
+            logger.error("Failed to start %s job %s: %s", operation, job_id, exc)
             raise HTTPException(status_code=500, detail=f"Failed to start {operation}: {exc}") from exc
 
     async def _ensure_process_running(self, job_id: str, process: asyncio.subprocess.Process) -> None:
@@ -357,9 +358,9 @@ class FFmpegTranscoder:
             return
 
         stderr = await process.stderr.read() if process.stderr else b""
-        raise RuntimeError(
-            f"FFmpeg exited immediately with code {process.returncode}: {stderr.decode('utf-8', errors='ignore')}"
-        )
+        stderr_text = stderr.decode("utf-8", errors="ignore")
+        logger.error("FFmpeg job %s exited immediately with code %s: %s", job_id, process.returncode, stderr_text)
+        raise RuntimeError(f"FFmpeg exited immediately with code {process.returncode}: {stderr_text}")
 
     async def _wait_for_playlist(
         self,
@@ -376,6 +377,7 @@ class FFmpegTranscoder:
         if process.returncode is None:
             process.kill()
             await process.wait()
+        logger.error("FFmpeg did not create playlist %s within %.1f seconds", playlist_path, timeout_seconds)
         raise TimeoutError(f"FFmpeg did not create an HLS playlist within {int(timeout_seconds)} seconds")
 
     async def _monitor_progress(
@@ -407,8 +409,11 @@ class FFmpegTranscoder:
             if process.returncode == 0:
                 await self._mark_job_completed(job_id)
             else:
-                await self._mark_job_failed(job_id, self._summarize_stderr(process.returncode, stderr_lines))
+                summary = self._summarize_stderr(process.returncode, stderr_lines)
+                logger.error("FFmpeg job %s failed: %s", job_id, summary)
+                await self._mark_job_failed(job_id, summary)
         except Exception as exc:
+            logger.error("Progress monitoring failed for FFmpeg job %s: %s", job_id, exc)
             await self._mark_job_failed(job_id, f"Progress monitoring failed: {exc}")
         finally:
             self._active_jobs.pop(job_id, None)

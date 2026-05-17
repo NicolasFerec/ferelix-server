@@ -14,14 +14,13 @@ from app.database import async_session_maker
 from app.dependencies import set_scheduler
 from app.routers.v1 import auth, dashboard, media, streaming, users
 from app.services.jobs import init_job_tracking
+from app.services.logging_config import configure_logging
 from app.services.settings import cleanup_stalled_jobs_job, get_or_create_settings, initialize_scheduler_jobs
 from app.services.setup import router as setup_router
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+configure_logging()
+
 logger = logging.getLogger(__name__)
 
 # Initialize scheduler

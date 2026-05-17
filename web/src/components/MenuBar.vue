@@ -305,7 +305,7 @@ async function handleLogout(): Promise<void> {
           to="/dashboard"
           class="max-w-52 truncate border-b-2 px-3 py-2 text-sm font-medium transition-colors"
           :class="
-            route.name === 'dashboard'
+            route.path === '/dashboard' || route.path.startsWith('/dashboard/')
               ? 'border-primary-500 text-white'
               : 'border-transparent text-gray-300 hover:border-gray-600 hover:text-white'
           "
@@ -323,7 +323,7 @@ async function handleLogout(): Promise<void> {
             <img
               v-if="userProfileImageUrl"
               :src="userProfileImageUrl"
-              :alt="currentUser?.username || 'User'"
+              :alt="currentUser?.username || $t('common.user')"
               class="h-full w-full object-cover"
             />
             <span v-else>{{ userInitials }}</span>
@@ -415,7 +415,7 @@ async function handleLogout(): Promise<void> {
               to="/dashboard"
               class="mt-auto block border-l-2 px-3 py-3 text-sm font-medium transition-colors"
               :class="
-                route.name === 'dashboard'
+                route.path === '/dashboard' || route.path.startsWith('/dashboard/')
                   ? 'border-primary-500 text-white'
                   : 'border-transparent text-gray-300 hover:border-gray-700 hover:text-white'
               "

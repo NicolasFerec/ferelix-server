@@ -74,7 +74,7 @@ async function handleLogin(): Promise<void> {
 
         <div class="rounded-md shadow-xs -space-y-px">
           <div>
-            <label for="username" class="sr-only">Username</label>
+            <label for="username" class="sr-only">{{ $t('login.username') }}</label>
             <input
               id="username"
               v-model="username"
@@ -86,7 +86,7 @@ async function handleLogin(): Promise<void> {
             />
           </div>
           <div>
-            <label for="password" class="sr-only">Password</label>
+            <label for="password" class="sr-only">{{ $t('login.password') }}</label>
             <input
               id="password"
               v-model="password"

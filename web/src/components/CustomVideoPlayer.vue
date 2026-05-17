@@ -525,7 +525,7 @@ async function setupHlsPlayback(source: StreamSource) {
 
 type TranscodingJobSchema = TranscodingJob;
 
-async function waitForHlsReady(jobId: string, maxWait = 30000): Promise<TranscodingJobSchema> {
+async function waitForHlsReady(jobId: string, maxWait = 120000): Promise<TranscodingJobSchema> {
   return waitForHlsReadyService(
     jobId,
     (status) => {

@@ -83,7 +83,7 @@ export async function startPlaybackJob(options: {
 export async function waitForHlsReady(
     jobId: string,
     onStatus?: (status: TranscodingJob) => void,
-    maxWait = 30000,
+    maxWait = 120000,
 ): Promise<TranscodingJob> {
     const startedAt = Date.now();
 

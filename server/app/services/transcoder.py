@@ -22,6 +22,16 @@ from app.services.transcoding.subtitles import extract_subtitle_to_webvtt
 logger = logging.getLogger(__name__)
 
 STALE_RUNNING_JOB_AFTER = timedelta(minutes=10)
+HLS_PLAYLIST_STARTUP_TIMEOUT = 120.0
+HLS_REMUX_PLAYLIST_STARTUP_TIMEOUT = 60.0
+
+
+def _float_from_env(name: str, default: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return max(value, 1.0)
 
 
 class FFmpegTranscoder:
@@ -115,7 +125,14 @@ class FFmpegTranscoder:
             max_width=max_width,
             max_height=max_height,
         )
-        return await self._launch_ffmpeg(job_id, media_file.duration, cmd, playlist_path, 30, "transcoding")
+        return await self._launch_ffmpeg(
+            job_id,
+            media_file.duration,
+            cmd,
+            playlist_path,
+            _float_from_env("FERELIX_HLS_PLAYLIST_STARTUP_TIMEOUT", HLS_PLAYLIST_STARTUP_TIMEOUT),
+            "transcoding",
+        )
 
     async def start_remux_hls(
         self,
@@ -152,7 +169,14 @@ class FFmpegTranscoder:
             video_codec="copy",
             audio_codec="copy",
         )
-        return await self._launch_ffmpeg(job_id, media_file.duration, cmd, playlist_path, 15, "remuxing")
+        return await self._launch_ffmpeg(
+            job_id,
+            media_file.duration,
+            cmd,
+            playlist_path,
+            _float_from_env("FERELIX_HLS_REMUX_PLAYLIST_STARTUP_TIMEOUT", HLS_REMUX_PLAYLIST_STARTUP_TIMEOUT),
+            "remuxing",
+        )
 
     async def stop_job(self, job_id: str) -> bool:
         """Gracefully stop a running transcoding job."""
@@ -343,7 +367,9 @@ class FFmpegTranscoder:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
-            await self._wait_for_playlist(process, playlist_path, playlist_timeout)
+            task = asyncio.create_task(self._watch_playlist_startup(job_id, process, playlist_path, playlist_timeout))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
             return str(playlist_path)
         except Exception as exc:
             await self._mark_job_failed(job_id, str(exc))
@@ -362,8 +388,9 @@ class FFmpegTranscoder:
         logger.error("FFmpeg job %s exited immediately with code %s: %s", job_id, process.returncode, stderr_text)
         raise RuntimeError(f"FFmpeg exited immediately with code {process.returncode}: {stderr_text}")
 
-    async def _wait_for_playlist(
+    async def _watch_playlist_startup(
         self,
+        job_id: str,
         process: asyncio.subprocess.Process,
         playlist_path: Path,
         timeout_seconds: float,
@@ -372,13 +399,16 @@ class FFmpegTranscoder:
         while asyncio.get_running_loop().time() < deadline:
             if playlist_path.exists():
                 return
+            if process.returncode is not None:
+                return
             await asyncio.sleep(0.5)
 
         if process.returncode is None:
+            message = f"FFmpeg did not create an HLS playlist within {int(timeout_seconds)} seconds"
+            logger.error("%s for job %s at %s", message, job_id, playlist_path)
+            await self._mark_job_failed(job_id, message)
             process.kill()
             await process.wait()
-        logger.error("FFmpeg did not create playlist %s within %.1f seconds", playlist_path, timeout_seconds)
-        raise TimeoutError(f"FFmpeg did not create an HLS playlist within {int(timeout_seconds)} seconds")
 
     async def _monitor_progress(
         self,
@@ -405,6 +435,8 @@ class FFmpegTranscoder:
 
             await process.wait()
             if await self._job_has_status(job_id, TranscodingJobStatus.CANCELLED):
+                return
+            if await self._job_has_status(job_id, TranscodingJobStatus.FAILED):
                 return
             if process.returncode == 0:
                 await self._mark_job_completed(job_id)

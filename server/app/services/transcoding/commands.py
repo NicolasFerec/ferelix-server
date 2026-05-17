@@ -88,6 +88,8 @@ class HlsCommandBuilder:
             if "vaapi" not in encoder:
                 cmd.extend(["-pix_fmt", "yuv420p"])
             cmd.extend(["-force_key_frames", f"expr:gte(t,n_forced*{options.segment_duration})"])
+            if "nvenc" in encoder:
+                cmd.extend(["-forced-idr", "1"])
 
         cmd.extend(["-c:a", options.audio_codec])
         if options.audio_codec == "aac":

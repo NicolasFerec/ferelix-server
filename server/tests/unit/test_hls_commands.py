@@ -92,6 +92,7 @@ def test_nvidia_transcode_uses_cuda_decode_without_scaling() -> None:
     assert cmd[cmd.index("-hwaccel_output_format") + 1] == "cuda"
     assert cmd[cmd.index("-hwaccel_device") + 1] == "0"
     assert cmd[cmd.index("-c:v") + 1] == "h264_nvenc"
+    assert cmd[cmd.index("-forced-idr") + 1] == "1"
 
 
 def test_nvidia_transcode_keeps_software_decode_when_scaling() -> None:

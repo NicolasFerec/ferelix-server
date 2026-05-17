@@ -452,6 +452,15 @@ export const media = {
     },
 
     /**
+     * Get generated thumbnail URL
+     */
+    getThumbnailUrl(mediaId: number): string {
+        const token = getAccessToken();
+        const baseUrl = `/api/v1/media/${mediaId}/thumbnail`;
+        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
+    },
+
+    /**
      * Get HLS playlist URL
      */
     getHlsPlaylistUrl(jobId: string): string {

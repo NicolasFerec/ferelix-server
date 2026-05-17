@@ -167,6 +167,7 @@ Optional runtime configuration:
 ```bash
 FERELIX_FFMPEG_PATH=/usr/lib/jellyfin-ffmpeg/ffmpeg
 FERELIX_TRANSCODE_DIR=/tmp/ferelix-transcode
+FERELIX_THUMBNAIL_DIR=/tmp/ferelix-thumbnails
 ```
 
 ## Docker & CI

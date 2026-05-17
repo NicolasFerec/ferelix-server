@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { onMounted, type Ref, ref } from "vue";
+import { computed, onMounted, type Ref, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { type MediaFile, media } from "@/api/client";
+import { getMediaTitleInfo } from "@/services/mediaDisplay";
+import {
+  type AudioTrackOption,
+  getAudioTrackLabel,
+  getSubtitleTrackLabel,
+  type SubtitleTrackOption,
+} from "@/services/playerUi";
 import MenuBar from "../components/MenuBar.vue";
+
+type VideoTrackOption = MediaFile["video_tracks"][number];
 
 const route = useRoute();
 const router = useRouter();
@@ -11,14 +20,40 @@ const { t } = useI18n();
 const mediaFile: Ref<MediaFile | null> = ref(null);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string> = ref("");
+const thumbnailFailed = ref(false);
+const selectedVideoStreamIndex = ref<number | null>(null);
+const selectedAudioStreamIndex = ref<number | null>(null);
+const selectedSubtitleStreamIndex = ref<number | null>(null);
+
+const audioTracks = computed(() => (mediaFile.value?.audio_tracks || []) as AudioTrackOption[]);
+const videoTracks = computed(() => (mediaFile.value?.video_tracks || []) as VideoTrackOption[]);
+const subtitleTracks = computed(() => (mediaFile.value?.subtitle_tracks || []) as SubtitleTrackOption[]);
+const displayInfo = computed(() =>
+  mediaFile.value?.file_name
+    ? getMediaTitleInfo(mediaFile.value.file_name)
+    : { title: mediaFile.value?.id ? String(mediaFile.value.id) : "", year: null },
+);
+const subtitleSelectValue = computed({
+  get: () => selectedSubtitleStreamIndex.value ?? -1,
+  set: (value: number) => {
+    selectedSubtitleStreamIndex.value = value === -1 ? null : value;
+  },
+});
 
 async function loadMedia(): Promise<void> {
   loading.value = true;
   error.value = "";
 
   try {
-    // Load MediaFile first
     mediaFile.value = await media.getMediaFile(Number(route.params.id));
+    selectedVideoStreamIndex.value =
+      videoTracks.value.find((track) => track.is_default)?.stream_index ??
+      videoTracks.value[0]?.stream_index ??
+      null;
+    selectedAudioStreamIndex.value =
+      audioTracks.value.find((track) => track.is_default)?.stream_index ??
+      audioTracks.value[0]?.stream_index ??
+      null;
   } catch (err: unknown) {
     console.error("Failed to load media:", err);
     error.value = t("mediaDetail.loadFailed");
@@ -40,10 +75,6 @@ function formatDuration(seconds: number): string {
   return t("mediaDetail.duration.minutes", { minutes });
 }
 
-function formatDurationSeconds(seconds: number): string {
-  return formatDuration(seconds);
-}
-
 function formatBitrate(bitrate: number): string {
   if (bitrate >= 1000000) {
     return `${(bitrate / 1000000).toFixed(2)} Mbps`;
@@ -51,31 +82,90 @@ function formatBitrate(bitrate: number): string {
   return `${(bitrate / 1000).toFixed(0)} Kbps`;
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes >= 1073741824) {
-    return `${(bytes / 1073741824).toFixed(2)} GB`;
+function formatTrackBitrate(bitrate?: number | null): string {
+  return bitrate ? formatBitrate(bitrate) : t("mediaDetail.track.unknown");
+}
+
+function formatSampleRate(sampleRate?: number | null): string {
+  if (!sampleRate) return t("mediaDetail.track.unknown");
+  return `${(sampleRate / 1000).toFixed(sampleRate % 1000 === 0 ? 0 : 1)} kHz`;
+}
+
+function formatVideoTrackLabel(track: VideoTrackOption): string {
+  return [
+    track.width && track.height ? `${track.width}x${track.height}` : null,
+    track.codec?.toUpperCase(),
+    getVideoRangeLabel(track),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatAudioTrackLabel(track: AudioTrackOption): string {
+  return [
+    getAudioTrackLabel(track),
+    track.codec?.toUpperCase(),
+    track.bitrate ? formatTrackBitrate(track.bitrate) : null,
+    track.sample_rate ? formatSampleRate(track.sample_rate) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function getVideoRangeLabel(track: VideoTrackOption): string | null {
+  const metadata = [
+    track.profile,
+    track.color_space,
+    track.color_primaries,
+    track.color_transfer,
+    track.pixel_format,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (metadata.includes("dolby") || metadata.includes("dvhe") || metadata.includes("dovi")) {
+    return "DV";
   }
-  if (bytes >= 1048576) {
-    return `${(bytes / 1048576).toFixed(2)} MB`;
+  if (
+    metadata.includes("bt2020") ||
+    metadata.includes("smpte2084") ||
+    metadata.includes("arib-std-b67") ||
+    metadata.includes("hlg")
+  ) {
+    return "HDR";
   }
-  if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(2)} KB`;
+  if (track.bit_depth && track.bit_depth > 8) {
+    return `${track.bit_depth}-bit`;
   }
-  return `${bytes} B`;
+
+  return null;
 }
 
 function handlePlayClick(): void {
   if (mediaFile.value?.id) {
-    router.push({ name: "player", params: { id: String(mediaFile.value.id) } });
+    router.push({
+      name: "player",
+      params: { id: String(mediaFile.value.id) },
+      query: {
+        ...(selectedAudioStreamIndex.value !== null
+          ? { audio: String(selectedAudioStreamIndex.value) }
+          : {}),
+        ...(selectedSubtitleStreamIndex.value !== null
+          ? { subtitle: String(selectedSubtitleStreamIndex.value) }
+          : {}),
+      },
+    });
   }
 }
 
 function getMediaTitle(): string {
-  if (!mediaFile.value?.file_name) return mediaFile.value?.id ? String(mediaFile.value.id) : "";
-  // Extract title from file_name by removing extension
-  const name = mediaFile.value.file_name;
-  const lastDot = name.lastIndexOf(".");
-  return lastDot > 0 ? name.substring(0, lastDot) : name;
+  return displayInfo.value.title;
+}
+
+function thumbnailUrl(): string | null {
+  if (!mediaFile.value?.id || thumbnailFailed.value) return null;
+  return media.getThumbnailUrl(mediaFile.value.id);
 }
 
 onMounted(() => {
@@ -103,6 +193,13 @@ onMounted(() => {
     <div v-else-if="mediaFile" class="relative">
       <!-- Header -->
       <div class="relative h-64 md:h-96 overflow-hidden bg-gray-800">
+        <img
+          v-if="thumbnailUrl()"
+          :src="thumbnailUrl() || undefined"
+          :alt="getMediaTitle()"
+          class="absolute inset-0 h-full w-full object-cover opacity-50 blur-sm scale-105"
+          @error="thumbnailFailed = true"
+        />
         <div
           class="absolute inset-0 bg-linear-to-b from-transparent via-gray-900/50 to-gray-900"
         ></div>
@@ -125,14 +222,22 @@ onMounted(() => {
       </div>
 
       <!-- Content -->
-      <div class="container mx-auto px-6 py-8 -mt-32 relative z-10">
+      <div class="container mx-auto px-6 pt-0 pb-8 -mt-56 relative z-10">
         <div class="flex flex-col md:flex-row gap-8">
           <!-- Poster Placeholder -->
           <div class="shrink-0">
             <div
-              class="w-48 md:w-64 aspect-2/3 bg-gray-800 rounded-lg shadow-2xl flex items-center justify-center"
+              class="w-48 md:w-64 aspect-2/3 bg-gray-800 rounded-lg shadow-2xl overflow-hidden flex items-center justify-center"
             >
+              <img
+                v-if="thumbnailUrl()"
+                :src="thumbnailUrl() || undefined"
+                :alt="getMediaTitle()"
+                class="h-full w-full object-cover"
+                @error="thumbnailFailed = true"
+              />
               <svg
+                v-else
                 class="w-24 h-24 text-gray-600"
                 fill="none"
                 stroke="currentColor"
@@ -150,68 +255,80 @@ onMounted(() => {
 
           <!-- Info -->
           <div class="flex-1 text-white">
-            <h1 class="text-4xl md:text-5xl font-bold mb-4">{{ getMediaTitle() }}</h1>
-            <div class="flex items-center gap-4 mb-4 text-gray-300">
+            <div class="mb-4 flex items-start justify-between gap-6">
+              <h1 class="min-w-0 text-4xl md:text-5xl font-bold">{{ getMediaTitle() }}</h1>
+              <button
+                v-if="mediaFile.id"
+                @click="handlePlayClick"
+                class="shrink-0 bg-primary-600 hover:bg-primary-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
+                  />
+                </svg>
+                {{ t("mediaDetail.play") }}
+              </button>
+            </div>
+            <div class="flex items-center gap-4 mb-6 text-gray-300">
               <span v-if="mediaFile.duration">{{ formatDuration(mediaFile.duration) }}</span>
-              <span v-if="mediaFile.duration && mediaFile.file_extension">•</span>
-              <span v-if="mediaFile.file_extension">{{
-                mediaFile.file_extension.toUpperCase()
-              }}</span>
+              <span v-if="mediaFile.duration && displayInfo.year">•</span>
+              <span v-if="displayInfo.year">{{ displayInfo.year }}</span>
             </div>
 
-            <!-- MediaFile Information -->
-            <div class="mb-6 p-4 bg-gray-800/50 rounded-lg">
-              <h2 class="text-xl font-semibold mb-3">{{ t("mediaDetail.fileInformation") }}</h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.file") }}:</span>
-                  <span class="ml-2 text-gray-300">{{ mediaFile.file_name }}</span>
-                </div>
-                <div>
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.path") }}:</span>
-                  <span class="ml-2 text-gray-300 break-all">{{ mediaFile.file_path }}</span>
-                </div>
-                <div v-if="mediaFile.duration">
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.duration") }}:</span>
-                  <span class="ml-2 text-gray-300">{{
-                    formatDurationSeconds(mediaFile.duration)
-                  }}</span>
-                </div>
-                <div v-if="mediaFile.width && mediaFile.height">
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.resolution") }}:</span>
-                  <span class="ml-2 text-gray-300"
-                    >{{ mediaFile.width }}x{{ mediaFile.height }}</span
+            <div class="max-w-2xl space-y-2 text-sm">
+              <label class="flex items-center gap-3">
+                <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.video") }}</span>
+                <select
+                  v-model.number="selectedVideoStreamIndex"
+                  class="media-track-select"
+                  :disabled="videoTracks.length <= 1"
+                >
+                  <option
+                    v-for="track in videoTracks"
+                    :key="track.id"
+                    :value="track.stream_index"
                   >
-                </div>
-                <div v-if="mediaFile.codec">
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.codec") }}:</span>
-                  <span class="ml-2 text-gray-300">{{ mediaFile.codec }}</span>
-                </div>
-                <div v-if="mediaFile.bitrate">
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.bitrate") }}:</span>
-                  <span class="ml-2 text-gray-300">{{ formatBitrate(mediaFile.bitrate) }}</span>
-                </div>
-                <div>
-                  <span class="text-gray-400">{{ t("mediaDetail.fields.size") }}:</span>
-                  <span class="ml-2 text-gray-300">{{
-                    formatFileSize(mediaFile.file_size || 0)
-                  }}</span>
-                </div>
-              </div>
+                    {{ formatVideoTrackLabel(track) }}
+                  </option>
+                </select>
+              </label>
+              <label class="flex items-center gap-3">
+                <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.audio") }}</span>
+                <select
+                  v-model.number="selectedAudioStreamIndex"
+                  class="media-track-select"
+                  :disabled="audioTracks.length <= 1"
+                >
+                  <option
+                    v-for="track in audioTracks"
+                    :key="track.id"
+                    :value="track.stream_index"
+                  >
+                    {{ formatAudioTrackLabel(track) }}
+                  </option>
+                </select>
+              </label>
+              <label class="flex items-center gap-3">
+                <span class="w-24 shrink-0 text-gray-400">{{
+                  t("mediaDetail.tracks.subtitles")
+                }}</span>
+                <select
+                  v-model.number="subtitleSelectValue"
+                  class="media-track-select"
+                  :disabled="subtitleTracks.length <= 1"
+                >
+                  <option :value="-1">{{ t("mediaDetail.track.subtitlesOff") }}</option>
+                  <option
+                    v-for="track in subtitleTracks"
+                    :key="track.id"
+                    :value="track.stream_index"
+                  >
+                    {{ getSubtitleTrackLabel(track) }}
+                  </option>
+                </select>
+              </label>
             </div>
-
-            <button
-              v-if="mediaFile.id"
-              @click="handlePlayClick"
-              class="bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors duration-200 flex items-center gap-2"
-            >
-              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
-                />
-              </svg>
-              {{ t("mediaDetail.play") }}
-            </button>
           </div>
         </div>
       </div>
@@ -225,3 +342,44 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.media-track-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  field-sizing: content;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%239ca3af' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 0.2rem center;
+  background-repeat: no-repeat;
+  color: rgb(209 213 219);
+  padding: 0.125rem 1.25rem 0.125rem 0.35rem;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.media-track-select:hover:not(:disabled),
+.media-track-select:focus {
+  border-color: rgba(59, 130, 246, 0.55);
+  color: white;
+}
+
+.media-track-select:disabled {
+  cursor: default;
+  opacity: 1;
+  background-image: none;
+  color: rgb(209 213 219);
+  padding-right: 0.35rem;
+}
+
+.media-track-select option {
+  background-color: rgb(17 24 39);
+  color: rgb(229 231 235);
+}
+</style>

@@ -3,8 +3,11 @@ import { isTextSubtitleCodec } from "@/services/subtitles";
 export interface AudioTrackOption {
     id: number;
     stream_index: number;
+    codec?: string;
     language?: string;
     channels?: number;
+    bitrate?: number | null;
+    sample_rate?: number | null;
     title?: string;
     is_default?: boolean;
 }

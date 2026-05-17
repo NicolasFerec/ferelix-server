@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models import AudioTrack, Library, MediaFile, SubtitleTrack, VideoTrack
+from app.services.thumbnails import generate_video_thumbnail
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +403,8 @@ async def scan_library_path(  # noqa: C901
             # Extract metadata and update tracks
             metadata = extract_video_metadata(file_path)
             await _update_media_tracks(session, existing_file, metadata)
+            if not existing_file.thumbnail_path or not Path(existing_file.thumbnail_path).exists():
+                existing_file.thumbnail_path = generate_video_thumbnail(file_path, metadata.get("duration"))
 
             # Update scanned_at timestamp
             existing_file.scanned_at = datetime.now(UTC)
@@ -411,6 +414,7 @@ async def scan_library_path(  # noqa: C901
             # Extract metadata for new file
             logger.info(f"Processing new file: {file_path}")
             metadata = extract_video_metadata(file_path)
+            thumbnail_path = generate_video_thumbnail(file_path, metadata.get("duration"))
 
             # Create new MediaFile entry
             media_file = MediaFile(
@@ -418,6 +422,7 @@ async def scan_library_path(  # noqa: C901
                 file_name=file_name,
                 file_size=file_path.stat().st_size,
                 file_extension=file_extension,
+                thumbnail_path=thumbnail_path,
                 duration=metadata.get("duration"),
                 width=metadata.get("width"),
                 height=metadata.get("height"),

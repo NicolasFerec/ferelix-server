@@ -19,6 +19,7 @@ class MediaFile(Base):
     file_name: Mapped[str] = mapped_column(String)
     file_size: Mapped[int] = mapped_column(Integer)
     file_extension: Mapped[str] = mapped_column(String)
+    thumbnail_path: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Video metadata (extracted via ffprobe)
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -40,6 +41,13 @@ class MediaFile(Base):
         back_populates="media_file", cascade="all, delete-orphan"
     )
 
+    @property
+    def thumbnail_url(self) -> str | None:
+        """Authenticated thumbnail endpoint for this media file."""
+        if self.id is None:
+            return None
+        return f"/api/v1/media/{self.id}/thumbnail"
+
 
 class MediaFileSchema(BaseModel):
     """Schema for MediaFile API responses."""
@@ -51,6 +59,7 @@ class MediaFileSchema(BaseModel):
     file_name: str
     file_size: int
     file_extension: str
+    thumbnail_url: str | None = None
     duration: float | None = None
     width: int | None = None
     height: int | None = None

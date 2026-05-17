@@ -191,7 +191,21 @@
             "resolution": "Résolution",
             "codec": "Codec",
             "bitrate": "Débit",
-            "size": "Taille"
+            "size": "Taille",
+            "container": "Conteneur"
+        },
+        "tracks": {
+            "title": "Pistes",
+            "video": "Vidéo",
+            "audio": "Audio",
+            "subtitles": "Sous-titres",
+            "none": "Aucune piste trouvée"
+        },
+        "track": {
+            "default": "Par défaut",
+            "forced": "Forcé",
+            "subtitlesOff": "Désactivé",
+            "unknown": "Inconnu"
         },
         "duration": {
             "hoursMinutes": "{hours} h {minutes} min",

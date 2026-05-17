@@ -1,8 +1,10 @@
 """API endpoints for managing media library and files (v1 with authentication)."""
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +27,7 @@ from app.models.playback import (
 from app.services.playback_session import ClientContext, PlaybackSessionService
 from app.services.recommendation_row import apply_filter_criteria
 from app.services.stream_builder import StreamBuilder
+from app.services.thumbnails import generate_video_thumbnail
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
@@ -236,6 +239,38 @@ async def get_media_file(
         )
 
     return MediaFileSchema.model_validate(media_file)
+
+
+@router.get("/media/{media_id}/thumbnail")
+async def get_media_thumbnail(
+    media_id: int,
+    _user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> FileResponse:
+    """Serve or lazily generate a screenshot thumbnail for a media file."""
+    media_file = await session.get(MediaFile, media_id)
+    if not media_file or media_file.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
+
+    source_path = Path(media_file.file_path)
+    if not source_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found on disk")
+
+    thumbnail_path = Path(media_file.thumbnail_path) if media_file.thumbnail_path else None
+    if not thumbnail_path or not thumbnail_path.exists():
+        generated_path = generate_video_thumbnail(source_path, media_file.duration)
+        if not generated_path:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail not available")
+
+        media_file.thumbnail_path = generated_path
+        await session.commit()
+        thumbnail_path = Path(generated_path)
+
+    return FileResponse(
+        thumbnail_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # Homepage rows endpoint

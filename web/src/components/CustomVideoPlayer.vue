@@ -29,6 +29,16 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  initialAudioStreamIndex: {
+    type: Number,
+    required: false,
+    default: undefined,
+  },
+  initialSubtitleStreamIndex: {
+    type: Number,
+    required: false,
+    default: undefined,
+  },
 });
 
 const emit = defineEmits(["close"]);
@@ -209,6 +219,7 @@ onMounted(async () => {
   setupKeyboardShortcuts();
 
   // Initialize playback
+  applyInitialTrackSelection();
   await initializePlayback();
 });
 
@@ -226,6 +237,54 @@ function closeAllMenus() {
   showAudioMenu.value = false;
   showSubtitleMenu.value = false;
   showResolutionMenu.value = false;
+}
+
+function applyInitialTrackSelection() {
+  const initialAudio = audioTracks.value.find(
+    (track: AudioTrackOption) => track.stream_index === props.initialAudioStreamIndex,
+  );
+  selectedAudioTrack.value =
+    initialAudio ||
+    audioTracks.value.find((track: AudioTrackOption) => track.is_default) ||
+    audioTracks.value[0] ||
+    null;
+
+  selectedSubtitleTrack.value =
+    subtitleTracks.value.find(
+      (track: SubtitleTrackOption) => track.stream_index === props.initialSubtitleStreamIndex,
+    ) || null;
+}
+
+function selectedAudioStreamIndex(): number | undefined {
+  return selectedAudioTrack.value?.stream_index ?? defaultAudioStreamIndex(audioTracks.value);
+}
+
+function selectedBurnedSubtitleStreamIndex(): number | undefined {
+  if (!selectedSubtitleTrack.value || isTextSubtitleCodec(selectedSubtitleTrack.value.codec)) {
+    return undefined;
+  }
+  return selectedSubtitleTrack.value.stream_index;
+}
+
+function sourceWithBurnedSubtitle(source: StreamSource): StreamSource {
+  if (selectedBurnedSubtitleStreamIndex() === undefined) {
+    return source;
+  }
+
+  return {
+    ...source,
+    PlayMethod: "Transcode",
+    TranscodingUrl: `/api/v1/hls/${props.mediaFile.id}/start`,
+    TranscodingType: "full",
+    IsRemuxOnly: false,
+  };
+}
+
+async function loadSelectedTextSubtitle() {
+  if (!selectedSubtitleTrack.value || !isTextSubtitleCodec(selectedSubtitleTrack.value.codec)) {
+    return;
+  }
+  await loadExternalSubtitle(selectedSubtitleTrack.value);
 }
 
 
@@ -252,7 +311,7 @@ async function initializePlayback() {
       throw new Error("No playback sources available");
     }
 
-    const source = playbackInfo.MediaSources[0];
+    const source = sourceWithBurnedSubtitle(playbackInfo.MediaSources[0] as StreamSource);
     currentSource.value = source as StreamSource;
     playMethod.value = source.PlayMethod as PlaybackMethod;
 
@@ -274,9 +333,14 @@ async function initializePlayback() {
     if (source.PlayMethod === "DirectPlay" && source.DirectStreamUrl) {
       // Direct play - use native video element
       await setupDirectPlay(source.DirectStreamUrl);
+      if (selectedAudioTrack.value) {
+        selectNativeAudioTrack(selectedAudioTrack.value);
+      }
+      await loadSelectedTextSubtitle();
     } else if (source.TranscodingUrl) {
       // Need HLS (remux or transcode)
       await setupHlsPlayback(source as StreamSource);
+      await loadSelectedTextSubtitle();
     } else {
       throw new Error("No valid playback URL available");
     }
@@ -324,15 +388,11 @@ async function setupHlsPlayback(source: StreamSource) {
       currentTime.value > 0
         ? (isHlsPlayback.value ? (jobStartOffset.value ?? 0) + currentTime.value : currentTime.value)
         : 0;
-    const subtitleIndex =
-      selectedSubtitleTrack.value && !isTextSubtitleCodec(selectedSubtitleTrack.value.codec)
-        ? selectedSubtitleTrack.value.stream_index
-        : undefined;
     const job = await startPlaybackJob({
       mediaId: props.mediaFile.id,
-      source,
-      audioStreamIndex: defaultAudioStreamIndex(audioTracks.value),
-      subtitleStreamIndex: subtitleIndex,
+      source: sourceWithBurnedSubtitle(source),
+      audioStreamIndex: selectedAudioStreamIndex(),
+      subtitleStreamIndex: selectedBurnedSubtitleStreamIndex(),
       startTime: desiredStart,
     });
 
@@ -565,20 +625,23 @@ async function selectAudioTrack(track: AudioTrackOption) {
       await media.stopHls(currentJobId.value);
     }
 
-    const source = currentSource.value || { TranscodingType: "audio-only" };
+    const source = sourceWithBurnedSubtitle(currentSource.value || { TranscodingType: "audio-only" });
     const job = await startPlaybackJob({
       mediaId: props.mediaFile.id,
       source,
       audioStreamIndex: track.stream_index,
+      subtitleStreamIndex: selectedBurnedSubtitleStreamIndex(),
       startTime: absoluteStartTime,
     });
 
     currentJobId.value = job.id;
 
-    await waitForHlsReady(job.id);
+    const status = await waitForHlsReady(job.id);
+    jobStartOffset.value = status.start_time ?? absoluteStartTime;
 
     const playlistUrl = media.getHlsPlaylistUrl(job.id);
     await setupHlsPlayer(playlistUrl);
+    await loadSelectedTextSubtitle();
 
     // Note: Backend handles startTime, so playback starts from the right position
   } catch (error) {
@@ -704,11 +767,6 @@ async function loadExternalSubtitle(track: SubtitleTrackOption) {
 }
 
 async function restartWithBurnedSubtitle(track: SubtitleTrackOption) {
-  if (!isHlsPlayback.value) {
-    errorMessage.value = "Image subtitles require transcoding";
-    return;
-  }
-
   const savedTime = currentTime.value;
 
   // Pause playback immediately
@@ -719,7 +777,6 @@ async function restartWithBurnedSubtitle(track: SubtitleTrackOption) {
   isLoading.value = true;
   loadingMessage.value = "Burning subtitles...";
 
-  // Convert relative savedTime to absolute startTime when HLS playback is active
   const absoluteStartTime = isHlsPlayback.value ? (jobStartOffset.value ?? 0) + savedTime : savedTime;
 
   try {
@@ -737,6 +794,8 @@ async function restartWithBurnedSubtitle(track: SubtitleTrackOption) {
     });
 
     currentJobId.value = job.id;
+    isHlsPlayback.value = true;
+    playMethod.value = "Transcode";
 
     const status = await waitForHlsReady(job.id);
 
@@ -874,7 +933,7 @@ async function restartHlsAt(absoluteStart: number) {
       }
     }
 
-    const sourceForJob = subtitleIndex
+    const sourceForJob = subtitleIndex !== undefined
       ? { ...source, TranscodingType: "full", IsRemuxOnly: false }
       : source;
     const job = await startPlaybackJob({
@@ -1078,6 +1137,9 @@ function onLoadedMetadata() {
       const defaultAudio = audioTracks.value.find((t: { is_default: boolean }) => t.is_default) || audioTracks.value[0];
       selectedAudioTrack.value = defaultAudio;
     }
+    if (!isHlsPlayback.value && selectedAudioTrack.value) {
+      selectNativeAudioTrack(selectedAudioTrack.value);
+    }
 
     // Ensure controls are visible when metadata loads
     showControls();
@@ -1164,18 +1226,21 @@ async function retryWithTranscoding() {
   try {
     const job = await startPlaybackJob({
       mediaId: props.mediaFile.id,
-      source: { TranscodingType: "full" },
-      audioStreamIndex: selectedAudioTrack.value?.stream_index,
+      source: sourceWithBurnedSubtitle({ TranscodingType: "full" }),
+      audioStreamIndex: selectedAudioStreamIndex(),
+      subtitleStreamIndex: selectedBurnedSubtitleStreamIndex(),
     });
 
     currentJobId.value = job.id;
     isHlsPlayback.value = true;
     playMethod.value = "Transcode";
 
-    await waitForHlsReady(job.id);
+    const status = await waitForHlsReady(job.id);
+    jobStartOffset.value = status.start_time ?? 0;
 
     const playlistUrl = media.getHlsPlaylistUrl(job.id);
     await setupHlsPlayer(playlistUrl);
+    await loadSelectedTextSubtitle();
   } catch (error) {
     console.error("Transcode fallback failed:", error);
     errorMessage.value = "Playback failed. This format may not be supported.";

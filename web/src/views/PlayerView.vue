@@ -10,6 +10,14 @@ const mediaFile: Ref<MediaFile | null> = ref(null);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string | null> = ref(null);
 
+function numberQueryValue(value: unknown): number | undefined {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (typeof rawValue !== "string") return undefined;
+
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 async function loadMedia(): Promise<void> {
   loading.value = true;
   error.value = null;
@@ -46,7 +54,13 @@ onUnmounted(() => {
 
 <template>
   <div class="player-view fixed inset-0 bg-black z-50">
-    <CustomVideoPlayer v-if="mediaFile" :media-file="mediaFile" @close="handleClose" />
+    <CustomVideoPlayer
+      v-if="mediaFile"
+      :media-file="mediaFile"
+      :initial-audio-stream-index="numberQueryValue(route.query.audio)"
+      :initial-subtitle-stream-index="numberQueryValue(route.query.subtitle)"
+      @close="handleClose"
+    />
     <div v-else-if="loading" class="flex items-center justify-center h-full text-white">
       <p>{{ $t('player.loading') }}</p>
     </div>

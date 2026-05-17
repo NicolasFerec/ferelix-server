@@ -739,6 +739,68 @@
         }
       }
     },
+    "/api/v1/media/{media_id}/thumbnail": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Get Media Thumbnail",
+        "description": "Serve or lazily generate a screenshot thumbnail for a media file.",
+        "operationId": "get_media_thumbnail_api_v1_media__media_id__thumbnail_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "media_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Media Id"
+            }
+          },
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/homepage/rows": {
       "get": {
         "tags": [
@@ -4407,6 +4469,17 @@
           "file_extension": {
             "type": "string",
             "title": "File Extension"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
           },
           "duration": {
             "anyOf": [

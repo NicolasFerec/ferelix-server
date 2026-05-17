@@ -368,6 +368,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/media/{media_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Media Thumbnail
+         * @description Serve or lazily generate a screenshot thumbnail for a media file.
+         */
+        get: operations["get_media_thumbnail_api_v1_media__media_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/homepage/rows": {
         parameters: {
             query?: never;
@@ -1625,6 +1645,8 @@ export interface components {
             file_size: number;
             /** File Extension */
             file_extension: string;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
             /** Duration */
             duration?: number | null;
             /** Width */
@@ -2641,6 +2663,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaFileSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_media_thumbnail_api_v1_media__media_id__thumbnail_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

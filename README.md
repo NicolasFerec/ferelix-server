@@ -63,9 +63,10 @@ Ferelix defaults to the `ffmpeg` binary on `PATH`. To run a packaged build such 
 ```bash
 export FERELIX_FFMPEG_PATH=/usr/lib/jellyfin-ffmpeg/ffmpeg
 export FERELIX_TRANSCODE_DIR=/tmp/ferelix-transcode
+export FERELIX_THUMBNAIL_DIR=/tmp/ferelix-thumbnails
 ```
 
-The player uses DirectPlay when possible, HLS remux for compatible streams in unsupported containers, audio-only transcode when only audio is incompatible, and full HLS transcode as the fallback.
+The player uses DirectPlay when possible, HLS remux for compatible streams in unsupported containers, audio-only transcode when only audio is incompatible, and full HLS transcode as the fallback. Library scans also use ffmpeg to extract a representative thumbnail screenshot for each media card.
 
 ### Discover Available Commands
 

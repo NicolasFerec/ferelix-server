@@ -145,3 +145,44 @@ def test_nvidia_decoders_are_probed_before_being_reported(monkeypatch, tmp_path)
 
     assert device.decoders == {"h264"}
     assert any("av1_cuvid" in call for call in calls)
+
+
+def test_nvidia_hevc_decode_probe_uses_realistic_sample(monkeypatch, tmp_path) -> None:
+    calls: list[list[str]] = []
+
+    class FakeTemporaryDirectory:
+        def __enter__(self):
+            return tmp_path
+
+        def __exit__(self, *args) -> None:
+            return None
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+
+        class Result:
+            returncode = 0
+            stdout = b""
+            stderr = b""
+
+        output = cmd[-1]
+        if isinstance(output, str) and output.endswith(".mkv"):
+            (tmp_path / output.split("/")[-1]).write_bytes(b"sample")
+        return Result()
+
+    monkeypatch.setattr("app.services.transcoding.hardware.tempfile.TemporaryDirectory", FakeTemporaryDirectory)
+    monkeypatch.setattr("app.services.transcoding.hardware.subprocess.run", fake_run)
+
+    hw_accel = HardwareAcceleration()
+
+    assert hw_accel._test_nvidia_decoder(
+        "hevc",
+        "hevc_cuvid",
+        "libx265 hevc_cuvid",
+        index=0,
+    )
+
+    encode_cmd = calls[0]
+    assert "color=black:s=256x256:d=0.2" in encode_cmd
+    assert encode_cmd[encode_cmd.index("-frames:v") + 1] == "3"
+    assert encode_cmd[encode_cmd.index("-pix_fmt") + 1] == "yuv420p"

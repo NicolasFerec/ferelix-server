@@ -60,6 +60,8 @@ NVIDIA_DECODE_SAMPLE_ENCODERS: dict[str, tuple[str, ...]] = {
     "av1": ("libaom-av1", "libsvtav1", "librav1e"),
 }
 
+NVIDIA_DECODE_SAMPLE_SIZE = "256x256"
+
 CODEC_ALIASES = {
     "h265": "hevc",
     "libx265": "hevc",
@@ -578,6 +580,7 @@ class HardwareAcceleration:
             None,
         )
         if not sample_encoder:
+            logger.debug("Skipping NVIDIA %s decode probe because no sample encoder is available", codec)
             return False
 
         try:
@@ -587,12 +590,16 @@ class HardwareAcceleration:
                     [
                         self.ffmpeg_path,
                         "-hide_banner",
+                        "-loglevel",
+                        "error",
                         "-f",
                         "lavfi",
                         "-i",
-                        "color=black:s=64x64:d=0.1",
+                        f"color=black:s={NVIDIA_DECODE_SAMPLE_SIZE}:d=0.2",
                         "-frames:v",
-                        "1",
+                        "3",
+                        "-pix_fmt",
+                        "yuv420p",
                         "-c:v",
                         sample_encoder,
                         str(sample_path),
@@ -601,11 +608,19 @@ class HardwareAcceleration:
                     timeout=20,
                 )
                 if encode_sample.returncode != 0 or not sample_path.exists():
+                    logger.debug(
+                        "Failed to create NVIDIA %s decode probe sample with %s: %s",
+                        codec,
+                        sample_encoder,
+                        encode_sample.stderr.decode("utf-8", errors="ignore").strip(),
+                    )
                     return False
 
                 decode_cmd = [
                     self.ffmpeg_path,
                     "-hide_banner",
+                    "-loglevel",
+                    "error",
                     "-hwaccel",
                     "cuda",
                     "-hwaccel_output_format",
@@ -627,8 +642,17 @@ class HardwareAcceleration:
                     capture_output=True,
                     timeout=15,
                 )
-                return decode_sample.returncode == 0
-        except Exception:
+                if decode_sample.returncode != 0:
+                    logger.debug(
+                        "NVIDIA %s decode probe failed with %s: %s",
+                        codec,
+                        decoder,
+                        decode_sample.stderr.decode("utf-8", errors="ignore").strip(),
+                    )
+                    return False
+                return True
+        except Exception as exc:
+            logger.debug("NVIDIA %s decode probe raised an exception: %s", codec, exc)
             return False
 
     def _test_vaapi_encoder(self, device: str, encoder: str) -> bool:

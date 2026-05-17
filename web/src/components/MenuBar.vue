@@ -15,11 +15,28 @@ const isHomepage = computed(() => {
   return route.name === "home";
 });
 
+const activeLibraryId = computed(() => {
+  if (route.name === "library") {
+    return parseRouteId(route.params.id);
+  }
+
+  if (route.name === "media-detail") {
+    return parseRouteId(route.query.libraryId);
+  }
+
+  return null;
+});
+
+function parseRouteId(value: unknown): number | null {
+  const routeId = Array.isArray(value) ? value[0] : value;
+  if (typeof routeId !== "string" && typeof routeId !== "number") return null;
+
+  const parsed = parseInt(routeId.toString(), 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function isActiveLibrary(libraryId: string | number): boolean {
-  return (
-    route.name === "library" &&
-    parseInt(route.params.id as string, 10) === parseInt(libraryId.toString(), 10)
-  );
+  return activeLibraryId.value === parseInt(libraryId.toString(), 10);
 }
 
 async function loadLibraries(): Promise<void> {

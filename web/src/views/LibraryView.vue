@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 import { libraries as libraryApi } from "@/api/client";
@@ -17,6 +17,11 @@ const loading = ref(false);
 const loadingItems = ref(false);
 const error = ref("");
 const activeTab = ref("recommended");
+const currentLibraryId = computed(() => {
+  const routeId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id;
+  const libraryId = parseInt(routeId, 10);
+  return Number.isNaN(libraryId) ? null : libraryId;
+});
 
 function getDisplayName(row) {
   // Use display_name from API (already processed - replaces {library_name} if present)
@@ -34,8 +39,7 @@ function getDisplayName(row) {
 }
 
 async function loadLibrary() {
-  const routeId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id;
-  const libraryId = parseInt(routeId, 10);
+  const libraryId = currentLibraryId.value;
   if (!libraryId) {
     error.value = "Invalid library ID";
     return;
@@ -54,8 +58,7 @@ async function loadLibrary() {
 }
 
 async function loadRows() {
-  const routeId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id;
-  const libraryId = parseInt(routeId, 10);
+  const libraryId = currentLibraryId.value;
   if (!libraryId) return;
 
   try {
@@ -67,8 +70,7 @@ async function loadRows() {
 }
 
 async function loadItems() {
-  const routeId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id;
-  const libraryId = parseInt(routeId, 10);
+  const libraryId = currentLibraryId.value;
   if (!libraryId) return;
 
   loadingItems.value = true;
@@ -170,6 +172,7 @@ onMounted(async () => {
               :key="`${row.playlist_id}-${row.library_id}`"
               :displayName="getDisplayName(row)"
               :items="row.items"
+              :sourceLibraryId="row.library_id"
             />
           </div>
         </div>
@@ -186,7 +189,12 @@ onMounted(async () => {
             v-else
             class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
           >
-            <MediaCard v-for="item in items" :key="item.id" :mediaFile="item" />
+            <MediaCard
+              v-for="item in items"
+              :key="item.id"
+              :mediaFile="item"
+              :sourceLibraryId="currentLibraryId"
+            />
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import MediaCard from "./MediaCard.vue";
 const props = defineProps<{
   displayName: string;
   items: MediaFile[];
+  sourceLibraryId?: number | string | null;
 }>();
 
 const { t } = useI18n();
@@ -63,7 +64,7 @@ onUnmounted(() => {
         style="scroll-behavior: smooth"
       >
         <div v-for="item in items" :key="item.id" class="shrink-0 w-[200px]">
-          <MediaCard :mediaFile="item" />
+          <MediaCard :mediaFile="item" :sourceLibraryId="sourceLibraryId" />
         </div>
         <div
           v-if="items.length === 0"

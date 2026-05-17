@@ -6,6 +6,7 @@ import { getMediaTitleInfo } from "@/services/mediaDisplay";
 
 const props = defineProps<{
   mediaFile: MediaFile;
+  sourceLibraryId?: number | string | null;
 }>();
 
 const router = useRouter();
@@ -16,7 +17,11 @@ const displayInfo = computed(() => {
 });
 
 function handleClick(): void {
-  router.push({ name: "media-detail", params: { id: String(props.mediaFile.id) } });
+  router.push({
+    name: "media-detail",
+    params: { id: String(props.mediaFile.id) },
+    query: props.sourceLibraryId ? { libraryId: String(props.sourceLibraryId) } : undefined,
+  });
 }
 
 function getMediaTitle(): string {

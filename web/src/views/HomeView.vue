@@ -74,6 +74,7 @@ onMounted(async () => {
             :key="`${row.playlist_id}-${row.library_id}`"
             :displayName="getDisplayName(row)"
             :items="row.items"
+            :sourceLibraryId="row.library_id"
           />
         </div>
       </div>

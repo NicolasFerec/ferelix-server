@@ -10,6 +10,7 @@ import {
   getSubtitleTrackLabel,
   type SubtitleTrackOption,
 } from "@/services/playerUi";
+import DropdownSelect, { type DropdownOption } from "../components/DropdownSelect.vue";
 import MenuBar from "../components/MenuBar.vue";
 
 type VideoTrackOption = MediaFile["video_tracks"][number];
@@ -33,12 +34,25 @@ const displayInfo = computed(() =>
     ? getMediaTitleInfo(mediaFile.value.file_name)
     : { title: mediaFile.value?.id ? String(mediaFile.value.id) : "", year: null },
 );
-const subtitleSelectValue = computed({
-  get: () => selectedSubtitleStreamIndex.value ?? -1,
-  set: (value: number) => {
-    selectedSubtitleStreamIndex.value = value === -1 ? null : value;
-  },
-});
+const videoTrackOptions = computed<DropdownOption[]>(() =>
+  videoTracks.value.map((track) => ({
+    value: track.stream_index,
+    label: formatVideoTrackLabel(track),
+  })),
+);
+const audioTrackOptions = computed<DropdownOption[]>(() =>
+  audioTracks.value.map((track) => ({
+    value: track.stream_index,
+    label: formatAudioTrackLabel(track),
+  })),
+);
+const subtitleTrackOptions = computed<DropdownOption[]>(() => [
+  { value: null, label: t("mediaDetail.track.subtitlesOff") },
+  ...subtitleTracks.value.map((track) => ({
+    value: track.stream_index,
+    label: getSubtitleTrackLabel(track),
+  })),
+]);
 
 async function loadMedia(): Promise<void> {
   loading.value = true;
@@ -279,54 +293,29 @@ onMounted(() => {
             <div class="max-w-2xl space-y-2 text-sm">
               <label class="flex items-center gap-3">
                 <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.video") }}</span>
-                <select
-                  v-model.number="selectedVideoStreamIndex"
-                  class="media-track-select"
-                  :disabled="videoTracks.length <= 1"
-                >
-                  <option
-                    v-for="track in videoTracks"
-                    :key="track.id"
-                    :value="track.stream_index"
-                  >
-                    {{ formatVideoTrackLabel(track) }}
-                  </option>
-                </select>
+                <DropdownSelect
+                  v-model="selectedVideoStreamIndex"
+                  :options="videoTrackOptions"
+                  :disabled="videoTrackOptions.length <= 1"
+                />
               </label>
               <label class="flex items-center gap-3">
                 <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.audio") }}</span>
-                <select
-                  v-model.number="selectedAudioStreamIndex"
-                  class="media-track-select"
-                  :disabled="audioTracks.length <= 1"
-                >
-                  <option
-                    v-for="track in audioTracks"
-                    :key="track.id"
-                    :value="track.stream_index"
-                  >
-                    {{ formatAudioTrackLabel(track) }}
-                  </option>
-                </select>
+                <DropdownSelect
+                  v-model="selectedAudioStreamIndex"
+                  :options="audioTrackOptions"
+                  :disabled="audioTrackOptions.length <= 1"
+                />
               </label>
               <label class="flex items-center gap-3">
                 <span class="w-24 shrink-0 text-gray-400">{{
                   t("mediaDetail.tracks.subtitles")
                 }}</span>
-                <select
-                  v-model.number="subtitleSelectValue"
-                  class="media-track-select"
-                  :disabled="subtitleTracks.length <= 1"
-                >
-                  <option :value="-1">{{ t("mediaDetail.track.subtitlesOff") }}</option>
-                  <option
-                    v-for="track in subtitleTracks"
-                    :key="track.id"
-                    :value="track.stream_index"
-                  >
-                    {{ getSubtitleTrackLabel(track) }}
-                  </option>
-                </select>
+                <DropdownSelect
+                  v-model="selectedSubtitleStreamIndex"
+                  :options="subtitleTrackOptions"
+                  :disabled="subtitleTrackOptions.length <= 1"
+                />
               </label>
             </div>
           </div>
@@ -342,44 +331,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.media-track-select {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  field-sizing: content;
-  appearance: none;
-  border: 1px solid transparent;
-  border-radius: 0.375rem;
-  background-color: transparent;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='none' stroke='%239ca3af' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
-  background-position: right 0.2rem center;
-  background-repeat: no-repeat;
-  color: rgb(209 213 219);
-  padding: 0.125rem 1.25rem 0.125rem 0.35rem;
-  outline: none;
-  transition:
-    border-color 160ms ease,
-    color 160ms ease;
-}
-
-.media-track-select:hover:not(:disabled),
-.media-track-select:focus {
-  border-color: rgba(59, 130, 246, 0.55);
-  color: white;
-}
-
-.media-track-select:disabled {
-  cursor: default;
-  opacity: 1;
-  background-image: none;
-  color: rgb(209 213 219);
-  padding-right: 0.35rem;
-}
-
-.media-track-select option {
-  background-color: rgb(17 24 39);
-  color: rgb(229 231 235);
-}
-</style>

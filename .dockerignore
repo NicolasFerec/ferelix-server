@@ -46,8 +46,19 @@ Dockerfile*
 
 # Build artifacts
 dist
+**/dist
 build
+**/build
 *.egg
+
+# Node dependencies
+node_modules
+**/node_modules
+
+# Nested project caches and virtual environments
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
 
 
 # Alembic

@@ -81,7 +81,10 @@ def configure_logging() -> None:
         elif isinstance(handler, logging.StreamHandler):
             handler.setLevel(console_level)
 
-    if not any(isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
+    if not any(
+        isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler)
+        for handler in root_logger.handlers
+    ):
         stream_handler = logging.StreamHandler()
         stream_handler.setLevel(console_level)
         stream_handler.setFormatter(formatter)
@@ -90,7 +93,10 @@ def configure_logging() -> None:
 
     log_path = get_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    if not any(isinstance(handler, RotatingFileHandler) and Path(handler.baseFilename) == log_path for handler in root_logger.handlers):
+    if not any(
+        isinstance(handler, RotatingFileHandler) and Path(handler.baseFilename) == log_path
+        for handler in root_logger.handlers
+    ):
         file_handler = RotatingFileHandler(
             log_path,
             maxBytes=max_log_bytes,
@@ -260,7 +266,9 @@ def _schema_for_line(number: int, line: str) -> LogLineSchema:
         number=number,
         text=line,
         message=line[match.end() :] if match else line,
-        channel=match.group("channel") if match and match.group("channel") else (channel_for_logger(logger_name) if logger_name else None),
+        channel=match.group("channel")
+        if match and match.group("channel")
+        else (channel_for_logger(logger_name) if logger_name else None),
         logger=logger_name,
         level=match.group("level") if match else None,
         timestamp=_normalize_timestamp(timestamp),

@@ -7,7 +7,7 @@ install:
     @echo "📦 Installing server dependencies..."
     cd server && uv sync
     @echo "📦 Installing web dependencies..."
-    cd web && pnpm install
+    cd clients/web && pnpm install
     @echo "✅ All dependencies installed!"
 
 # Start development server (backend FastAPI)
@@ -17,7 +17,7 @@ dev-server:
 # Start development web client (frontend Vite)
 dev-web:
     sleep 1
-    cd web && pnpm dev
+    cd clients/web && pnpm dev
 
 # Start both server and web client in parallel
 [parallel]
@@ -29,7 +29,7 @@ test-server:
 
 # Run frontend tests
 test-web:
-    cd web && pnpm test
+    cd clients/web && pnpm test
 
 # Run all tests (backend + frontend)
 test: test-server test-web
@@ -40,7 +40,7 @@ type-check-server:
 
 # Run web type checks
 type-check-web:
-    cd web && pnpm vue-tsc --noEmit
+    cd clients/web && pnpm vue-tsc --noEmit
 
 # Run all type checks (backend + frontend)
 type-check: type-check-server type-check-web

@@ -4,10 +4,10 @@ Ferelix is a self-hosted media server, similar to Plex or Jellyfin. It allows yo
 
 ## Architecture
 
-Ferelix is organized into two main subprojects:
+Ferelix is organized as a server plus client applications:
 
 - **[Server](./server)** - The backend API and media management engine built with Python
-- **[Web](./web)** - The Vue dashboard and media player, with playback orchestration split from reusable player controls and UI helpers
+- **[Web](./clients/web)** - The Vue dashboard and media player, with playback orchestration split from reusable player controls and UI helpers
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ just install
 
 # Or manually
 cd server && uv sync
-cd web && pnpm install
+cd clients/web && pnpm install
 ```
 
 ### Run Development Servers
@@ -101,7 +101,7 @@ This will show all available commands you can run.
 For detailed setup instructions, configuration, and development guidelines, refer to the individual README files:
 
 - Server setup: [server/README.md](./server/README.md)
-- Web setup: [web/README.md](./web/README.md)
+- Web setup: [clients/web/README.md](./clients/web/README.md)
 
 ## License
 

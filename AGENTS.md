@@ -1,10 +1,10 @@
 # Ferelix - AI Coding Agent Guide
 
-Ferelix is a media server with FastAPI backend and Vue 3 frontend, featuring transcoding and HLS streaming.
+Ferelix is a media server with FastAPI backend and client applications, featuring transcoding and HLS streaming.
 
 ## Architecture Overview
 
-**Monorepo Structure**: `./server` (Python backend) + `./web` (Vue 3 frontend)
+**Monorepo Structure**: `./server` (Python backend) + `./clients/web` (Vue 3 frontend). New native clients should live under `./clients/`.
 
 **Backend Stack** (`./server`):
 - FastAPI + Python 3.14+ + SQLAlchemy (async) + Alembic migrations
@@ -12,10 +12,15 @@ Ferelix is a media server with FastAPI backend and Vue 3 frontend, featuring tra
 - Streaming strategies: DirectPlay → DirectStream/Remux → Full Transcode
 - Key services: `StreamBuilder` (playback decisions), `PlaybackSessionService` (HLS job startup), `FFmpegTranscoder` (ffmpeg process coordination), `Scanner` (library indexing)
 
-**Frontend Stack** (`./web`):
+**Web Frontend Stack** (`./clients/web`):
 - Vue 3 + TypeScript + Vite + Tailwind CSS 4 + HLS.js
 - API client: openapi-fetch with auto-generated types from backend OpenAPI schema
 - Dev server proxies `/api` → `http://localhost:8005`
+
+**Android TV Client** (`./clients/android-tv`, planned):
+- Native Kotlin client using AndroidX Media3/ExoPlayer for playback
+- Prefer Jetpack Compose for TV for new UI unless an Android TV platform constraint makes a focused native view preferable
+- Keep the playback contract aligned with the Vue player and backend streaming APIs: device profile, playback session creation, HLS readiness, heartbeat/session updates, audio/subtitle/quality switching, seek/restart, and clean session shutdown
 
 ## Critical Workflows
 
@@ -30,7 +35,7 @@ When backend routes change, **always** regenerate types:
 # In ./server - export OpenAPI schema
 uv run python -m scripts.export_openapi
 
-# In ./web - regenerate TypeScript types
+# In ./clients/web - regenerate TypeScript types
 pnpm generate-api-types
 ```
 
@@ -52,8 +57,10 @@ uv run ruff check --fix
 uv run ruff format
 ```
 
-### Frontend Development
+### Web Frontend Development
 ```bash
+cd clients/web
+
 # Package manager: pnpm (version pinned in package.json)
 pnpm install                         # Install dependencies
 pnpm dev                            # Dev server on port 5187 from Vite config
@@ -63,6 +70,24 @@ pnpm test                           # Run Vitest unit tests
 pnpm test:watch                     # Run Vitest in watch mode
 pnpm test:coverage                  # Generate test coverage report
 ```
+
+### Android TV Development
+Local Android tooling is installed in user space:
+```bash
+export JAVA_HOME="$HOME/.local/opt/jdk-21"
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+```
+
+Available AVDs:
+```bash
+emulator -list-avds
+# Ferelix_Android_TV_API_36
+# Ferelix_Android_TV_API_34
+```
+
+If the emulator segfaults on Fedora/Wayland, check SELinux denials for `RenderThread`/`execheap` before changing app code. Emulator screenshots saved from the desktop UI are under `/home/nicolas/Images/Copies d'écran/`.
 
 ### Backend Testing
 ```bash
@@ -89,7 +114,7 @@ uv run pytest --cov                 # Run with coverage report
 - **API tests** (`tests/api/`): Test complete request/response cycles
 - Run tests locally before committing: `uv run pytest`
 
-### Frontend Tests (`web/tests/`)
+### Frontend Tests (`clients/web/tests/`)
 - **Unit tests** (`tests/unit/`): Test individual components, composables, and utility functions
 - Use Vitest + Vue Testing Library for component testing
 - Run tests locally before committing: `pnpm test`
@@ -161,7 +186,7 @@ Decision logic compares `DeviceProfile` capabilities against media file metadata
 
 `PlaybackSessionService` starts HLS jobs for the selected method. `FFmpegTranscoder` coordinates ffmpeg processes while command construction, hardware detection, subtitle extraction, and HLS file I/O live in focused helper modules under `app/services/transcoding/` and `app/services/streaming_io.py`.
 
-The Vue player keeps playback orchestration in `CustomVideoPlayer.vue`, presentational controls/status overlays in `web/src/components/player/`, and small formatting/type helpers in `web/src/services/playerUi.ts`.
+The Vue player keeps playback orchestration in `CustomVideoPlayer.vue`, presentational controls/status overlays in `clients/web/src/components/player/`, and small formatting/type helpers in `clients/web/src/services/playerUi.ts`.
 
 Optional runtime configuration:
 ```bash
@@ -208,9 +233,9 @@ When reviewing code, **focus on real bugs only** - not style preferences or mino
 - `server/app/services/streaming_io.py` - HTTP range parsing and HLS playlist/segment readiness helpers
 - `server/app/services/stream_builder.py` - Playback decision logic
 - `server/app/services/directory_browser.py` - Admin filesystem browsing helper used by dashboard routes
-- `web/src/api/client.ts` - Centralized API client with token refresh
-- `web/src/components/CustomVideoPlayer.vue` - HLS player with transcode management
-- `web/src/components/player/` - Presentational video player controls and status overlays
-- `web/src/services/playerPlayback.ts` - Playback job selection and HLS readiness polling
-- `web/src/services/playerUi.ts` - Shared player UI types, labels, and time formatting
+- `clients/web/src/api/client.ts` - Centralized API client with token refresh
+- `clients/web/src/components/CustomVideoPlayer.vue` - HLS player with transcode management
+- `clients/web/src/components/player/` - Presentational video player controls and status overlays
+- `clients/web/src/services/playerPlayback.ts` - Playback job selection and HLS readiness polling
+- `clients/web/src/services/playerUi.ts` - Shared player UI types, labels, and time formatting
 - `justfile` - All development commands

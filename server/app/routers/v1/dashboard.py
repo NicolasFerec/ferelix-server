@@ -1215,6 +1215,7 @@ async def ensure_active_admin_remains(
             detail="At least one active admin is required",
         )
 
+
 # ============================================================================
 # Recommendation Row Management Endpoints (Admin Only)
 # ============================================================================

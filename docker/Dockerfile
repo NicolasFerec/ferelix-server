@@ -9,11 +9,11 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /build
 
 # Copy frontend package files first for better caching
-COPY web/package.json web/pnpm-lock.yaml ./
+COPY clients/web/package.json clients/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build
-COPY web/ ./
+COPY clients/web/ ./
 RUN pnpm build
 
 # =============================================================================

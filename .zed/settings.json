@@ -6,15 +6,11 @@
   "lsp": {
     "biome": {
       "settings": {
-        "config_path": "web/biome.json",
+        "config_path": "clients/web/biome.json",
       },
     },
   },
-
   "formatter": "language_server",
-
-  "language_servers": ["!eslint", "..."],
-
   "code_actions_on_format": {
     "source.fixAll.biome": true,
     "source.organizeImports.biome": true,

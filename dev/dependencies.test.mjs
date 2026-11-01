@@ -4,7 +4,7 @@ import test from 'node:test';
 
 test('patched OpenAPI tooling preserves URL header matching with minimatch 11', async () => {
     const require = createRequire(import.meta.url);
-    const generator = createRequire(require.resolve('../web/node_modules/openapi-typescript/dist/index.mjs'));
+    const generator = createRequire(require.resolve('../clients/web/node_modules/openapi-typescript/dist/index.mjs'));
     const core = createRequire(generator.resolve('@redocly/openapi-core'));
     const { readFileFromUrl } = core('./utils.js');
     let headers;

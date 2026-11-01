@@ -7,17 +7,17 @@
     "node": ">=26.13.0 <27"
   },
   "scripts": {
-    "bootstrap": "uv sync --locked --directory server && pnpm --dir web install --frozen-lockfile",
+    "bootstrap": "uv sync --locked --directory server && pnpm --dir clients/web install --frozen-lockfile",
     "dev": "node dev/start.mjs",
-    "dev:web": "pnpm --dir web dev",
+    "dev:web": "pnpm --dir clients/web dev",
     "dev:server": "node dev/start.mjs --server-only",
-    "build": "pnpm --dir web build",
+    "build": "pnpm --dir clients/web build",
     "test": "pnpm test:dev && pnpm test:server && pnpm test:web",
     "type-check": "pnpm type-check:server && pnpm type-check:web",
     "test:server": "uv run --directory server pytest",
-    "test:web": "pnpm --dir web test",
+    "test:web": "pnpm --dir clients/web test",
     "type-check:server": "uv run --directory server basedpyright",
-    "type-check:web": "pnpm --dir web exec vue-tsc --noEmit",
+    "type-check:web": "pnpm --dir clients/web exec vue-tsc --noEmit",
     "tc": "pnpm type-check",
     "test:dev": "node --test dev/*.test.mjs"
   }

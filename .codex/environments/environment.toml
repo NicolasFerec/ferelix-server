@@ -6,7 +6,7 @@ script = '''
 set -eu
 
 # Environment files are optional; copy them from the source checkout when present.
-for directory in . server web; do
+for directory in . server clients/web; do
     for filename in .env .env.local .env.development .env.development.local; do
         source_file="${CODEX_SOURCE_TREE_PATH:?}/$directory/$filename"
         if [ -f "$source_file" ]; then

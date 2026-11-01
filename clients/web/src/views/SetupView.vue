@@ -65,7 +65,7 @@ async function handleSetup(): Promise<void> {
 
 <template>
   <div class="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-    <div class="max-w-md w-full space-y-8">
+    <div class="w-full max-w-[350px] space-y-8">
       <div>
         <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
           {{ $t('setup.title') }}

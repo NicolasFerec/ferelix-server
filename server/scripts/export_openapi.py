@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Export OpenAPI schema to JSON file."""
 
 import json
@@ -9,7 +8,7 @@ from app.main import app
 
 
 def main():
-    output_path = Path(__file__).parent.parent.parent / "web" / "src" / "api" / "openapi.json"
+    output_path = Path(__file__).parent.parent.parent / "clients" / "web" / "src" / "api" / "openapi.json"
     new_content = json.dumps(app.openapi(), indent=2) + "\n"
 
     if output_path.exists():

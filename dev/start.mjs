@@ -69,7 +69,7 @@ try {
     });
     if (!stopping) {
         run('uv', ['run', 'uvicorn', 'app.main:app', '--reload', '--reload-dir', 'app', '--port', '8005'], 'server', backendEnv);
-        if (!serverOnly) run('pnpm', ['dev', '--strictPort'], 'web', environment('web'));
+        if (!serverOnly) run('pnpm', ['dev', '--strictPort'], 'clients/web', environment('clients/web'));
         console.log('Ferelix: http://localhost:5187 — API: http://localhost:8005/docs');
     }
 } catch (error) {

@@ -7,7 +7,7 @@ Ferelix is a self-hosted media server, similar to Plex or Jellyfin. It allows yo
 Ferelix is organized into two main subprojects:
 
 - **[Server](./server)** - The backend API and media management engine built with Python
-- **[Web](./web)** - The Vue dashboard and media player, with playback orchestration split from reusable player controls and UI helpers
+- **[Web](./clients/web)** - The Vue dashboard and media player, with playback orchestration split from reusable player controls and UI helpers
 
 ## Quick Start
 
@@ -87,7 +87,7 @@ Run `pnpm run` at the repository root to list all commands.
 For detailed setup instructions, configuration, and development guidelines, refer to the individual README files:
 
 - Server setup: [server/README.md](./server/README.md)
-- Web setup: [web/README.md](./web/README.md)
+- Web setup: [clients/web/README.md](./clients/web/README.md)
 
 ## License
 
@@ -101,7 +101,7 @@ The launcher loads optional `.env` and `.env.local` files from the root and each
 
 The backend applies Alembic migrations before starting and watches only `server/app/`. SQLite defaults to `server/ferelix.db`. Worktree setup installs dependencies and copies environment files, but does not copy the database.
 
-Root commands: `pnpm test`, `pnpm type-check`, `pnpm build`, `pnpm dev:server`, and `pnpm dev:web`. Frontend dependencies and their lockfile stay in `web/`; root scripts delegate to that package.
+Root commands: `pnpm test`, `pnpm type-check`, `pnpm build`, `pnpm dev:server`, and `pnpm dev:web`. Frontend dependencies and their lockfile stay in `clients/web/`; root scripts delegate to that package.
 
 ### Dependency compatibility
 
@@ -115,7 +115,7 @@ Set `SECRET_KEY` to manage the signing key yourself. Otherwise Ferelix generates
 
 Profile images are stored in `/config/images/profile` in Docker and `server/images/profile` for local development. `FERELIX_PROFILE_IMAGE_DIR` overrides this location.
 
-The web lockfile also refreshes transitive dependencies. `pnpm-workspace.yaml` overrides `glob` and `minimatch` to patched releases; `web/patches/@redocly__openapi-core@1.34.22.patch` adapts Redocly's minimatch import so OpenAPI generation remains compatible. A regression test exercises URL-header matching through this patched code. Remove the patch when the generator supports the maintained dependency directly.
+The web lockfile also refreshes transitive dependencies. `pnpm-workspace.yaml` overrides `glob` and `minimatch` to patched releases; `clients/web/patches/@redocly__openapi-core@1.34.22.patch` adapts Redocly's minimatch import so OpenAPI generation remains compatible. A regression test exercises URL-header matching through this patched code. Remove the patch when the generator supports the maintained dependency directly.
 
 ### Runtime versions
 

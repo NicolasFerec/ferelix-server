@@ -75,7 +75,7 @@ async function loadItems() {
 
   loadingItems.value = true;
   try {
-    items.value = await libraryApi.getLibraryItems(libraryId);
+    items.value = await libraryApi.getAllLibraryItems(libraryId);
   } catch (err) {
     console.error("Failed to load library items:", err);
     items.value = [];

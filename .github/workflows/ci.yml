@@ -22,7 +22,7 @@ jobs:
         uses: ./.github/actions/setup-deps
 
       - name: Run tests
-        run: just test
+        run: pnpm test
 
       - name: Run type checks
-        run: just type-check
+        run: pnpm type-check

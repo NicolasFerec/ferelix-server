@@ -7,7 +7,7 @@ Ferelix is a media server with FastAPI backend and Vue 3 frontend, featuring tra
 **Monorepo Structure**: `./server` (Python backend) + `./web` (Vue 3 frontend)
 
 **Backend Stack** (`./server`):
-- FastAPI + Python 3.14+ + SQLAlchemy (async) + Alembic migrations
+- FastAPI + Python 3.15.2 + SQLAlchemy (async) + Alembic migrations
 - Media processing: FFmpeg/ffprobe for metadata extraction and HLS transcoding
 - Streaming strategies: DirectPlay → DirectStream/Remux → Full Transcode
 - Key services: `StreamBuilder` (playback decisions), `PlaybackSessionService` (HLS job startup), `FFmpegTranscoder` (ffmpeg process coordination), `Scanner` (library indexing)
@@ -19,9 +19,10 @@ Ferelix is a media server with FastAPI backend and Vue 3 frontend, featuring tra
 
 ## Critical Workflows
 
-### Command Runner: Just
-All dev commands use [Just](https://github.com/casey/just). Run `just --list` to see all commands.
-- **Start development**: `just dev` (runs both server and frontend in parallel)
+### Commands: pnpm
+Run `nvm use` in each new shell before pnpm commands. `.nvmrc` pins Node.js 26.13.0 LTS; `.python-version` pins Python 3.15.2 for uv. Use uv 0.13.6 and pnpm 12.16.1, matching CI and Docker.
+Root `package.json` exposes `pnpm bootstrap`, `pnpm dev`, `pnpm test`, `pnpm type-check`, and `pnpm build`. Run `pnpm run` to list commands. Component-specific checks use `pnpm test:server`, `pnpm test:web`, `pnpm type-check:server`, and `pnpm type-check:web`.
+- **Start development**: `pnpm dev` (runs migrations, then backend and frontend; loads optional environment files)
 - **Servers may already be running** from previous sessions - check before starting
 
 ### API Type Synchronization (CRITICAL)
@@ -213,4 +214,4 @@ When reviewing code, **focus on real bugs only** - not style preferences or mino
 - `web/src/components/player/` - Presentational video player controls and status overlays
 - `web/src/services/playerPlayback.ts` - Playback job selection and HLS readiness polling
 - `web/src/services/playerUi.ts` - Shared player UI types, labels, and time formatting
-- `justfile` - All development commands
+- `package.json` - Root development commands

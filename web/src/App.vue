@@ -18,7 +18,7 @@ onMounted(async () => {
 
 <template>
   <div id="app" class="min-h-screen bg-gray-900">
-    <router-view />
+    <router-view :key="$route.path" />
     <ToastViewport />
   </div>
 </template>

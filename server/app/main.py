@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +14,7 @@ from app.database import async_session_maker
 from app.dependencies import set_scheduler
 from app.routers.v1 import auth, dashboard, media, streaming, users
 from app.services.jobs import init_job_tracking
-from app.services.logging_config import configure_logging
+from app.services.logging_config import configure_logging, protect_access_logs
 from app.services.settings import cleanup_stalled_jobs_job, get_or_create_settings, initialize_scheduler_jobs
 from app.services.setup import router as setup_router
 
@@ -30,6 +30,7 @@ scheduler = AsyncIOScheduler()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup and shutdown events."""
+    protect_access_logs()
     # Startup
     logger.info("Starting Ferelix Server...")
 
@@ -40,37 +41,38 @@ async def lifespan(app: FastAPI):
     # Start scheduler before initializing jobs
     scheduler.start()
 
-    # Initialize job tracking (must be after scheduler.start())
-    init_job_tracking(scheduler)
-
-    # Get or create settings and initialize scheduler jobs
-    async with async_session_maker() as session:
-        settings = await get_or_create_settings(session)
-        initialize_scheduler_jobs(scheduler, settings)
-
-    # Clean up any stalled transcoding jobs from previous server restart
     try:
-        cleaned_count = await cleanup_stalled_jobs_job()
-        if cleaned_count > 0:
-            logger.info(f"Cleaned up {cleaned_count} stalled transcoding jobs at startup")
-    except Exception as e:
-        logger.error(f"Failed to cleanup stalled jobs at startup: {e}")
+        # Initialize job tracking (must be after scheduler.start())
+        init_job_tracking(scheduler)
 
-    yield
+        # Get or create settings and initialize scheduler jobs
+        async with async_session_maker() as session:
+            settings = await get_or_create_settings(session)
+            initialize_scheduler_jobs(scheduler, settings)
 
-    # Shutdown
-    logger.info("Shutting down Ferelix Server...")
+        # Clean up any stalled transcoding jobs from previous server restart
+        try:
+            cleaned_count = await cleanup_stalled_jobs_job()
+            if cleaned_count > 0:
+                logger.info(f"Cleaned up {cleaned_count} stalled transcoding jobs at startup")
+        except Exception:
+            logger.exception("Failed to cleanup stalled jobs at startup")
 
-    # Run final cleanup of transcode files before shutdown
-    try:
-        final_cleanup_count = await cleanup_stalled_jobs_job()
-        if final_cleanup_count > 0:
-            logger.info(f"Final cleanup removed {final_cleanup_count} transcoding jobs on shutdown")
-    except Exception as e:
-        logger.error(f"Failed to run final cleanup on shutdown: {e}")
+        yield
+    finally:
+        # Shutdown
+        logger.info("Shutting down Ferelix Server...")
 
-    scheduler.shutdown()
-    logger.info("Scheduler stopped")
+        # Run final cleanup of transcode files before shutdown
+        try:
+            final_cleanup_count = await cleanup_stalled_jobs_job()
+            if final_cleanup_count > 0:
+                logger.info(f"Final cleanup removed {final_cleanup_count} transcoding jobs on shutdown")
+        except Exception:
+            logger.exception("Failed to run final cleanup on shutdown")
+
+        scheduler.shutdown()
+        logger.info("Scheduler stopped")
 
 
 app = FastAPI(title="Ferelix Server", version="0.1.0", lifespan=lifespan)
@@ -91,6 +93,13 @@ app.include_router(media.router)
 app.include_router(streaming.router)
 app.include_router(dashboard.router)
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "ok"}
+
+
 # Mount static files for frontend
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.exists():
@@ -102,7 +111,7 @@ if STATIC_DIR.exists():
         """Serve the SPA index.html for all non-API routes."""
         # If path starts with api/, setup/, health - let it fall through to API
         if full_path.startswith(("api/", "setup/", "health")):
-            return None
+            raise HTTPException(status_code=404, detail="Not found")
 
         # Serve index.html for SPA client-side routing
         index_file = STATIC_DIR / "index.html"
@@ -110,9 +119,3 @@ if STATIC_DIR.exists():
             return FileResponse(index_file)
 
         return {"error": "Frontend not found"}
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok"}

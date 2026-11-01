@@ -196,7 +196,7 @@ class HardwareAcceleration:
         except Exception as exc:
             message = f"Hardware acceleration detection failed: {exc}"
             self.warnings.append(message)
-            logger.warning(message)
+            logger.warning(message, exc_info=True)
             return
 
         self.devices.extend(self._detect_nvidia_devices(encoders_output, decoders_output))
@@ -391,6 +391,7 @@ class HardwareAcceleration:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         return f"{result.stdout}\n{result.stderr}"
 
@@ -405,8 +406,10 @@ class HardwareAcceleration:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
         except Exception:
+            logger.debug("Hardware probe _nvidia_gpu_rows failed", exc_info=True)
             return []
 
         if result.returncode != 0:
@@ -464,8 +467,10 @@ class HardwareAcceleration:
                 capture_output=True,
                 text=True,
                 timeout=5,
+                check=False,
             )
         except Exception:
+            logger.debug("Hardware probe _lspci_device_name failed", exc_info=True)
             return None
 
         if result.returncode != 0:
@@ -503,8 +508,10 @@ class HardwareAcceleration:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
         except Exception:
+            logger.debug("Hardware probe _vainfo_decoders failed", exc_info=True)
             return set()
 
         if result.returncode != 0:
@@ -572,6 +579,7 @@ class HardwareAcceleration:
                     ],
                     capture_output=True,
                     timeout=15,
+                    check=False,
                 )
                 if create_sample.returncode != 0:
                     return False
@@ -598,9 +606,11 @@ class HardwareAcceleration:
                     ],
                     capture_output=True,
                     timeout=15,
+                    check=False,
                 )
                 return decode_sample.returncode == 0
         except Exception:
+            logger.debug("Hardware probe _test_vaapi_decoder failed", exc_info=True)
             return False
 
     def _has_any_encoder(self, device_type: str, output: str) -> bool:
@@ -628,9 +638,11 @@ class HardwareAcceleration:
                 cmd,
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
             return result.returncode == 0
         except Exception:
+            logger.debug("Hardware probe _test_encoder failed", exc_info=True)
             return False
 
     def _test_nvidia_decoder(
@@ -672,6 +684,7 @@ class HardwareAcceleration:
                     ],
                     capture_output=True,
                     timeout=20,
+                    check=False,
                 )
                 if encode_sample.returncode != 0 or not sample_path.exists():
                     logger.debug(
@@ -707,6 +720,7 @@ class HardwareAcceleration:
                     decode_cmd,
                     capture_output=True,
                     timeout=15,
+                    check=False,
                 )
                 if decode_sample.returncode != 0:
                     logger.debug(
@@ -718,7 +732,7 @@ class HardwareAcceleration:
                     return False
                 return True
         except Exception as exc:
-            logger.debug("NVIDIA %s decode probe raised an exception: %s", codec, exc)
+            logger.debug("NVIDIA %s decode probe raised an exception: %s", codec, exc, exc_info=True)
             return False
 
     def _test_vaapi_encoder(self, device: str, encoder: str) -> bool:
@@ -743,9 +757,11 @@ class HardwareAcceleration:
                 ],
                 capture_output=True,
                 timeout=10,
+                check=False,
             )
             return result.returncode == 0
         except Exception:
+            logger.debug("Hardware probe _test_vaapi_encoder failed", exc_info=True)
             return False
 
 

@@ -1740,18 +1740,12 @@ export interface components {
         };
         /** Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put */
         Body_upload_current_user_profile_image_api_v1_users_me_profile_image_put: {
-            /**
-             * Image
-             * Format: binary
-             */
+            /** Image */
             image: string;
         };
         /** Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put */
         Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put: {
-            /**
-             * Image
-             * Format: binary
-             */
+            /** Image */
             image: string;
         };
         /**
@@ -2679,6 +2673,22 @@ export interface components {
             is_default: boolean;
         };
         /**
+         * TokenResponse
+         * @description Response schema for token endpoints.
+         */
+        TokenResponse: {
+            /** Access Token */
+            access_token: string;
+            /** Refresh Token */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            user: components["schemas"]["UserSchema"];
+        };
+        /**
          * TranscodeReason
          * @description Reasons why transcoding may be required.
          * @enum {string}
@@ -2893,6 +2903,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
         /**
          * VideoTrackSchema
@@ -2946,22 +2960,6 @@ export interface components {
             /** Max Fall */
             max_fall?: number | null;
         };
-        /**
-         * TokenResponse
-         * @description Response schema for token endpoints.
-         */
-        app__routers__v1__auth__TokenResponse: {
-            /** Access Token */
-            access_token: string;
-            /** Refresh Token */
-            refresh_token: string;
-            /**
-             * Token Type
-             * @default bearer
-             */
-            token_type: string;
-            user: components["schemas"]["UserSchema"];
-        };
     };
     responses: never;
     parameters: never;
@@ -3012,7 +3010,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__routers__v1__auth__TokenResponse"];
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3028,7 +3026,9 @@ export interface operations {
     };
     register_api_v1_auth_register_post: {
         parameters: {
-            query?: never;
+            query?: {
+                api_key?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3078,7 +3078,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__routers__v1__auth__TokenResponse"];
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3111,7 +3111,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__routers__v1__auth__TokenResponse"];
+                    "application/json": components["schemas"]["TokenResponse"];
                 };
             };
             /** @description Validation Error */

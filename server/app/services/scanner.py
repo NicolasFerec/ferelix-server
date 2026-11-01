@@ -1,9 +1,11 @@
 """Media library scanner service."""
 
+import asyncio
 import json
 import logging
 import os
 import subprocess
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -13,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker
 from app.models import AudioTrack, Library, MediaFile, SubtitleTrack, VideoTrack
+from app.services.jobs import is_cancellation_requested
+from app.services.library_paths import library_file_filter
 from app.services.thumbnails import generate_video_thumbnail
 
 logger = logging.getLogger(__name__)
@@ -133,7 +137,7 @@ def _update_media_file_metadata(
     media_file.bitrate = metadata.get("bitrate")
 
 
-def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
+def extract_video_metadata(file_path: Path) -> dict:  # ruff: ignore[complex-structure]
     """Extract video metadata using ffprobe.
 
     Returns a dictionary with duration, width, height, codec, bitrate,
@@ -154,6 +158,7 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
 
         if result.returncode != 0:
@@ -257,8 +262,8 @@ def extract_video_metadata(file_path: Path) -> dict:  # noqa: C901
     except json.JSONDecodeError:
         logger.error(f"Failed to parse ffprobe output for {file_path}")
         return {}
-    except Exception as e:
-        logger.error(f"Error extracting metadata for {file_path}: {e}")
+    except Exception:
+        logger.exception("Error extracting metadata for %s", file_path)
         return {}
 
 
@@ -343,7 +348,7 @@ async def _update_media_tracks(session: AsyncSession, media_file: MediaFile, met
         session.add(subtitle_track)
 
 
-async def scan_library_path(  # noqa: C901
+async def scan_library_path(  # ruff: ignore[complex-structure]
     session: AsyncSession, library_path: Library, job_id: str | None = None
 ) -> dict[str, int | bool]:
     """Scan a library path for video files and update the database.
@@ -363,7 +368,7 @@ async def scan_library_path(  # noqa: C901
     )
 
     path = Path(library_path.path)
-    if not path.exists() or not path.is_dir():
+    if not (await asyncio.to_thread(path.exists)) or not (await asyncio.to_thread(path.is_dir)):
         logger.warning(f"Library path does not exist or is not a directory: {path}")
         return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": False}
 
@@ -377,31 +382,13 @@ async def scan_library_path(  # noqa: C901
 
     logger.info(f"Scanning library path: {path}")
 
-    # First pass: Count video files for progress tracking
-    video_files = []
+    # A failed directory enumeration must never look like deleted media.
     logger.info("Counting video files...")
-    for root, dirs, files in os.walk(path):
-        # Check for cancellation during counting
-        if job_id and is_cancellation_requested(job_id):
-            logger.info("Cancellation requested during file counting")
-            was_cancelled = True
-            if job_id:
-                mark_job_cancelled(job_id)
-            return {
-                "new": 0,
-                "updated": 0,
-                "deleted": 0,
-                "restored": 0,
-                "cancelled": True,
-            }
-
-        for file_name in files:
-            file_path = Path(root) / file_name
-            file_extension = file_path.suffix.lower()
-
-            # Check if it's a video file
-            if file_extension in VIDEO_EXTENSIONS:
-                video_files.append((file_path, file_name, file_extension))
+    video_files = await asyncio.to_thread(_collect_video_files, path, job_id)
+    if video_files is None:
+        if job_id:
+            mark_job_cancelled(job_id)
+        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": True}
 
     files_total = len(video_files)
     logger.info(f"Found {files_total} video files to process")
@@ -426,7 +413,7 @@ async def scan_library_path(  # noqa: C901
 
         file_path_str = str(file_path)
         scanned_paths.add(file_path_str)
-        file_stat = file_path.stat()
+        file_stat = await asyncio.to_thread(file_path.stat)
         modified_at = _file_modified_at(file_stat)
 
         # Update progress with current file
@@ -449,11 +436,13 @@ async def scan_library_path(  # noqa: C901
 
             if needs_metadata_scan:
                 logger.info(f"Processing updated file: {file_path}")
-                metadata = extract_video_metadata(file_path)
+                metadata = await asyncio.to_thread(extract_video_metadata, file_path)
                 await _update_media_tracks(session, existing_file, metadata)
                 _update_media_file_metadata(existing_file, metadata, file_stat, modified_at)
 
-                thumbnail_path = generate_video_thumbnail(file_path, metadata.get("duration"), force=file_changed)
+                thumbnail_path = await asyncio.to_thread(
+                    generate_video_thumbnail, file_path, metadata.get("duration"), force=file_changed
+                )
                 if thumbnail_path:
                     existing_file.thumbnail_path = thumbnail_path
 
@@ -470,8 +459,8 @@ async def scan_library_path(  # noqa: C901
         else:
             # Extract metadata for new file
             logger.info(f"Processing new file: {file_path}")
-            metadata = extract_video_metadata(file_path)
-            thumbnail_path = generate_video_thumbnail(file_path, metadata.get("duration"))
+            metadata = await asyncio.to_thread(extract_video_metadata, file_path)
+            thumbnail_path = await asyncio.to_thread(generate_video_thumbnail, file_path, metadata.get("duration"))
 
             # Create new MediaFile entry
             media_file = MediaFile(
@@ -519,7 +508,7 @@ async def scan_library_path(  # noqa: C901
     if not was_cancelled:
         library_files = await session.scalars(
             select(MediaFile).where(
-                MediaFile.file_path.startswith(str(path)),
+                library_file_filter(str(path)),
                 MediaFile.deleted_at.is_(None),
             )
         )
@@ -556,6 +545,23 @@ async def scan_library_path(  # noqa: C901
         )
 
     return stats
+
+
+def _raise_walk_error(error: OSError) -> None:
+    raise error
+
+
+def _collect_video_files(path: Path, job_id: str | None) -> list[tuple[Path, str, str]] | None:
+    files_to_scan = []
+    for root, _directories, files in os.walk(path, onerror=_raise_walk_error):
+        if job_id and is_cancellation_requested(job_id):
+            return None
+        for name in files:
+            file_path = Path(root) / name
+            extension = file_path.suffix.lower()
+            if extension in VIDEO_EXTENSIONS:
+                files_to_scan.append((file_path, name, extension))
+    return files_to_scan
 
 
 async def scan_all_libraries(
@@ -639,8 +645,7 @@ def schedule_library_scan(scheduler: AsyncIOScheduler, library_id: int, library_
     Returns:
         Job ID for tracking
     """
-    timestamp = int(datetime.now(UTC).timestamp())
-    job_id = f"scan_library_{library_id}_{timestamp}"
+    job_id = f"scan_library_{library_id}_{uuid.uuid4().hex}"
 
     scheduler.add_job(
         func=scan_library_job,

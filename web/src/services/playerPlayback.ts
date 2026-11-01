@@ -43,52 +43,61 @@ export async function startPlaybackJob(options: {
     subtitleStreamIndex?: number;
     startTime?: number;
     sessionId?: string | null;
+    signal?: AbortSignal;
 }): Promise<TranscodingJob> {
     const { mediaId, source, audioStreamIndex, subtitleStreamIndex, startTime, sessionId } = options;
+    options.signal?.throwIfAborted();
+    let job: TranscodingJob;
     const settings = source.TranscodeSettings;
     const transcodingType = source.TranscodingType || "full";
 
     if (transcodingType === "remux" || source.IsRemuxOnly) {
-        return media.startRemux(mediaId, {
+        job = await media.startRemux(mediaId, {
             audioStreamIndex,
             startTime: startTime || undefined,
             sessionId,
         });
-    }
-
-    if (transcodingType === "audio-only") {
-        return media.startAudioTranscode(mediaId, {
+    } else if (transcodingType === "audio-only") {
+        job = await media.startAudioTranscode(mediaId, {
             audioCodec: settings?.AudioCodec,
             audioBitrate: settings?.AudioBitrate,
             audioStreamIndex,
             startTime: startTime || undefined,
             sessionId,
         });
+    } else {
+        job = await media.startTranscode(mediaId, {
+            videoCodec: settings?.VideoCodec,
+            audioCodec: settings?.AudioCodec,
+            videoBitrate: settings?.VideoBitrate,
+            audioBitrate: settings?.AudioBitrate,
+            maxWidth: settings?.MaxWidth,
+            maxHeight: settings?.MaxHeight,
+            audioStreamIndex,
+            subtitleStreamIndex,
+            startTime: startTime || undefined,
+            sessionId,
+        });
     }
-
-    return media.startTranscode(mediaId, {
-        videoCodec: settings?.VideoCodec,
-        audioCodec: settings?.AudioCodec,
-        videoBitrate: settings?.VideoBitrate,
-        audioBitrate: settings?.AudioBitrate,
-        maxWidth: settings?.MaxWidth,
-        maxHeight: settings?.MaxHeight,
-        audioStreamIndex,
-        subtitleStreamIndex,
-        startTime: startTime || undefined,
-        sessionId,
-    });
+    if (options.signal?.aborted) {
+        await media.stopHls(job.id);
+        options.signal.throwIfAborted();
+    }
+    return job;
 }
 
 export async function waitForHlsReady(
     jobId: string,
     onStatus?: (status: TranscodingJob) => void,
     maxWait = 120000,
+    signal?: AbortSignal,
 ): Promise<TranscodingJob> {
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < maxWait) {
+        signal?.throwIfAborted();
         const status = await media.getHlsStatus(jobId);
+        signal?.throwIfAborted();
         onStatus?.(status);
 
         if (status.status === "failed") {
@@ -99,7 +108,7 @@ export async function waitForHlsReady(
         }
         if (status.status === "running" || status.status === "completed") {
             try {
-                const response = await fetch(media.getHlsPlaylistUrl(jobId), { method: "HEAD" });
+                const response = await fetch(media.getHlsPlaylistUrl(jobId), { method: "HEAD", signal });
                 if (response.ok) {
                     return status;
                 }

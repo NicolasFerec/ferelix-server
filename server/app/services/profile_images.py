@@ -1,5 +1,7 @@
 """Profile image storage helpers."""
 
+import asyncio
+import os
 import uuid
 from io import BytesIO
 from pathlib import Path
@@ -11,21 +13,21 @@ ALLOWED_PROFILE_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
 MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_PROFILE_IMAGE_PIXELS = 20_000_000
 PROFILE_IMAGE_SIZE = 512
-DEFAULT_PROFILE_IMAGE_DIR = "/config/images/profile"
+DEFAULT_PROFILE_IMAGE_DIR = "/config/images/profile" if Path("/config").is_dir() else "images/profile"
 
 Image.MAX_IMAGE_PIXELS = MAX_PROFILE_IMAGE_PIXELS
 
 
 def profile_image_dir() -> Path:
     """Return the directory used for uploaded user profile images."""
-    directory = Path(DEFAULT_PROFILE_IMAGE_DIR)
+    directory = Path(os.getenv("FERELIX_PROFILE_IMAGE_DIR", DEFAULT_PROFILE_IMAGE_DIR))
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
 
 async def save_profile_image(user_id: int, image: UploadFile) -> str:
     """Validate, normalize, and persist an uploaded profile image."""
-    contents = await image.read()
+    contents = await image.read(MAX_PROFILE_IMAGE_BYTES + 1)
     if not contents:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -33,10 +35,14 @@ async def save_profile_image(user_id: int, image: UploadFile) -> str:
         )
     if len(contents) > MAX_PROFILE_IMAGE_BYTES:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail="Profile image is too large",
         )
 
+    return await asyncio.to_thread(_store_profile_image, user_id, contents)
+
+
+def _store_profile_image(user_id: int, contents: bytes) -> str:
     output_image = normalize_profile_image(contents)
     output_path = profile_image_dir() / f"user-{user_id}-{uuid.uuid4().hex}.jpg"
     output_image.save(output_path, format="JPEG", quality=90, optimize=True, progressive=True)

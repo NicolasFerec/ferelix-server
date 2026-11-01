@@ -26,11 +26,13 @@ class TestRegister:
     async def test_register_success(
         self,
         client: AsyncClient,
+        admin_auth_headers: dict[str, str],
         db_session: AsyncSession,
     ) -> None:
         """Test successful user registration."""
         response = await client.post(
             "/api/v1/auth/register",
+            headers=admin_auth_headers,
             json={
                 "username": "newuser",
                 "email": "new@example.com",
@@ -48,11 +50,13 @@ class TestRegister:
     async def test_register_duplicate_username(
         self,
         client: AsyncClient,
+        admin_auth_headers: dict[str, str],
         test_user: User,
     ) -> None:
         """Test registration with existing username fails."""
         response = await client.post(
             "/api/v1/auth/register",
+            headers=admin_auth_headers,
             json={
                 "username": test_user.username,
                 "email": "different@example.com",
@@ -67,11 +71,13 @@ class TestRegister:
     async def test_register_duplicate_email(
         self,
         client: AsyncClient,
+        admin_auth_headers: dict[str, str],
         test_user: User,
     ) -> None:
         """Test registration with existing email fails."""
         response = await client.post(
             "/api/v1/auth/register",
+            headers=admin_auth_headers,
             json={
                 "username": "uniqueuser",
                 "email": test_user.email,
@@ -86,10 +92,12 @@ class TestRegister:
     async def test_register_cannot_create_admin(
         self,
         client: AsyncClient,
+        admin_auth_headers: dict[str, str],
     ) -> None:
-        """Test public registration always creates reader accounts."""
+        """Test the registration endpoint creates reader accounts even for admins."""
         response = await client.post(
             "/api/v1/auth/register",
+            headers=admin_auth_headers,
             json={
                 "username": "notadmin",
                 "email": "notadmin@example.com",

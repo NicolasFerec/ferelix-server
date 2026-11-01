@@ -1,0 +1,28 @@
+version = 1
+name = "ferelix-server"
+
+[setup]
+script = '''
+set -eu
+
+# Environment files are optional; copy them from the source checkout when present.
+for directory in . server web; do
+    for filename in .env .env.local .env.development .env.development.local; do
+        source_file="${CODEX_SOURCE_TREE_PATH:?}/$directory/$filename"
+        if [ -f "$source_file" ]; then
+            cp "$source_file" "$directory/$filename"
+        fi
+    done
+done
+
+# Use the repository's Node version when nvm is available on this machine.
+if [ -f "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+    . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    nvm install
+fi
+if ! command -v pnpm >/dev/null 2>&1; then
+    package_manager=$(node -p "require('./package.json').packageManager")
+    npm install --global --allow-scripts=pnpm "$package_manager"
+fi
+pnpm bootstrap
+'''

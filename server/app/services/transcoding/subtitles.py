@@ -39,6 +39,6 @@ async def extract_subtitle_to_webvtt(
 
         logger.error("Subtitle extraction failed: %s", stderr.decode("utf-8", errors="ignore"))
         return False
-    except Exception as exc:
-        logger.error("Subtitle extraction error: %s", exc)
+    except Exception:
+        logger.exception("Subtitle extraction error for %s", media_file_path)
         return False

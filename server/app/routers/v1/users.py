@@ -1,5 +1,6 @@
 """User profile endpoints (authenticated users)."""
 
+import asyncio
 from pathlib import Path
 from typing import Annotated
 
@@ -41,7 +42,7 @@ async def get_profile_image(
     user = await session.get(User, user_id)
     if not user or not user.profile_image_path:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile image not found")
-    if not Path(user.profile_image_path).exists():
+    if not (await asyncio.to_thread(Path(user.profile_image_path).exists)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile image not found")
 
     return FileResponse(
@@ -116,6 +117,12 @@ async def update_current_user(
         email_value = (
             user_update.email.strip() if isinstance(user_update.email, str) and user_update.email.strip() else None
         )
+        if (
+            email_value
+            and await session.scalar(select(User.id).where(User.email == email_value, User.id != current_user.id))
+            is not None
+        ):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
 
         # Update email (can be None to clear it)
         current_user.email = email_value

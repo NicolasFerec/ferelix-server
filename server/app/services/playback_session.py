@@ -1,5 +1,6 @@
 """Playback session helpers for direct, remux, and transcoded streaming."""
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -66,7 +67,7 @@ class PlaybackSessionService:
         if not media_file:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
-        if not Path(media_file.file_path).exists():
+        if not (await asyncio.to_thread(Path(media_file.file_path).exists)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found on disk")
 
         return media_file
@@ -96,7 +97,7 @@ class PlaybackSessionService:
                 job.completed_at = func.now()
                 cleanup_count += 1
             except Exception as exc:
-                logger.warning("Failed to clean up previous job %s: %s", job.id, exc)
+                logger.warning("Failed to clean up previous job %s: %s", job.id, exc, exc_info=True)
 
         if cleanup_count:
             await self.session.commit()

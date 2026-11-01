@@ -1,5 +1,6 @@
 """API endpoints for managing media library and files (v1 with authentication)."""
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -28,6 +29,7 @@ from app.models.playback import (
     PlaybackInfoRequest,
     PlaybackInfoResponse,
 )
+from app.services.library_paths import library_file_filter
 from app.services.playback_session import ClientContext, PlaybackSessionService
 from app.services.recommendation_row import apply_filter_criteria
 from app.services.stream_builder import StreamBuilder
@@ -162,9 +164,10 @@ async def get_library_items(
             selectinload(MediaFile.subtitle_tracks),
         )
         .where(
-            MediaFile.file_path.startswith(library_path.path),
+            library_file_filter(library_path.path),
             MediaFile.deleted_at.is_(None),
         )
+        .order_by(MediaFile.id)
         .offset(skip)
         .limit(limit)
     )
@@ -344,12 +347,12 @@ async def get_media_thumbnail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
     source_path = Path(media_file.file_path)
-    if not source_path.exists():
+    if not (await asyncio.to_thread(source_path.exists)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found on disk")
 
     thumbnail_path = Path(media_file.thumbnail_path) if media_file.thumbnail_path else None
     if not thumbnail_path or not thumbnail_path.exists():
-        generated_path = generate_video_thumbnail(source_path, media_file.duration)
+        generated_path = await asyncio.to_thread(generate_video_thumbnail, source_path, media_file.duration)
         if not generated_path:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thumbnail not available")
 
@@ -385,7 +388,7 @@ async def get_homepage_rows(
     result = await session.execute(
         select(RecommendationRow, Library)
         .join(Library, RecommendationRow.library_id == Library.id)
-        .where(RecommendationRow.visible_on_homepage == True, Library.enabled == True)  # noqa: E712
+        .where(RecommendationRow.visible_on_homepage == True, Library.enabled == True)
         .order_by(Library.name, RecommendationRow.name)
     )
 

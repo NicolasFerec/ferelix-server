@@ -22,6 +22,7 @@ class HlsCommandOptions:
     segment_duration: int = 6
     audio_stream_index: int | None = None
     subtitle_stream_index: int | None = None
+    subtitle_filter_index: int = 0
     is_image_subtitle: bool = False
     start_time: float | None = None
     hls_segment_type: str = "mpegts"
@@ -169,20 +170,24 @@ class HlsCommandBuilder:
         vf_filters: list[str],
     ) -> None:
         if options.is_image_subtitle:
-            software_filters = [
-                item for item in vf_filters if "vaapi" not in item and item != "hwupload" and item != "format=nv12"
-            ]
-            filter_input = f"[0:v]{','.join(software_filters)}[v]" if software_filters else "[0:v]null[v]"
+            software_filters = self._video_filters(options, "libx264", False)
+            # Composite at the source resolution so bitmap subtitle positions stay
+            # aligned, then resize the entire frame and upload it for VAAPI.
+            output_filter = ",".join(["overlay", *software_filters])
+            if "vaapi" in encoder:
+                output_filter += ",format=nv12,hwupload"
             cmd.extend([
                 "-filter_complex",
-                f"{filter_input};[v][0:{options.subtitle_stream_index}]overlay[vout]",
+                f"[0:v][0:{options.subtitle_stream_index}]{output_filter}[vout]",
                 "-map",
                 "[vout]",
             ])
             self._append_audio_map(cmd, options.audio_stream_index)
             return
 
-        subtitle_filter = f"subtitles='{options.input_path}':stream_index={options.subtitle_stream_index}"
+        # The filter counts subtitle tracks, whereas -map uses absolute stream indices.
+        filename = escape_filter_filename(options.input_path)
+        subtitle_filter = f"subtitles=filename={filename}:stream_index={options.subtitle_filter_index}"
         if "vaapi" in encoder:
             vf_filters.insert(0, subtitle_filter)
         else:
@@ -319,3 +324,9 @@ class HlsCommandBuilder:
             playlist_path,
         ])
         return args
+
+
+def escape_filter_filename(filename: str) -> str:
+    """Escape both FFmpeg's option parser and the enclosing filtergraph parser."""
+    option = "".join("\\" + char if char in "\\':" else char for char in filename)
+    return "".join("\\" + char if char in "\\'[],;" else char for char in option)

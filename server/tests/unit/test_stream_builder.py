@@ -207,7 +207,7 @@ class TestStreamBuilderTranscode:
         stream_info = builder.build_stream_info(media_file)
 
         # Should transcode audio while copying video
-        assert stream_info.PlayMethod in (PlayMethod.TRANSCODE,)
+        assert stream_info.PlayMethod == PlayMethod.TRANSCODE
 
 
 class TestStreamBuilderResolution:

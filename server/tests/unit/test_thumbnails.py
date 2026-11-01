@@ -2,15 +2,17 @@
 
 from pathlib import Path
 
+import pytest
+
 from app.services.thumbnails import screenshot_timestamp, thumbnail_path_for_media
 
 
 def test_screenshot_timestamp_uses_middle_frame_for_short_media() -> None:
-    assert screenshot_timestamp(20.0) == 7.0
+    assert screenshot_timestamp(20.0) == pytest.approx(7.0)
 
 
 def test_screenshot_timestamp_avoids_start_and_credits_for_long_media() -> None:
-    assert screenshot_timestamp(7200.0) == 1440.0
+    assert screenshot_timestamp(7200.0) == pytest.approx(1440.0)
 
 
 def test_thumbnail_path_is_deterministic(monkeypatch, tmp_path: Path) -> None:

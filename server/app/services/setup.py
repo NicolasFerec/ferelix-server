@@ -5,12 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_maker, get_session
 from app.models import RefreshToken, User, UserSchema
 from app.services.auth import (
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
     hash_token,
@@ -75,8 +76,12 @@ async def create_first_admin(
     Raises:
         HTTPException: If setup already complete or validation fails
     """
-    # Check if setup already complete
-    if await is_setup_complete():
+    # Serialize first-run account creation across requests and worker processes.
+    if session.get_bind().dialect.name == "sqlite":
+        await session.execute(text("BEGIN IMMEDIATE"))
+    else:
+        await session.execute(text("SELECT pg_advisory_xact_lock(761984203)"))
+    if await session.scalar(select(User.id).limit(1)) is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Setup already complete. Use the admin dashboard to create additional users.",
@@ -92,8 +97,7 @@ async def create_first_admin(
     )
 
     session.add(admin_user)
-    await session.commit()
-    await session.refresh(admin_user)
+    await session.flush()
 
     # Create tokens
     access_token = create_access_token(data={"sub": str(admin_user.id)})
@@ -103,11 +107,12 @@ async def create_first_admin(
     refresh_token = RefreshToken(
         user_id=admin_user.id,
         token=hash_token(refresh_token_str),
-        expires_at=datetime.now(UTC) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         device_info=None,
     )
     session.add(refresh_token)
     await session.commit()
+    await session.refresh(admin_user)
 
     return TokenResponse(
         access_token=access_token,

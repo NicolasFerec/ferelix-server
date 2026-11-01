@@ -16,7 +16,7 @@ A self-hosted media server with JWT-based authentication, role-based access cont
 
 ## Development
 
-- Python 3.14+
+- Python 3.15.2
 - [uv](https://docs.astral.sh/uv/)
 - ffmpeg (for ffprobe metadata extraction)
 - Docker (for production deployment)

@@ -13,45 +13,30 @@ Ferelix is organized into two main subprojects:
 
 ### Prerequisites
 
-- **Python 3.14+** and **[uv](https://docs.astral.sh/uv/)** - For the backend server
-- **pnpm** - For the web frontend
+- **Python 3.15.2** and **[uv](https://docs.astral.sh/uv/)** - For the backend server
+- **Node.js 26.13.0 LTS** and **pnpm** (version pinned in the root `package.json`)
 - **ffmpeg** - For video metadata extraction and generated HLS playback
-- **[just](https://github.com/casey/just)** - Command runner (optional but recommended)
-
-### Install Just (Command Runner)
-
-Just is a handy command runner that makes working with this monorepo easier:
-
-```bash
-# Debian/Ubuntu
-sudo apt install just
-```
-
-Verify installation:
-```bash
-just --version
-```
 
 ### Install Dependencies
 
 ```bash
-# Using just (recommended)
-just install
+# From the repository root
+pnpm bootstrap
 
 # Or manually
-cd server && uv sync
-cd web && pnpm install
+(cd server && uv sync --locked)
+(cd web && pnpm install --frozen-lockfile)
 ```
 
 ### Run Development Servers
 
 ```bash
 # Start both backend and frontend together
-just dev
+pnpm dev
 
 # Or start them separately in different terminals
-just dev-server   # Backend only
-just dev-web      # Frontend only
+pnpm dev:server   # Backend only
+pnpm dev:web      # Frontend only
 ```
 
 The server will be available at `http://localhost:8005` and the web client at `http://localhost:5187`.
@@ -82,19 +67,20 @@ Hardware transcoding is detected automatically from the devices visible to the F
 
 Ferelix tests the visible FFmpeg encoders at runtime and uses `auto` by default. Admins can pin a specific detected device, or force software encoding, from Dashboard > Settings > Hardware Transcoding. The optional `FERELIX_HW_ACCEL_DEVICE` environment variable accepts the same values (`auto`, `software`, or a detected device id such as `vaapi:/dev/dri/renderD128`).
 
-### Discover Available Commands
+### Available Commands
 
-```bash
-just --list
-```
+Run `pnpm run` at the repository root to list all commands.
 
-or simply:
-
-```bash
-just
-```
-
-This will show all available commands you can run.
+| Command | Purpose |
+| --- | --- |
+| `pnpm bootstrap` | Install backend and frontend dependencies |
+| `pnpm dev` | Run migrations and start both development servers |
+| `pnpm dev:server` / `pnpm dev:web` | Start one development server |
+| `pnpm test` | Run all tests |
+| `pnpm test:server` / `pnpm test:web` | Run backend or frontend tests |
+| `pnpm type-check` (or `pnpm tc`) | Check backend and frontend types |
+| `pnpm type-check:server` / `pnpm type-check:web` | Check one component's types |
+| `pnpm build` | Build the web client |
 
 ## Detailed Setup
 
@@ -106,3 +92,33 @@ For detailed setup instructions, configuration, and development guidelines, refe
 ## License
 
 See [LICENSE](./LICENSE) for details.
+
+## Daily development
+
+From the repository root, run `pnpm bootstrap` once to install Python and web dependencies, then `pnpm dev` to start both servers. Node.js 26.13.0 LTS is required. Stop both servers with Ctrl+C; if either server fails, the other is stopped too. Occupied ports are reported before migrations run.
+
+The launcher loads optional `.env` and `.env.local` files from the root and each component directory. Component values override root values; exported shell variables take precedence. Vite also loads its usual mode-specific environment files.
+
+The backend applies Alembic migrations before starting and watches only `server/app/`. SQLite defaults to `server/ferelix.db`. Worktree setup installs dependencies and copies environment files, but does not copy the database.
+
+Root commands: `pnpm test`, `pnpm type-check`, `pnpm build`, `pnpm dev:server`, and `pnpm dev:web`. Frontend dependencies and their lockfile stay in `web/`; root scripts delegate to that package.
+
+### Dependency compatibility
+
+TypeScript stays on `~5.9.3`: the current Vue language tools cannot run with TypeScript 7, and `openapi-typescript` requires TypeScript 5. All other direct dependencies were refreshed to their latest stable releases on 2026-11-01. pnpm is pinned to 12.16.1 in both packages and Docker. The web pnpm settings allow the exact same-day releases selected in this refresh while preserving the release-age check for other versions.
+
+### Authentication and local storage
+
+Accounts are created by administrators in the dashboard; `/api/v1/auth/register` also requires administrator authentication. First-run setup creates the initial administrator atomically.
+
+Set `SECRET_KEY` to manage the signing key yourself. Otherwise Ferelix generates a private persistent `.secret_key` in the backend working directory (or `/config/.secret_key` in Docker). Keep it private and backed up; changing it invalidates existing tokens. `FERELIX_SECRET_KEY_FILE` can override its location. Installations previously using the public development key must sign in again.
+
+Profile images are stored in `/config/images/profile` in Docker and `server/images/profile` for local development. `FERELIX_PROFILE_IMAGE_DIR` overrides this location.
+
+The web lockfile also refreshes transitive dependencies. `pnpm-workspace.yaml` overrides `glob` and `minimatch` to patched releases; `web/patches/@redocly__openapi-core@1.34.22.patch` adapts Redocly's minimatch import so OpenAPI generation remains compatible. A regression test exercises URL-header matching through this patched code. Remove the patch when the generator supports the maintained dependency directly.
+
+### Runtime versions
+
+The project uses Python 3.15.2, Node.js 26.13.0 LTS, uv 0.13.6 and pnpm 12.16.1. Root and backend `.python-version` files select Python for uv; `.nvmrc` selects Node for nvm and CI. Docker uses the same pinned versions.
+
+Before working in a new terminal, run `nvm use` from the repository, then `pnpm bootstrap` and `pnpm dev`. If the selected Node version is missing, run `nvm install` first. Python is installed automatically by uv when needed. The OS Python and nvm default for other repositories are not changed.

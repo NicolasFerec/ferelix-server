@@ -77,8 +77,8 @@ export function isAuthenticated(): boolean {
     return !!getAccessToken();
 }
 
-let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshPromise: Promise<string> | null = null;
+const replayRequests = new WeakMap<Request, Request>();
 
 function apiErrorMessage(error: unknown, fallback: string): string {
     if (error && typeof error === "object" && "detail" in error) {
@@ -88,23 +88,6 @@ function apiErrorMessage(error: unknown, fallback: string): string {
         }
     }
     return fallback;
-}
-
-/**
- * Subscribe to token refresh completion
- */
-function subscribeTokenRefresh(callback: (token: string) => void): void {
-    refreshSubscribers.push(callback);
-}
-
-/**
- * Notify all subscribers when token refresh completes
- */
-function onTokenRefreshed(accessToken: string): void {
-    for (const callback of refreshSubscribers) {
-        callback(accessToken);
-    }
-    refreshSubscribers = [];
 }
 
 /**
@@ -146,38 +129,22 @@ const authMiddleware: Middleware = {
         if (accessToken) {
             request.headers.set("Authorization", `Bearer ${accessToken}`);
         }
+        // Clone before fetch consumes a JSON/FormData request body.
+        replayRequests.set(request, request.clone());
         return request;
     },
 
     async onResponse({ request, response }) {
         if (response.status === 401 && getRefreshToken()) {
-            if (!isRefreshing) {
-                isRefreshing = true;
-
-                try {
-                    const newAccessToken = await refreshAccessToken();
-                    isRefreshing = false;
-                    onTokenRefreshed(newAccessToken);
-
-                    // Retry original request with new token
-                    const newRequest = request.clone();
-                    newRequest.headers.set("Authorization", `Bearer ${newAccessToken}`);
-                    return fetch(newRequest);
-                } catch (error) {
-                    isRefreshing = false;
-                    throw error;
-                }
-            } else {
-                // Wait for ongoing refresh to complete
-                const newAccessToken = await new Promise<string>((resolve) => {
-                    subscribeTokenRefresh(resolve);
-                });
-
-                // Retry with new token
-                const newRequest = request.clone();
-                newRequest.headers.set("Authorization", `Bearer ${newAccessToken}`);
-                return fetch(newRequest);
-            }
+            refreshPromise ??= refreshAccessToken().finally(() => {
+                refreshPromise = null;
+            });
+            // All waiting requests share both the success and failure of this refresh.
+            const accessToken = await refreshPromise;
+            const retry = replayRequests.get(request);
+            if (!retry) throw new Error("Request cannot be retried");
+            retry.headers.set("Authorization", `Bearer ${accessToken}`);
+            return fetch(retry);
         }
 
         return response;
@@ -573,6 +540,16 @@ export const libraries = {
             throw new Error("Failed to get library items");
         }
         return data;
+    },
+
+    async getAllLibraryItems(libraryId: number): Promise<MediaFile[]> {
+        const items: MediaFile[] = [];
+        const pageSize = 100;
+        while (true) {
+            const page = await libraries.getLibraryItems(libraryId, items.length, pageSize);
+            items.push(...page);
+            if (page.length < pageSize) return items;
+        }
     },
 
     /**

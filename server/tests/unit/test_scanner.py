@@ -1,5 +1,6 @@
 """Unit tests for library scanner change detection."""
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -24,7 +25,7 @@ async def _create_library(db_session: AsyncSession, path: Path) -> Library:
 
 
 async def _create_media_file(db_session: AsyncSession, file_path: Path, **overrides: object) -> MediaFile:
-    file_stat = file_path.stat()
+    file_stat = await asyncio.to_thread(file_path.stat)
     values = {
         "file_path": str(file_path),
         "file_name": file_path.name,
@@ -107,7 +108,7 @@ async def test_scan_reextracts_metadata_and_regenerates_thumbnail_for_changed_fi
     extract_metadata.assert_called_once_with(media_path)
     generate_thumbnail.assert_called_once_with(media_path, 240.0, force=True)
     assert media_file.file_size == media_path.stat().st_size
-    assert media_file.duration == 240.0
+    assert media_file.duration == pytest.approx(240.0)
     assert media_file.width == 3840
     assert media_file.height == 2160
     assert media_file.codec == "hevc"
@@ -151,4 +152,4 @@ async def test_scan_processes_existing_file_without_metadata(db_session: AsyncSe
     assert stats["updated"] == 1
     extract_metadata.assert_called_once_with(media_path)
     generate_thumbnail.assert_called_once_with(media_path, 90.0, force=False)
-    assert media_file.duration == 90.0
+    assert media_file.duration == pytest.approx(90.0)

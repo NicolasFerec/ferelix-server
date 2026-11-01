@@ -3,11 +3,11 @@ name = "ferelix-server"
 version = "0.1.0"
 description = "A FastAPI application for managing media content"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.15.2,<3.16"
 dependencies = [
     "fastapi[standard]",
     "uvicorn[standard]",
-    "sqlalchemy",
+    "sqlalchemy[asyncio]>=2.1.6",
     "aiosqlite",
     "asyncpg",
     "pydantic",
@@ -57,13 +57,13 @@ venvPath = "."
 venv = ".venv"
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py315"
 unsafe-fixes = true
 preview = true
 line-length = 120
 lint.extend-select = ["I", "C", "SIM", "TCH", "UP", "RUF"]
 lint.mccabe.max-complexity = 15
-lint.ignore = ["TC001", "TC002", "TC003"]
+lint.ignore = ["typing-only-first-party-import", "typing-only-third-party-import", "typing-only-standard-library-import"]
 
 [[tool.alembic.post_write_hooks]]
 entrypoint = "ruff_format"

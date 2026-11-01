@@ -173,7 +173,10 @@ def raise_if_job_failed(job: TranscodingJob) -> None:
 
 async def is_playlist_ready(playlist_path: Path) -> bool:
     """Return true when the playlist is parseable and its first media segment exists."""
-    if not playlist_path.exists() or playlist_path.stat().st_size == 0:
+    if (
+        not (await asyncio.to_thread(playlist_path.exists))
+        or (await asyncio.to_thread(playlist_path.stat)).st_size == 0
+    ):
         return False
 
     try:
@@ -217,7 +220,7 @@ def append_api_key_to_playlist_segments(content: str, api_key: str | None) -> st
         if line.startswith("#EXT-X-MAP:"):
             rewritten_lines.append(_append_api_key_to_ext_x_map(raw_line, encoded_key))
             continue
-        if not line or line.startswith("#") or "://" in line or line.startswith("/") or "api_key=" in line:
+        if not line or line.startswith(("#", "/")) or "://" in line or "api_key=" in line:
             rewritten_lines.append(raw_line)
             continue
 
@@ -249,7 +252,7 @@ def _append_api_key_to_ext_x_map(line: str, encoded_key: str) -> str:
 
 def raise_invalid_range(file_size: int) -> None:
     raise HTTPException(
-        status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+        status_code=status.HTTP_416_RANGE_NOT_SATISFIABLE,
         detail="Invalid range",
         headers={"Content-Range": f"bytes */{file_size}"},
     )

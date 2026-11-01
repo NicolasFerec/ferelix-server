@@ -1,5 +1,6 @@
 """Video streaming endpoints with HTTP Range and HLS transcoding support."""
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -96,6 +97,8 @@ async def start_hls_job_response(
         service = PlaybackSessionService(session)
         job = await service.start_hls_job(media_id, options, client_context_from_request(request))
         return TranscodingJobSchema.model_validate(job)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -290,13 +293,13 @@ async def stream_video(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
     file_path = Path(media_file.file_path)
-    if not file_path.exists():
+    if not (await asyncio.to_thread(file_path.exists)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Media file not found on disk",
         )
 
-    file_size = file_path.stat().st_size
+    file_size = (await asyncio.to_thread(file_path.stat)).st_size
     start, end, partial = parse_range_header(range_header, file_size)
     content_type = VIDEO_CONTENT_TYPES.get(media_file.file_extension.lower(), "application/octet-stream")
 
@@ -622,7 +625,7 @@ async def get_subtitle(
         raise HTTPException(status_code=404, detail="Media file not found")
 
     file_path = Path(media_file.file_path)
-    if not file_path.exists():
+    if not (await asyncio.to_thread(file_path.exists)):
         raise HTTPException(status_code=404, detail="Media file not found on disk")
 
     subtitle_track = next(

@@ -7,7 +7,7 @@ import { useDeviceProfile } from "@/composables/useDeviceProfile";
 import {
   defaultAudioStreamIndex,
   type StreamSource,
-  startPlaybackJob,
+  startPlaybackJob as startPlaybackJobService,
   type TranscodingJob,
   waitForHlsReady as waitForHlsReadyService,
 } from "@/services/playerPlayback";
@@ -51,6 +51,10 @@ const videoElement = ref<HTMLVideoElement | null>(null);
 const hlsInstance = ref<Hls | null>(null);
 const currentJobId = ref<string | null>(null);
 const playbackSessionId = ref<string | null>(null);
+const playbackAbort = new AbortController();
+function startPlaybackJob(options: Parameters<typeof startPlaybackJobService>[0]) {
+  return startPlaybackJobService({ ...options, signal: playbackAbort.signal });
+}
 const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null);
 const isEndingPlaybackSession = ref(false);
 const jobStartOffset = ref<number>(0); // Absolute time offset that the current job starts at
@@ -229,6 +233,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  playbackAbort.abort();
   stopHeartbeat();
   markPlaybackSessionEnded();
   cleanup();
@@ -283,13 +288,17 @@ async function ensurePlaybackSession() {
     audioStreamIndex: selectedAudioStreamIndex() ?? null,
     subtitleStreamIndex: selectedSubtitleTrack.value?.stream_index ?? null,
   });
+  if (playbackAbort.signal.aborted) {
+    await playbackSessions.end(session.id);
+    playbackAbort.signal.throwIfAborted();
+  }
   playbackSessionId.value = session.id;
   startHeartbeat();
   return session.id;
 }
 
 function startHeartbeat() {
-  if (heartbeatTimer.value) return;
+  if (playbackAbort.signal.aborted || heartbeatTimer.value) return;
   heartbeatTimer.value = setInterval(() => {
     sendHeartbeat().catch((error) => console.warn("Playback heartbeat failed:", error));
   }, 3000);
@@ -374,14 +383,14 @@ async function loadSelectedTextSubtitle() {
 }
 
 
-async function initializePlayback() {
-  if (!props.mediaFile?.id) return;
+async function initializePlayback(resetRetries = true) {
+  if (playbackAbort.signal.aborted || !props.mediaFile?.id) return;
 
   isInitializing.value = true;
   isLoading.value = true;
   loadingMessage.value = "Analyzing media...";
   errorMessage.value = "";
-  retryCount.value = 0;
+  if (resetRetries) retryCount.value = 0;
 
   try {
     await ensurePlaybackSession();
@@ -395,6 +404,7 @@ async function initializePlayback() {
       deviceProfile as unknown as Parameters<typeof media.getPlaybackInfo>[1],
     );
 
+    playbackAbort.signal.throwIfAborted();
     if (!playbackInfo.MediaSources?.length) {
       throw new Error("No playback sources available");
     }
@@ -532,6 +542,7 @@ async function waitForHlsReady(jobId: string, maxWait = 120000): Promise<Transco
       loadingMessage.value = `Transcoding... ${Math.round(status.progress_percent || 0)}%`;
     },
     maxWait,
+    playbackAbort.signal,
   );
 }
 
@@ -616,7 +627,7 @@ async function setupHlsPlayer(playlistUrl: string, startPosition?: number) {
               if (retryCount.value < maxRetries) {
                 retryCount.value++;
                 const backoffDelay = Math.min(1000 * 2 ** (retryCount.value - 1), 8000);
-                setTimeout(() => initializePlayback(), backoffDelay);
+                setTimeout(() => initializePlayback(false), backoffDelay);
               } else {
                 console.error("Max retries reached, giving up");
                 errorMessage.value = t("player.retry_failed");

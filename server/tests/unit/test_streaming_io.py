@@ -41,7 +41,7 @@ def test_parse_range_header_rejects_invalid_ranges(range_header: str) -> None:
     with pytest.raises(HTTPException) as exc_info:
         parse_range_header(range_header, 1000)
 
-    assert exc_info.value.status_code == status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE
+    assert exc_info.value.status_code == status.HTTP_416_RANGE_NOT_SATISFIABLE
     assert exc_info.value.headers == {"Content-Range": "bytes */1000"}
 
 

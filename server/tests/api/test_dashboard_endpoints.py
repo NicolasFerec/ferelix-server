@@ -1,5 +1,6 @@
 """API tests for dashboard endpoints."""
 
+import asyncio
 from io import BytesIO
 from pathlib import Path
 
@@ -432,7 +433,7 @@ class TestUserManagement:
             files={"image": ("avatar.png", make_png_bytes(), "image/png")},
         )
         assert upload_response.status_code == 200
-        stored_files = list(tmp_path.glob("*.jpg"))
+        stored_files = await asyncio.to_thread(lambda: list(tmp_path.glob("*.jpg")))
         assert len(stored_files) == 1
 
         delete_response = await client.delete(
@@ -626,7 +627,7 @@ class TestSettingsManagement:
             def hardware_status(self) -> HardwareAccelerationStatus:
                 return status
 
-        monkeypatch.setattr("app.routers.v1.dashboard.get_transcoder", lambda: FakeTranscoder())
+        monkeypatch.setattr("app.routers.v1.dashboard.get_transcoder", FakeTranscoder)
 
         response = await client.get(
             "/api/v1/dashboard/hardware-transcoding",

@@ -1,0 +1,21 @@
+# Exact releases selected for the 2026-11-01 refresh, published less than a day ago.
+# Preserve pnpm's age check for every other release.
+minimumReleaseAgeExclude:
+  - '@intlify/core-base@11.4.17'
+  - '@intlify/devtools-types@11.4.17'
+  - '@intlify/message-compiler@11.4.17'
+  - '@intlify/shared@11.4.17'
+  - 'vue-i18n@11.4.17'
+  - 'parse5@8.1.0'
+  - 'tinybench@6.2.3'
+
+allowBuilds:
+  esbuild: true
+
+patchedDependencies:
+  '@redocly/openapi-core@1.34.22': patches/@redocly__openapi-core@1.34.22.patch
+
+# Patched Redocly keeps its API while using the maintained minimatch export.
+overrides:
+  minimatch: ^11.0.3
+  glob: ^14.0.3

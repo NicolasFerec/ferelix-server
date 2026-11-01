@@ -26,7 +26,9 @@ class Library(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     # Relationship
-    recommendation_rows: Mapped[list[RecommendationRow]] = relationship("RecommendationRow", back_populates="library")
+    recommendation_rows: Mapped[list[RecommendationRow]] = relationship(
+        "RecommendationRow", back_populates="library", cascade="all, delete-orphan"
+    )
 
 
 class LibrarySchema(BaseModel):

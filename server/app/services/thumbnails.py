@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ def screenshot_timestamp(duration: float | None) -> float:
         return 10.0
 
     if duration < 30:
-        return max(1.0, duration * 0.35)
+        return 0.0 if duration < 1 else duration * 0.35
 
     return min(max(duration * 0.2, 30.0), duration * 0.8)
 
@@ -52,8 +53,12 @@ def generate_video_thumbnail(
         return None
 
     output_path = thumbnail_path_for_media(source_path)
-    if output_path.exists() and not force:
+    if output_path.is_file() and output_path.stat().st_size > 0 and not force:
         return str(output_path)
+
+    descriptor, temporary_name = tempfile.mkstemp(suffix=".jpg", dir=output_path.parent)
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
 
     timestamp = screenshot_timestamp(duration)
     command = [
@@ -70,23 +75,27 @@ def generate_video_thumbnail(
         "1",
         "-vf",
         "scale='min(720,iw)':-2",
+        "-pix_fmt",
+        "yuvj420p",
         "-q:v",
         "4",
-        str(output_path),
+        str(temporary_path),
     ]
 
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=45)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=45, check=False)
+        if result.returncode != 0 or temporary_path.stat().st_size == 0:
+            logger.warning("ffmpeg thumbnail extraction failed for %s: %s", source_path, result.stderr)
+            return None
+        temporary_path.chmod(0o644)
+        temporary_path.replace(output_path)
+        return str(output_path)
     except subprocess.TimeoutExpired:
         logger.warning("Thumbnail extraction timed out for %s", source_path)
         return None
     except Exception as exc:
-        logger.warning("Thumbnail extraction failed for %s: %s", source_path, exc)
+        logger.warning("Thumbnail extraction failed for %s: %s", source_path, exc, exc_info=True)
         return None
 
-    if result.returncode != 0 or not output_path.exists():
-        logger.warning("ffmpeg thumbnail extraction failed for %s: %s", source_path, result.stderr)
-        return None
-
-    output_path.chmod(0o644)
-    return str(output_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)

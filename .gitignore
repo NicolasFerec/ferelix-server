@@ -42,6 +42,10 @@ env/
 # Environment
 .env
 .env.local
+.secret_key
+server/images/
+**/.gradle/
+**/local.properties
 
 # Logs
 *.log

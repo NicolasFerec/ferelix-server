@@ -68,7 +68,35 @@ def test_vaapi_transcode_keeps_software_decode_when_burning_subtitles() -> None:
     )
 
     assert "-hwaccel" not in cmd
-    assert "subtitles='/media/movie.mkv':stream_index=2,format=nv12,hwupload" in cmd
+    assert "subtitles=filename=/media/movie.mkv:stream_index=0,format=nv12,hwupload" in cmd
+
+
+def test_bitmap_subtitles_are_composited_before_resizing_and_vaapi_upload() -> None:
+    hardware = HardwareAcceleration(selected_device="auto")
+    hardware.devices = [
+        HardwareDevice(
+            id="vaapi:/dev/dri/renderD128",
+            type="vaapi",
+            name="VAAPI",
+            path="/dev/dri/renderD128",
+            encoders={"h264": "h264_vaapi"},
+        )
+    ]
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_transcode(
+        HlsCommandOptions(
+            input_path="/movie.mkv",
+            playlist_path="/tmp/playlist.m3u8",
+            segment_pattern="/tmp/segment_%03d.ts",
+            subtitle_stream_index=2,
+            is_image_subtitle=True,
+            max_width=640,
+            max_height=360,
+        )
+    )
+    graph = command[command.index("-filter_complex") + 1]
+    assert graph.startswith("[0:v][0:2]overlay,scale=w=640:h=360")
+    assert graph.endswith(",format=nv12,hwupload[vout]")
 
 
 def test_nvidia_transcode_uses_cuda_decode_without_scaling() -> None:

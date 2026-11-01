@@ -11,6 +11,8 @@ Ferelix Web serves two purposes:
 
 ### Development
 
+Use Node.js 26.13.0 LTS (`nvm use` from the repository) and pnpm 12.16.1.
+
 ```bash
 # Install dependencies
 pnpm install

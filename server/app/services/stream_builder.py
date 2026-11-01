@@ -393,8 +393,8 @@ class StreamBuilder:
 
     def _get_video_range(self, track: Any) -> str:
         """Determine if track is HDR or SDR based on color metadata."""
-        color_space = getattr(track, "color_space", "").lower()
-        color_primaries = getattr(track, "color_primaries", "").lower()
+        color_space = (getattr(track, "color_space", None) or "").lower()
+        color_primaries = (getattr(track, "color_primaries", None) or "").lower()
         transfer_characteristics = (getattr(track, "color_transfer", None) or "").lower()
 
         hdr_indicators = ["bt2020", "rec2020", "smpte2084", "hlg", "arib-std-b67"]

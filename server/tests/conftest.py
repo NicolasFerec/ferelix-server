@@ -32,6 +32,7 @@ def _set_sqlite_foreign_keys(dbapi_connection: Any, _connection_record: Any) -> 
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
+
 test_session_maker = async_sessionmaker(
     test_engine,
     class_=AsyncSession,

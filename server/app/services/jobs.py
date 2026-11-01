@@ -477,6 +477,6 @@ async def cancel_all_running_jobs() -> None:
             except asyncio.CancelledError:
                 logger.info(f"Job {job_id} cancelled successfully")
             except Exception as exc:
-                logger.warning(f"Error cancelling job {job_id}: {exc}")
+                logger.warning(f"Error cancelling job {job_id}: {exc}", exc_info=True)
 
     _RUNNING_JOB_TASKS.clear()

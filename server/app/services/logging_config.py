@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import BaseModel
 
@@ -55,8 +56,33 @@ class LoggingChannelFilter(logging.Filter):
     """Attach a stable dashboard channel to every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
+        # A watcher message written to a watched log file creates another event.
+        # Keep warnings/errors, but never persist the watcher's own change chatter.
+        if record.name.startswith("watchfiles") and record.levelno < logging.WARNING:
+            return False
+        if record.name == "uvicorn.access" and isinstance(record.args, tuple) and len(record.args) >= 3:
+            arguments = list(record.args)
+            if isinstance(arguments[2], str):
+                url = urlsplit(arguments[2])
+                query = parse_qsl(url.query, keep_blank_values=True)
+                if any(key == "api_key" for key, _value in query):
+                    arguments[2] = urlunsplit(
+                        url._replace(
+                            query=urlencode([
+                                (key, "[redacted]" if key == "api_key" else value) for key, value in query
+                            ])
+                        )
+                    )
+                    record.args = tuple(arguments)
         record.channel = channel_for_logger(record.name)
         return True
+
+
+def protect_access_logs() -> None:
+    """Filter the access logger itself, including Uvicorn's non-propagating handlers."""
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(item, LoggingChannelFilter) for item in access_logger.filters):
+        access_logger.addFilter(LoggingChannelFilter())
 
 
 def configure_logging() -> None:
@@ -81,7 +107,10 @@ def configure_logging() -> None:
         elif isinstance(handler, logging.StreamHandler):
             handler.setLevel(console_level)
 
-    if not any(isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
+    if not any(
+        isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler)
+        for handler in root_logger.handlers
+    ):
         stream_handler = logging.StreamHandler()
         stream_handler.setLevel(console_level)
         stream_handler.setFormatter(formatter)
@@ -90,7 +119,10 @@ def configure_logging() -> None:
 
     log_path = get_log_path()
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    if not any(isinstance(handler, RotatingFileHandler) and Path(handler.baseFilename) == log_path for handler in root_logger.handlers):
+    if not any(
+        isinstance(handler, RotatingFileHandler) and Path(handler.baseFilename) == log_path
+        for handler in root_logger.handlers
+    ):
         file_handler = RotatingFileHandler(
             log_path,
             maxBytes=max_log_bytes,
@@ -260,7 +292,9 @@ def _schema_for_line(number: int, line: str) -> LogLineSchema:
         number=number,
         text=line,
         message=line[match.end() :] if match else line,
-        channel=match.group("channel") if match and match.group("channel") else (channel_for_logger(logger_name) if logger_name else None),
+        channel=match.group("channel")
+        if match and match.group("channel")
+        else (channel_for_logger(logger_name) if logger_name else None),
         logger=logger_name,
         level=match.group("level") if match else None,
         timestamp=_normalize_timestamp(timestamp),

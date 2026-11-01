@@ -1,15 +1,16 @@
 # =============================================================================
 # Stage 1: Build frontend
 # =============================================================================
-FROM node:22-slim AS frontend-builder
+FROM node:26.13.0-slim AS frontend-builder
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install --global --allow-scripts=pnpm pnpm@12.16.1
 
 WORKDIR /build
 
 # Copy frontend package files first for better caching
-COPY web/package.json web/pnpm-lock.yaml ./
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+COPY web/patches/ ./patches/
 RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build
@@ -19,7 +20,7 @@ RUN pnpm build
 # =============================================================================
 # Stage 2: Build backend
 # =============================================================================
-FROM python:3.14-slim
+FROM python:3.15.2-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -41,7 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
 
 # Create app user and directories
 RUN useradd -m ferelix && \
@@ -76,13 +77,13 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8659/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Set volumes
 VOLUME /config
 
 # Set default environment variables
-ENV DATABASE_URL=sqlite+aiosqlite:///config/ferelix.db \
+ENV DATABASE_URL=sqlite+aiosqlite:////config/ferelix.db \
     PUID=1000 \
     PGID=1000
 

@@ -5,13 +5,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.models import RefreshToken, User, UserCreate, UserSchema
 from app.services.auth import (
+    REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
     create_refresh_token,
     hash_token,
@@ -44,7 +45,12 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
-@router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserSchema,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
 async def register(
     user_data: UserCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
@@ -70,7 +76,7 @@ async def register(
         )
 
     # Check if email exists
-    existing = await session.scalar(select(User).where(User.email == user_data.email))
+    existing = await session.scalar(select(User).where(User.email == user_data.email)) if user_data.email else None
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,7 +141,7 @@ async def login(
     refresh_token = RefreshToken(
         user_id=user.id,
         token=hash_token(refresh_token_str),
-        expires_at=datetime.now(UTC) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         device_info=login_data.device_info,
     )
     session.add(refresh_token)
@@ -206,19 +212,24 @@ async def refresh(
             detail="Refresh token not found or expired",
         )
 
-    # Update last used timestamp
-    stored_token.last_used_at = datetime.now(UTC)
+    # Claim the old token atomically; concurrent refreshes must not both succeed.
+    consumed = await session.execute(
+        delete(RefreshToken)
+        .where(RefreshToken.id == stored_token.id, RefreshToken.token == hashed)
+        .returning(RefreshToken.id)
+    )
+    if consumed.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token already used")
 
     # Create new tokens
     access_token = create_access_token(data={"sub": str(user.id)})
     new_refresh_token_str = create_refresh_token(data={"sub": str(user.id)})
 
     # Store new refresh token and delete old one
-    await session.delete(stored_token)
     new_refresh_token = RefreshToken(
         user_id=user.id,
         token=hash_token(new_refresh_token_str),
-        expires_at=datetime.now(UTC) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         device_info=stored_token.device_info,
     )
     session.add(new_refresh_token)

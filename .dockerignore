@@ -18,7 +18,9 @@ __pycache__
 
 # Virtual environments
 .venv
+**/.venv
 venv
+**/venv
 env
 
 # IDEs
@@ -30,6 +32,23 @@ env
 # Environment and local config
 .env
 .env.*
+.secret_key
+**/.env
+**/.env.*
+**/.secret_key
+**/node_modules
+**/.gradle
+**/local.properties
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/logs
+**/*.db
+**/*.db-*
+**/*.sqlite*
+**/dist
+**/build
+server/images
 *.db
 *.sqlite*
 

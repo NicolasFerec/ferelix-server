@@ -1,5 +1,6 @@
 """Dashboard API endpoints for admin management (v1 with router-level authentication)."""
 
+import asyncio
 import shlex
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -235,7 +236,7 @@ async def update_library(
 
 @router.get("/browse", response_model=list[DirectoryItem])
 async def browse_directory(
-    path: str = Query(..., description="Directory path to browse"),
+    path: Annotated[str, Query(description="Directory path to browse")],
 ) -> list[DirectoryItem]:
     """Browse directories and files at a given path (admin only).
 
@@ -467,7 +468,7 @@ async def trigger_job(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger job: {e!s}",
-        )
+        ) from e
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=JobTriggerResponse)
@@ -1053,7 +1054,7 @@ async def update_user(
     if "email" in user_update.model_fields_set:
         email = _normalize_email(user_update.email)
         # Check if email is already taken by another user
-        existing = await session.scalar(select(User).where(User.email == email, User.id != user_id))
+        existing = await session.scalar(select(User).where(User.email == email, User.id != user_id)) if email else None
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1205,8 +1206,8 @@ async def ensure_active_admin_remains(
     remaining_admin_count = await session.scalar(
         select(func.count(User.id)).where(
             User.id != user.id,
-            User.is_admin == True,  # noqa: E712
-            User.is_active == True,  # noqa: E712
+            User.is_admin == True,
+            User.is_active == True,
         )
     )
     if not remaining_admin_count:
@@ -1214,6 +1215,7 @@ async def ensure_active_admin_remains(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one active admin is required",
         )
+
 
 # ============================================================================
 # Recommendation Row Management Endpoints (Admin Only)
@@ -1643,13 +1645,13 @@ async def remove_library_recommendation_row(
 @router.get("/hardware-transcoding", response_model=HardwareAccelerationStatus)
 async def get_hardware_transcoding_status(
     session: Annotated[AsyncSession, Depends(get_session)],
-    refresh: bool = Query(False, description="Force hardware capability detection to run again"),
+    refresh: Annotated[bool, Query(description="Force hardware capability detection to run again")] = False,
 ) -> HardwareAccelerationStatus:
     """Get detected hardware transcoding devices and capabilities."""
     settings = await session.get(Settings, 1)
     transcoder = get_transcoder()
     transcoder.set_hardware_device(settings.hardware_transcoding_device if settings else "auto")
-    return transcoder.refresh_hardware_status() if refresh else transcoder.hardware_status()
+    return await asyncio.to_thread(transcoder.refresh_hardware_status) if refresh else transcoder.hardware_status()
 
 
 @router.get("/settings", response_model=SettingsSchema)

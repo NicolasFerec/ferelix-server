@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import Select, asc, desc
 
 from app.models import MediaFile
+from app.services.library_paths import library_file_filter
 
 # Whitelist of allowed fields for ordering and filtering
 ALLOWED_ORDER_FIELDS = {
@@ -61,7 +62,7 @@ def validate_filter_field(field: str) -> None:
         raise ValueError(f"Invalid filter field: {field}. Allowed fields: {sorted(ALLOWED_FILTER_FIELDS)}")
 
 
-def parse_where_clause(where_clause: list[dict[str, Any]]) -> list[Any]:  # noqa: C901
+def parse_where_clause(where_clause: list[dict[str, Any]]) -> list[Any]:  # ruff: ignore[complex-structure]
     """Parse and validate where clause filters.
 
     Args:
@@ -78,7 +79,7 @@ def parse_where_clause(where_clause: list[dict[str, Any]]) -> list[Any]:  # noqa
 
     for filter_item in where_clause:
         if not isinstance(filter_item, dict):
-            raise ValueError("Each where clause item must be a dictionary")
+            raise TypeError("Each where clause item must be a dictionary")
 
         field = filter_item.get("field")
         operator = filter_item.get("operator")
@@ -134,10 +135,10 @@ def parse_where_clause(where_clause: list[dict[str, Any]]) -> list[Any]:  # noqa
 
 
 def apply_filter_criteria(
-    query: Select[tuple[MediaFile]],
+    query: Select[MediaFile],
     filter_criteria: dict[str, Any],
     library_path: str,
-) -> Select[tuple[MediaFile]]:
+) -> Select[MediaFile]:
     """Apply filter criteria to a MediaFile query.
 
     Args:
@@ -158,7 +159,7 @@ def apply_filter_criteria(
     """
     # Always filter by library path and exclude deleted files
     query = query.where(
-        MediaFile.file_path.startswith(library_path),
+        library_file_filter(library_path),
         MediaFile.deleted_at.is_(None),
     )
 
@@ -216,7 +217,10 @@ def validate_filter_criteria(filter_criteria: dict[str, Any]) -> None:
 
     # Validate where clauses if present
     if filter_criteria.get("where"):
-        parse_where_clause(filter_criteria["where"])
+        try:
+            parse_where_clause(filter_criteria["where"])
+        except TypeError as exc:
+            raise ValueError(str(exc)) from exc
 
     # Validate limit if present
     if "limit" in filter_criteria:

@@ -55,7 +55,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/app__routers__v1__auth__TokenResponse"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             }
@@ -81,15 +81,38 @@
         "summary": "Register",
         "description": "Register a new user account.\n\nArgs:\n    user_data: User registration data\n    session: Database session\n\nReturns:\n    The created user (without password)\n\nRaises:\n    HTTPException: If username or email already exists",
         "operationId": "register_api_v1_auth_register_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "api_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api Key"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UserCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -139,7 +162,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/app__routers__v1__auth__TokenResponse"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             }
@@ -181,7 +204,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/app__routers__v1__auth__TokenResponse"
+                  "$ref": "#/components/schemas/TokenResponse"
                 }
               }
             }
@@ -5469,7 +5492,7 @@
         "properties": {
           "image": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Image"
           }
         },
@@ -5483,7 +5506,7 @@
         "properties": {
           "image": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Image"
           }
         },
@@ -7749,6 +7772,34 @@
         "title": "SubtitleTrackSchema",
         "description": "Schema for SubtitleTrack API responses."
       },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "user"
+        ],
+        "title": "TokenResponse",
+        "description": "Response schema for token endpoints."
+      },
       "TranscodeReason": {
         "type": "string",
         "enum": [
@@ -8312,6 +8363,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
@@ -8553,34 +8611,6 @@
         ],
         "title": "VideoTrackSchema",
         "description": "Schema for VideoTrack API responses."
-      },
-      "app__routers__v1__auth__TokenResponse": {
-        "properties": {
-          "access_token": {
-            "type": "string",
-            "title": "Access Token"
-          },
-          "refresh_token": {
-            "type": "string",
-            "title": "Refresh Token"
-          },
-          "token_type": {
-            "type": "string",
-            "title": "Token Type",
-            "default": "bearer"
-          },
-          "user": {
-            "$ref": "#/components/schemas/UserSchema"
-          }
-        },
-        "type": "object",
-        "required": [
-          "access_token",
-          "refresh_token",
-          "user"
-        ],
-        "title": "TokenResponse",
-        "description": "Response schema for token endpoints."
       }
     },
     "securitySchemes": {

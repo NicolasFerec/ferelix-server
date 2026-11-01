@@ -103,6 +103,14 @@ The backend applies Alembic migrations before starting and watches only `server/
 
 Root commands: `pnpm test`, `pnpm type-check`, `pnpm build`, `pnpm dev:server`, and `pnpm dev:web`. Frontend dependencies and their lockfile stay in `clients/web/`; root scripts delegate to that package.
 
+### Playback quality
+
+The web client checks HEVC Main and Main 10 support on its HLS playback path using MediaSource and MediaCapabilities (or native HLS where available). Supported video is copied into HLS; incompatible audio can be converted independently. An unsupported decoder still requires video transcoding.
+
+Automatic NVIDIA encoding uses VBR with CQ 19 and high-quality tuning instead of NVENC's default 2 Mb/s. Software H.264 uses CRF 18. Explicit bitrate requests take precedence. Automatic quality uses a variable bitrate and can require more bandwidth than the HEVC source when converting to H.264.
+
+When HDR10 or HLG video is re-encoded to 8-bit output, FFmpeg converts it to SDR BT.709 with `zscale` and `tonemap`. This color conversion currently runs on the CPU, including software decode; hardware encoding remains available. Copied video retains the original HDR signal. Old wide-gamut scans with missing transfer metadata are repaired before transcoding.
+
 ### Dependency compatibility
 
 TypeScript stays on `~5.9.3`: the current Vue language tools cannot run with TypeScript 7, and `openapi-typescript` requires TypeScript 5. All other direct dependencies were refreshed to their latest stable releases on 2026-11-01. pnpm is pinned to 12.16.1 in both packages and Docker. The web pnpm settings allow the exact same-day releases selected in this refresh while preserving the release-age check for other versions.

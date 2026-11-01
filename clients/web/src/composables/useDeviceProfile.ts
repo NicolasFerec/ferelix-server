@@ -70,7 +70,7 @@ export function useDeviceProfile(): DeviceProfileReturn {
             error.value = null;
 
             // Build profile (may take a few ms due to codec probing)
-            const deviceProfile = buildDeviceProfile();
+            const deviceProfile = await buildDeviceProfile();
 
             // Cache the profile
             cachedProfile = deviceProfile;

@@ -20,7 +20,7 @@ SOFTWARE_DEVICE_ID = "software"
 AUTO_DEVICE_ID = "auto"
 
 SOFTWARE_ENCODERS: dict[str, tuple[str, list[str]]] = {
-    "h264": ("libx264", ["-preset", "veryfast", "-profile:v", "high", "-level", "4.1"]),
+    "h264": ("libx264", ["-preset", "veryfast", "-profile:v", "high"]),
     "hevc": ("libx265", ["-preset", "veryfast"]),
 }
 
@@ -377,7 +377,7 @@ class HardwareAcceleration:
 
     def _encoder_args(self, device: HardwareDevice) -> list[str]:
         if device.type == "nvidia":
-            args = ["-preset", "p4", "-tune", "ll"]
+            args = ["-preset", "p4", "-tune", "hq"]
             if device.index is not None:
                 args.extend(["-gpu", str(device.index)])
             return args

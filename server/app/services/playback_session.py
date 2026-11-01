@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models import MediaFile, Settings, TranscodingJob
 from app.models.playback import PlayMethod, StreamInfo
 from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
+from app.services.scanner import extract_video_metadata
 from app.services.transcoder import get_transcoder
 
 logger = logging.getLogger(__name__)
@@ -113,6 +114,17 @@ class PlaybackSessionService:
         """Create and start a transcoding job for a media item."""
         client = client or ClientContext()
         media_file = await self.get_media_file(media_id)
+        # Older scans read the wrong ffprobe field for transfer characteristics.
+        # Repair wide-gamut metadata before deciding how to convert HDR to SDR.
+        if options.video_codec != "copy" and any(
+            track.color_transfer is None and track.color_space == "bt2020nc" for track in media_file.video_tracks
+        ):
+            metadata = await asyncio.to_thread(extract_video_metadata, Path(media_file.file_path))
+            for track in media_file.video_tracks:
+                for scanned in metadata.get("video_tracks", []):
+                    if scanned.get("stream_index") == track.stream_index:
+                        track.color_transfer = scanned.get("color_transfer") or "unknown"
+            await self.session.commit()
         session_id = options.playback_session_id or str(uuid.uuid4())
         job_id = str(uuid.uuid4())
 

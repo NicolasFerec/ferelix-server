@@ -201,7 +201,7 @@ def extract_video_metadata(file_path: Path) -> dict:  # ruff: ignore[complex-str
                     "color_range": stream.get("color_range"),
                     "color_space": stream.get("color_space"),
                     "color_primaries": stream.get("color_primaries"),
-                    "color_transfer": stream.get("color_trc"),
+                    "color_transfer": stream.get("color_transfer") or "unknown",
                     # HDR metadata
                     "max_luminance": hdr_info.get("max_luminance"),
                     "min_luminance": hdr_info.get("min_luminance"),

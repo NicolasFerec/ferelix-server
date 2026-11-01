@@ -1,5 +1,7 @@
 """Tests for FFmpeg HLS command construction."""
 
+import pytest
+
 from app.services.transcoding.commands import HlsCommandBuilder, HlsCommandOptions
 from app.services.transcoding.hardware import HardwareAcceleration, HardwareDevice
 
@@ -133,6 +135,28 @@ def test_nvidia_transcode_uses_cuda_decode_without_scaling() -> None:
     assert cmd[cmd.index("-g:v:0") + 1] == "144"
     assert cmd[cmd.index("-keyint_min:v:0") + 1] == "144"
     assert "-force_key_frames" not in cmd
+    assert cmd[cmd.index("-rc") + 1] == "vbr"
+    assert cmd[cmd.index("-cq") + 1] == "19"
+    assert cmd[cmd.index("-b:v") + 1] == "0"
+    assert cmd[cmd.index("-tune") + 1] == "hq"
+
+
+@pytest.mark.parametrize("bitrate", [5000000, 40000000])
+def test_explicit_nvenc_bitrate_overrides_automatic_quality(bitrate: int) -> None:
+    hardware = HardwareAcceleration(selected_device="auto")
+    hardware.devices = [HardwareDevice(id="nvidia:0", type="nvidia", name="GPU", encoders={"h264": "h264_nvenc"})]
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_transcode(
+        HlsCommandOptions(
+            input_path="/movie.mkv",
+            playlist_path="/tmp/playlist.m3u8",
+            segment_pattern="/tmp/%03d.ts",
+            video_bitrate=bitrate,
+        )
+    )
+    assert command[command.index("-b:v") + 1] == str(bitrate)
+    assert command[command.index("-maxrate") + 1] == str(int(bitrate * 1.2))
+    assert "-cq" not in command
 
 
 def test_nvidia_transcode_keeps_software_decode_when_scaling() -> None:
@@ -164,6 +188,44 @@ def test_nvidia_transcode_keeps_software_decode_when_scaling() -> None:
     assert "-hwaccel" not in cmd
     assert cmd[cmd.index("-vf") + 1].startswith("scale=")
     assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
+
+
+@pytest.mark.parametrize("transfer", ["smpte2084", "arib-std-b67"])
+def test_hdr_is_tonemapped_before_nvenc_encoding(transfer: str) -> None:
+    hardware = HardwareAcceleration(selected_device="auto")
+    hardware.devices = [
+        HardwareDevice(id="nvidia:0", type="nvidia", name="GPU", encoders={"h264": "h264_nvenc"}, decoders={"hevc"})
+    ]
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_transcode(
+        HlsCommandOptions(
+            input_path="/hdr.mkv",
+            playlist_path="/tmp/playlist.m3u8",
+            segment_pattern="/tmp/%03d.ts",
+            source_video_codec="hevc",
+            source_color_transfer=transfer,
+        )
+    )
+    assert "-hwaccel" not in command
+    assert command[command.index("-c:v") + 1] == "h264_nvenc"
+    assert "tonemap=tonemap=mobius" in command[command.index("-vf") + 1]
+    assert command[command.index("-color_trc") + 1] == "bt709"
+
+
+def test_video_copy_preserves_hdr_without_tonemapping() -> None:
+    hardware = HardwareAcceleration(selected_device="software")
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_transcode(
+        HlsCommandOptions(
+            input_path="/hdr.mkv",
+            playlist_path="/tmp/playlist.m3u8",
+            segment_pattern="/tmp/%03d.ts",
+            video_codec="copy",
+            source_color_transfer="smpte2084",
+        )
+    )
+    assert "-vf" not in command
+    assert "-color_trc" not in command
 
 
 def test_fmp4_hls_uses_fragment_discontinuity_segment_option() -> None:

@@ -95,6 +95,7 @@ class FFmpegTranscoder:
                 playlist_path=str(playlist_path),
                 segment_pattern=segment_pattern,
                 source_video_codec=self._source_video_codec(media_file),
+                source_color_transfer=media_file.video_tracks[0].color_transfer if media_file.video_tracks else None,
                 video_codec=video_codec,
                 audio_codec=audio_codec,
                 video_bitrate=video_bitrate,

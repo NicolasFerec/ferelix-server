@@ -9,7 +9,7 @@ export async function testDeviceProfile(): Promise<DeviceProfile> {
 
     try {
         // Build the profile
-        const profile = buildDeviceProfile();
+        const profile = await buildDeviceProfile();
 
         console.log("✅ Device profile built successfully");
         console.log("📊 Profile Summary:", {

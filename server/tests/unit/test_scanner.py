@@ -1,6 +1,7 @@
 """Unit tests for library scanner change detection."""
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -9,7 +10,28 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Library, MediaFile
-from app.services.scanner import scan_library_path
+from app.services.scanner import extract_video_metadata, scan_library_path
+
+
+def test_ffprobe_color_transfer_is_preserved_for_hdr(tmp_path: Path) -> None:
+    with patch("app.services.scanner.subprocess.run") as probe:
+        probe.return_value.returncode = 0
+        probe.return_value.stdout = json.dumps({
+            "streams": [
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "codec_name": "hevc",
+                    "pix_fmt": "yuv420p10le",
+                    "color_transfer": "smpte2084",
+                    "color_primaries": "bt2020",
+                    "color_space": "bt2020nc",
+                }
+            ],
+            "format": {},
+        })
+        metadata = extract_video_metadata(tmp_path / "movie.mkv")
+    assert metadata["video_tracks"][0]["color_transfer"] == "smpte2084"
 
 
 def _write_media_file(path: Path, content: bytes = b"video") -> None:

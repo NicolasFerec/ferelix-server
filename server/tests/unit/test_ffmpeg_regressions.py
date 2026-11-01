@@ -110,6 +110,68 @@ async def test_ffmpeg_progress_handles_carriage_returns_beyond_streamreader_limi
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg is not installed")
+def test_hdr_tonemap_produces_sdr_hls(tmp_path: Path) -> None:
+    source = tmp_path / "hdr.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=s=160x90:d=0.2",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p10le",
+            "-color_primaries",
+            "bt2020",
+            "-color_trc",
+            "smpte2084",
+            "-colorspace",
+            "bt2020nc",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=15,
+    )
+    hardware = HardwareAcceleration(selected_device="software")
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_transcode(
+        HlsCommandOptions(
+            input_path=str(source),
+            playlist_path=str(tmp_path / "playlist.m3u8"),
+            segment_pattern=str(tmp_path / "%03d.ts"),
+            source_color_transfer="smpte2084",
+        )
+    )
+    result = subprocess.run(command, capture_output=True, text=True, timeout=15, check=False)
+    assert result.returncode == 0, result.stderr
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=color_transfer,color_primaries,color_space,pix_fmt",
+            "-of",
+            "json",
+            str(tmp_path / "000.ts"),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+    )
+    assert '"color_transfer": "bt709"' in probe.stdout
+    assert '"pix_fmt": "yuv420p"' in probe.stdout
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg is not installed")
 def test_thumbnail_for_short_limited_range_video(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "movie.mp4"
     subprocess.run(

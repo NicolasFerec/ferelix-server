@@ -460,8 +460,13 @@ function buildTranscodingProfiles(): TranscodingProfile[] {
 /**
  * Build complete device profile
  */
-export function buildDeviceProfile(): DeviceProfile {
+export async function buildDeviceProfile(): Promise<DeviceProfile> {
     const codecSupport = probeCodecSupport();
+    const hevc = await probeHevcPlayback();
+    // HLS uses MediaSource with fragmented MP4, whose support can differ from
+    // canPlayType() on a file. Never infer MKV support from MP4 support.
+    codecSupport.video.mp4 = (codecSupport.video.mp4 || []).filter((codec) => codec !== "hevc");
+    if (hevc.main || hevc.main10) codecSupport.video.mp4.push("hevc");
     const hdrSupport = probeHDRSupport();
     const displayCaps = probeDisplayCapabilities();
 
@@ -505,5 +510,49 @@ export function buildDeviceProfile(): DeviceProfile {
         },
     };
 
+    if (!hevc.main10) {
+        profile.CodecProfiles.push({
+            Type: "Video",
+            Codec: "hevc",
+            Conditions: [{ Condition: "LessThanEqual", Property: "VideoBitDepth", Value: "8", IsRequired: true }],
+        });
+    }
     return profile;
+}
+
+/** Verify HEVC profiles on the actual browser HLS playback path. */
+export async function probeHevcPlayback(): Promise<{ main: boolean; main10: boolean }> {
+    const video = document.createElement("video");
+    const nativeHls = !!video.canPlayType("application/vnd.apple.mpegurl");
+    async function supported(profile: string, width: number, height: number): Promise<boolean> {
+        for (const tag of ["hvc1", "hev1"]) {
+            const contentType = `video/mp4; codecs="${tag}.${profile}"`;
+            const mse = typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(contentType);
+            if (!mse && !(nativeHls && video.canPlayType(contentType))) continue;
+            if (!navigator.mediaCapabilities?.decodingInfo) return true;
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            try {
+                const result = await Promise.race([
+                    navigator.mediaCapabilities.decodingInfo({
+                        type: mse ? "media-source" : "file",
+                        video: { contentType, width, height, bitrate: 20000000, framerate: 24 },
+                    }),
+                    new Promise<null>((resolve) => {
+                        timer = setTimeout(() => resolve(null), 1500);
+                    }),
+                ]);
+                if (result?.supported) return true;
+            } catch {
+                // A rejected capability query is not evidence of decoder support.
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+        return false;
+    }
+    const [main, main10] = await Promise.all([
+        supported("1.6.L120.90", 1920, 1080),
+        supported("2.4.L150.B0", 3840, 2160),
+    ]);
+    return { main, main10 };
 }

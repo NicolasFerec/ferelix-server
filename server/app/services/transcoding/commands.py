@@ -13,6 +13,7 @@ class HlsCommandOptions:
     playlist_path: str
     segment_pattern: str
     source_video_codec: str | None = None
+    source_color_transfer: str | None = None
     video_codec: str = "h264"
     audio_codec: str = "aac"
     video_bitrate: int | None = None
@@ -87,6 +88,8 @@ class HlsCommandBuilder:
 
         cmd.extend(self._output_sanitizing_args())
         cmd.extend(["-c:v", encoder])
+        if self._needs_tonemap(options):
+            cmd.extend(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"])
         if encoder != "copy":
             cmd.extend(encoder_args)
             if hardware_decode and "nvenc" in encoder:
@@ -110,6 +113,12 @@ class HlsCommandBuilder:
                 "-bufsize",
                 str(options.video_bitrate * 2),
             ])
+        elif "nvenc" in encoder:
+            # NVENC defaults to 2 Mb/s, which destroys detail at 4K. In Auto
+            # mode target visual quality; explicit bitrate requests still win.
+            cmd.extend(["-rc", "vbr", "-cq", "19", "-b:v", "0"])
+        elif encoder == "libx264":
+            cmd.extend(["-crf", "18"])
 
         vf_filters = self._video_filters(options, encoder, hardware_decode)
         if options.subtitle_stream_index is not None and encoder != "copy":
@@ -200,6 +209,14 @@ class HlsCommandBuilder:
 
     def _video_filters(self, options: HlsCommandOptions, encoder: str, hardware_decode: bool) -> list[str]:
         filters: list[str] = []
+        if self._needs_tonemap(options):
+            filters.extend([
+                f"zscale=pin=bt2020:p=bt2020:tin={options.source_color_transfer}:min=bt2020nc:t=linear:npl=100",
+                "format=gbrpf32le",
+                "tonemap=tonemap=mobius:desat=0",
+                "zscale=p=bt709:t=bt709:m=bt709:r=tv",
+                "format=yuv420p",
+            ])
         if hardware_decode and "nvenc" in encoder:
             # CUDA frames must stay on the GPU. Convert 10-bit sources to an
             # 8-bit surface here instead of asking software auto_scale to do it.
@@ -236,7 +253,12 @@ class HlsCommandBuilder:
         options: HlsCommandOptions,
         encoder: str,
     ) -> bool:
-        if not active_device or options.video_codec == "copy" or options.subtitle_stream_index is not None:
+        if (
+            not active_device
+            or options.video_codec == "copy"
+            or options.subtitle_stream_index is not None
+            or self._needs_tonemap(options)
+        ):
             return False
 
         source_codec = normalize_video_codec(options.source_video_codec)
@@ -250,6 +272,10 @@ class HlsCommandBuilder:
             return "nvenc" in encoder and not (options.max_width or options.max_height)
 
         return False
+
+    @staticmethod
+    def _needs_tonemap(options: HlsCommandOptions) -> bool:
+        return options.video_codec != "copy" and options.source_color_transfer in {"smpte2084", "arib-std-b67"}
 
     def _hardware_decode_args(self, active_device: HardwareDevice | None, hardware_decode: bool) -> list[str]:
         if not hardware_decode or not active_device:

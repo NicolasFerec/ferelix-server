@@ -128,6 +128,8 @@ def test_nvidia_transcode_uses_cuda_decode_without_scaling() -> None:
     assert cmd[cmd.index("-hwaccel_output_format") + 1] == "cuda"
     assert cmd[cmd.index("-hwaccel_device") + 1] == "0"
     assert cmd[cmd.index("-c:v") + 1] == "h264_nvenc"
+    assert cmd[cmd.index("-pix_fmt") + 1] == "cuda"
+    assert cmd[cmd.index("-vf") + 1] == "scale_cuda=format=yuv420p"
     assert cmd[cmd.index("-g:v:0") + 1] == "144"
     assert cmd[cmd.index("-keyint_min:v:0") + 1] == "144"
     assert "-force_key_frames" not in cmd
@@ -161,6 +163,7 @@ def test_nvidia_transcode_keeps_software_decode_when_scaling() -> None:
 
     assert "-hwaccel" not in cmd
     assert cmd[cmd.index("-vf") + 1].startswith("scale=")
+    assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
 
 
 def test_fmp4_hls_uses_fragment_discontinuity_segment_option() -> None:

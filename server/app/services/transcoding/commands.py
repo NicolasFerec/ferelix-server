@@ -89,7 +89,9 @@ class HlsCommandBuilder:
         cmd.extend(["-c:v", encoder])
         if encoder != "copy":
             cmd.extend(encoder_args)
-            if "vaapi" not in encoder:
+            if hardware_decode and "nvenc" in encoder:
+                cmd.extend(["-pix_fmt", "cuda"])
+            elif "vaapi" not in encoder:
                 cmd.extend(["-pix_fmt", "yuv420p"])
             cmd.extend(self._keyframe_args(encoder, options.segment_duration, options.real_frame_rate))
 
@@ -198,6 +200,10 @@ class HlsCommandBuilder:
 
     def _video_filters(self, options: HlsCommandOptions, encoder: str, hardware_decode: bool) -> list[str]:
         filters: list[str] = []
+        if hardware_decode and "nvenc" in encoder:
+            # CUDA frames must stay on the GPU. Convert 10-bit sources to an
+            # 8-bit surface here instead of asking software auto_scale to do it.
+            filters.append("scale_cuda=format=yuv420p")
         uses_vaapi_encoder = "vaapi" in encoder
         if uses_vaapi_encoder and not hardware_decode:
             filters.extend(["format=nv12", "hwupload"])

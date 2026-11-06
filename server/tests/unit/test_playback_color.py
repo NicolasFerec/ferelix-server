@@ -2,7 +2,10 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.models import MediaFile, VideoTrack
+from app.models.playback import PlayMethod, StreamInfo, TranscodeSettings
 from app.models.transcoding import TranscodingJobType
 from app.services.playback_session import HlsStartOptions, PlaybackSessionService
 
@@ -24,3 +27,23 @@ async def test_legacy_wide_gamut_metadata_is_repaired_once(db_session, tmp_path,
     assert transcoder.start_hls_transcode.call_args.kwargs["media_file"].video_tracks[0].color_transfer == "smpte2084"
     await service.start_hls_job(media.id, HlsStartOptions(job_type=TranscodingJobType.HLS))
     assert probe.call_count == 1
+
+
+@pytest.mark.parametrize("transcoding_type", ["remux", "audio-only", "full"])
+async def test_automatic_start_preserves_negotiated_audio_track(db_session, monkeypatch, transcoding_type):
+    monkeypatch.setattr("app.services.playback_session.get_transcoder", MagicMock())
+    service = PlaybackSessionService(db_session)
+    start = AsyncMock(return_value=MagicMock(id="job"))
+    monkeypatch.setattr(service, "start_hls_job", start)
+    source = StreamInfo(
+        Id="1",
+        PlayMethod=PlayMethod.DIRECT_STREAM if transcoding_type == "remux" else PlayMethod.TRANSCODE,
+        IsRemuxOnly=transcoding_type == "remux",
+        TranscodingType=transcoding_type,
+        AudioStreamIndex=4,
+        TranscodeSettings=TranscodeSettings(VideoCodec="copy", AudioCodec="aac"),
+    )
+
+    await service.start_from_stream_info(1, source)
+
+    assert start.call_args.args[1].audio_stream_index == 4

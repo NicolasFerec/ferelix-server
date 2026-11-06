@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -9,11 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import delete, or_, select, update
 
 from app.database import async_session_maker
 from app.models import MediaFile, TranscodingJob
 from app.models.transcoding import TranscodingJobStatus
+from app.services.streaming_io import is_playlist_ready
 from app.services.transcoding.codecs import IMAGE_SUBTITLE_CODECS, TEXT_SUBTITLE_CODECS
 from app.services.transcoding.commands import HlsCommandBuilder, HlsCommandOptions
 from app.services.transcoding.files import read_process_messages, remove_output_path, terminate_process
@@ -195,26 +197,18 @@ class FFmpegTranscoder:
         """Gracefully stop a running transcoding job."""
         process = self._active_jobs.get(job_id)
         if not process:
-            output_path = await self._cancel_persisted_job(job_id, terminate_by_pid=True)
-            if output_path is None:
+            found, output_path = await self._cancel_persisted_job(job_id, terminate_by_pid=True)
+            if not found:
                 return False
-            remove_output_path(output_path)
+            await asyncio.to_thread(remove_output_path, output_path)
             return True
 
         try:
-            if process.stdin and not process.stdin.is_closing():
-                process.stdin.write(b"q\n")
-                await process.stdin.drain()
-                process.stdin.close()
-
-            try:
-                await asyncio.wait_for(process.wait(), timeout=10.0)
-            except TimeoutError:
-                process.kill()
-                await process.wait()
-
+            await self._stop_process(process)
+            # Only report cancellation once the process has actually exited.
+            # Conditional monitor updates cannot overwrite this terminal state.
             output_path = await self._set_terminal_status(job_id, TranscodingJobStatus.CANCELLED)
-            remove_output_path(output_path)
+            await asyncio.to_thread(remove_output_path, output_path)
             return True
         except Exception as exc:
             logger.exception("Failed to stop FFmpeg job %s", job_id)
@@ -223,32 +217,78 @@ class FFmpegTranscoder:
         finally:
             self._active_jobs.pop(job_id, None)
 
+    async def _stop_process(self, process: asyncio.subprocess.Process) -> None:
+        """Reap FFmpeg even when its control pipe closed or it ignores quit."""
+        if process.returncode is None:
+            try:
+                if process.stdin and not process.stdin.is_closing():
+                    process.stdin.write(b"q\n")
+                    await process.stdin.drain()
+                    process.stdin.close()
+                else:
+                    process.terminate()
+            except BrokenPipeError, ConnectionResetError:
+                if process.returncode is None:
+                    with contextlib.suppress(ProcessLookupError):
+                        process.terminate()
+            except ProcessLookupError:
+                pass
+
+        try:
+            await asyncio.wait_for(process.wait(), timeout=5.0)
+        except TimeoutError:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            await process.wait()
+
     async def cleanup_transcode_files(self) -> int:
-        """Clean up files and rows for terminal jobs and stale running jobs."""
+        """Atomically claim expired jobs before stopping them outside a transaction."""
         cleanup_count = 0
-        now = datetime.now(UTC)
+        cutoff = datetime.now(UTC) - STALE_RUNNING_JOB_AFTER
+        eligible = (
+            TranscodingJob.output_path.isnot(None),
+            or_(
+                TranscodingJob.status.in_([
+                    TranscodingJobStatus.FAILED,
+                    TranscodingJobStatus.CANCELLED,
+                    TranscodingJobStatus.STOPPING,
+                ]),
+                TranscodingJob.last_accessed_at < cutoff,
+                TranscodingJob.last_accessed_at.is_(None),
+            ),
+        )
         async with async_session_maker() as session:
-            result = await session.execute(
-                select(TranscodingJob).where(
-                    TranscodingJob.output_path.isnot(None),
+            job_ids = list(await session.scalars(select(TranscodingJob.id).where(*eligible)))
+
+        for job_id in job_ids:
+            # The preceding encoder can take seconds to stop. Recheck the current
+            # lease atomically, not the snapshot taken at the start of this sweep.
+            async with async_session_maker() as session:
+                job = await session.scalar(
+                    update(TranscodingJob)
+                    .where(TranscodingJob.id == job_id, *eligible)
+                    .values(status=TranscodingJobStatus.STOPPING)
+                    .returning(TranscodingJob)
+                    .execution_options(populate_existing=True, synchronize_session=False)
                 )
-            )
-            for job in result.scalars().all():
-                # FFmpeg can finish encoding long before the viewer finishes playback.
-                if job.status == TranscodingJobStatus.COMPLETED and not self._is_stale(job.last_accessed_at, now):
-                    continue
-                if job.status == TranscodingJobStatus.RUNNING:
-                    if not self._is_stale(job.last_accessed_at, now):
-                        continue
-                    if job.process_id:
-                        terminate_process(job.process_id, job.output_path)
-                    logger.info("Cleaning up stale transcoding job %s", job.id)
+                await session.commit()
+            if job is None:
+                continue
 
-                remove_output_path(job.output_path)
-                await session.delete(job)
+            try:
+                process = getattr(self, "_active_jobs", {}).get(job_id)
+                if process:
+                    await self._stop_process(process)
+                elif job.process_id:
+                    await asyncio.to_thread(terminate_process, job.process_id, job.output_path)
+                await asyncio.to_thread(remove_output_path, job.output_path)
+                async with async_session_maker() as session:
+                    await session.execute(delete(TranscodingJob).where(TranscodingJob.id == job_id))
+                    await session.commit()
                 cleanup_count += 1
-
-            await session.commit()
+            except Exception:
+                # Retain STOPPING and its paths/PID so the next sweep can retry.
+                logger.exception("Failed to clean up transcoding job %s; will retry", job_id)
 
         if cleanup_count:
             logger.info("Cleaned up %s transcoding jobs and their files", cleanup_count)
@@ -260,7 +300,7 @@ class FFmpegTranscoder:
         async with async_session_maker() as session:
             result = await session.execute(select(TranscodingJob).where(TranscodingJob.output_path.isnot(None)))
             for job in result.scalars().all():
-                if job.status == TranscodingJobStatus.RUNNING and job.process_id:
+                if job.status in {TranscodingJobStatus.RUNNING, TranscodingJobStatus.STOPPING} and job.process_id:
                     terminate_process(job.process_id, job.output_path)
 
                 remove_output_path(job.output_path)
@@ -352,6 +392,7 @@ class FFmpegTranscoder:
         values = {
             "status": TranscodingJobStatus.RUNNING,
             "started_at": datetime.now(UTC),
+            "last_accessed_at": datetime.now(UTC),
             "ffmpeg_command": shlex.join(cmd),
             "output_path": str(job_dir),
             "playlist_path": str(playlist_path),
@@ -361,8 +402,16 @@ class FFmpegTranscoder:
             **settings,
         }
         async with async_session_maker() as session:
-            await session.execute(update(TranscodingJob).where(TranscodingJob.id == job_id).values(**values))
+            started_id = await session.scalar(
+                update(TranscodingJob)
+                .where(TranscodingJob.id == job_id, TranscodingJob.status == TranscodingJobStatus.PENDING)
+                .values(**values)
+                .returning(TranscodingJob.id)
+            )
             await session.commit()
+            if started_id is None:
+                await asyncio.to_thread(remove_output_path, str(job_dir))
+                raise HTTPException(status_code=410, detail="Transcoding job was cancelled before startup")
 
     async def _launch_ffmpeg(
         self,
@@ -373,11 +422,12 @@ class FFmpegTranscoder:
         playlist_timeout: float,
         operation: str,
     ) -> str:
+        process: asyncio.subprocess.Process | None = None
         try:
             logger.info("Starting ffmpeg job %s: %s", job_id, " ".join(cmd))
             process = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdout=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
                 stdin=asyncio.subprocess.PIPE,
             )
@@ -393,8 +443,24 @@ class FFmpegTranscoder:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
             return str(playlist_path)
-        except Exception as exc:
+        except BaseException as exc:
+            # HTTP disconnect/task cancellation and a failed DB write after spawn
+            # must not leave an unmonitored encoder behind.
+            if process is not None:
+                if process.returncode is None:
+                    with contextlib.suppress(ProcessLookupError):
+                        process.kill()
+                await process.communicate()
+            self._active_jobs.pop(job_id, None)
+            if isinstance(exc, asyncio.CancelledError):
+                output_path = await self._set_terminal_status(job_id, TranscodingJobStatus.CANCELLED)
+                await asyncio.to_thread(remove_output_path, output_path)
+                raise
             await self._mark_job_failed(job_id, str(exc))
+            if isinstance(exc, HTTPException):
+                raise
+            if not isinstance(exc, Exception):
+                raise
             logger.error("Failed to start %s job %s: %s", operation, job_id, exc)
             raise HTTPException(status_code=500, detail=f"Failed to start {operation}: {exc}") from exc
 
@@ -424,7 +490,7 @@ class FFmpegTranscoder:
     ) -> None:
         deadline = asyncio.get_running_loop().time() + timeout_seconds
         while asyncio.get_running_loop().time() < deadline:
-            if await asyncio.to_thread(playlist_path.exists):
+            if await is_playlist_ready(playlist_path):
                 return
             if process.returncode is not None:
                 return
@@ -433,9 +499,12 @@ class FFmpegTranscoder:
         if process.returncode is None:
             message = f"FFmpeg did not create an HLS playlist within {int(timeout_seconds)} seconds"
             logger.error("%s for job %s at %s", message, job_id, playlist_path)
-            await self._mark_job_failed(job_id, message)
-            process.kill()
-            await process.wait()
+            try:
+                await self._mark_job_failed(job_id, message)
+            finally:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+                await process.wait()
 
     async def _monitor_progress(
         self,
@@ -444,9 +513,8 @@ class FFmpegTranscoder:
         total_duration: float | None,
     ) -> None:
         stderr_lines: deque[str] = deque(maxlen=100)
-        job_start_time = await self._get_job_start_time(job_id)
-
         try:
+            job_start_time = await self._get_job_start_time(job_id)
             if process.stderr:
                 async for line in read_process_messages(process.stderr):
                     stderr_lines.append(line)
@@ -464,8 +532,20 @@ class FFmpegTranscoder:
                 summary = self._summarize_stderr(process.returncode, list(stderr_lines))
                 logger.error("FFmpeg job %s failed: %s", job_id, summary)
                 await self._mark_job_failed(job_id, summary)
+        except asyncio.CancelledError:
+            if process.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+            await process.communicate()
+            raise
         except Exception as exc:
             logger.exception("Progress monitoring failed for FFmpeg job %s", job_id)
+            # Without a stderr consumer FFmpeg can block forever on its pipe.
+            # Reap it before DB error handling, which can itself fail.
+            if process.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+            await process.communicate()
             await self._mark_job_failed(job_id, f"Progress monitoring failed: {exc}")
         finally:
             self._active_jobs.pop(job_id, None)
@@ -518,7 +598,6 @@ class FFmpegTranscoder:
                     transcoded_duration=progress_data.get("transcoded_duration"),
                     current_fps=progress_data.get("current_fps"),
                     current_bitrate=progress_data.get("current_bitrate"),
-                    last_accessed_at=datetime.now(UTC),
                 )
             )
             await session.commit()
@@ -527,7 +606,10 @@ class FFmpegTranscoder:
         async with async_session_maker() as session:
             await session.execute(
                 update(TranscodingJob)
-                .where(TranscodingJob.id == job_id)
+                .where(
+                    TranscodingJob.id == job_id,
+                    TranscodingJob.status == TranscodingJobStatus.RUNNING,
+                )
                 .values(
                     status=TranscodingJobStatus.COMPLETED,
                     completed_at=datetime.now(UTC),
@@ -540,7 +622,10 @@ class FFmpegTranscoder:
         async with async_session_maker() as session:
             await session.execute(
                 update(TranscodingJob)
-                .where(TranscodingJob.id == job_id)
+                .where(
+                    TranscodingJob.id == job_id,
+                    TranscodingJob.status.in_([TranscodingJobStatus.PENDING, TranscodingJobStatus.RUNNING]),
+                )
                 .values(
                     status=TranscodingJobStatus.FAILED,
                     error_message=error_message,
@@ -551,10 +636,15 @@ class FFmpegTranscoder:
 
     async def _set_process_id(self, job_id: str, process_id: int | None) -> None:
         async with async_session_maker() as session:
-            await session.execute(
-                update(TranscodingJob).where(TranscodingJob.id == job_id).values(process_id=process_id)
+            running_id = await session.scalar(
+                update(TranscodingJob)
+                .where(TranscodingJob.id == job_id, TranscodingJob.status == TranscodingJobStatus.RUNNING)
+                .values(process_id=process_id)
+                .returning(TranscodingJob.id)
             )
             await session.commit()
+            if running_id is None:
+                raise HTTPException(status_code=410, detail="Transcoding job was cancelled during startup")
 
     async def _set_terminal_status(self, job_id: str, status: TranscodingJobStatus) -> str | None:
         async with async_session_maker() as session:
@@ -568,11 +658,11 @@ class FFmpegTranscoder:
             await session.commit()
             return output_path
 
-    async def _cancel_persisted_job(self, job_id: str, terminate_by_pid: bool) -> str | None:
+    async def _cancel_persisted_job(self, job_id: str, terminate_by_pid: bool) -> tuple[bool, str | None]:
         async with async_session_maker() as session:
             job = await session.get(TranscodingJob, job_id)
             if not job:
-                return None
+                return False, None
 
             if terminate_by_pid and job.process_id:
                 terminate_process(job.process_id, job.output_path)
@@ -581,19 +671,12 @@ class FFmpegTranscoder:
             job.status = TranscodingJobStatus.CANCELLED
             job.completed_at = datetime.now(UTC)
             await session.commit()
-            return output_path
+            return True, output_path
 
     async def _job_has_status(self, job_id: str, status: TranscodingJobStatus) -> bool:
         async with async_session_maker() as session:
             result = await session.execute(select(TranscodingJob.status).where(TranscodingJob.id == job_id))
             return result.scalar_one_or_none() == status
-
-    def _is_stale(self, last_accessed_at: datetime | None, now: datetime) -> bool:
-        if last_accessed_at is None:
-            return True
-        if last_accessed_at.tzinfo is None:
-            last_accessed_at = last_accessed_at.replace(tzinfo=UTC)
-        return last_accessed_at < now - STALE_RUNNING_JOB_AFTER
 
     def _summarize_stderr(self, returncode: int | None, stderr_lines: list[str]) -> str:
         if not stderr_lines:

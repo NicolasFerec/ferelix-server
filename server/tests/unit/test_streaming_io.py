@@ -77,3 +77,20 @@ async def test_is_playlist_ready_requires_manifest_and_first_segment(tmp_path) -
     (tmp_path / "segment_000.ts").write_bytes(b"data")
 
     assert await is_playlist_ready(playlist) is True
+
+
+async def test_fmp4_readiness_requires_initialization_segment(tmp_path) -> None:
+    playlist = tmp_path / "playlist.m3u8"
+    playlist.write_text('#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:6.0,\nsegment_000.m4s\n')
+    (tmp_path / "segment_000.m4s").write_bytes(b"media")
+    assert await is_playlist_ready(playlist) is False
+    (tmp_path / "init.mp4").write_bytes(b"init")
+    assert await is_playlist_ready(playlist) is True
+
+
+async def test_readiness_handles_playlist_deleted_between_exists_and_stat(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    playlist = tmp_path / "playlist.m3u8"
+    monkeypatch.setattr(Path, "exists", lambda path: True)
+    assert await is_playlist_ready(playlist) is False

@@ -487,6 +487,13 @@
             "transcodeReasons": "Raisons du transcodage",
             "transcodingJob": "Tâche de transcodage",
             "jobId": "ID de tâche :"
-        }
+        },
+        "analyzing": "Analyse du média…",
+        "switchingAudio": "Changement de piste audio…",
+        "switchingSubtitles": "Changement des sous-titres…",
+        "switchingResolution": "Changement de résolution…",
+        "transcodingProgress": "Préparation de la lecture… {progress} %",
+        "transcodingFallback": "Format non pris en charge, transcodage…",
+        "buffering": "Mise en mémoire tampon…"
     }
 }

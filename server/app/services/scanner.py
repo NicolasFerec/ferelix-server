@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 # Supported video file extensions
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".flv", ".wmv"}
 
+# The scheduler runs in one server process. Coalesce requests for the same library
+# while allowing independent libraries to scan concurrently.
+_RUNNING_LIBRARY_SCANS: dict[int, str | None] = {}
+
 
 def _parse_fps(r_frame_rate: str | None) -> float | None:
     """Parse frame rate from ffprobe format (e.g., '30/1' or '30000/1001')."""
@@ -423,9 +427,22 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
         # Check if file already exists in database
         existing_file = await session.scalar(select(MediaFile).where(MediaFile.file_path == file_path_str))
 
+        file_changed = existing_file is not None and _has_file_changed(existing_file, file_stat, modified_at)
+        needs_metadata_scan = existing_file is None or file_changed or not _has_scanned_metadata(existing_file)
+        metadata: dict = {}
+        thumbnail_path = None
+        if needs_metadata_scan:
+            # Release both pending writes and the read transaction before slow
+            # subprocesses. SQLite otherwise blocks playback progress/heartbeats
+            # for the duration of up to ten ffprobe/thumbnail operations.
+            await session.commit()
+            pending_changes = 0
+            metadata = await asyncio.to_thread(extract_video_metadata, file_path)
+            thumbnail_path = await asyncio.to_thread(
+                generate_video_thumbnail, file_path, metadata.get("duration"), force=file_changed
+            )
+
         if existing_file:
-            file_changed = _has_file_changed(existing_file, file_stat, modified_at)
-            needs_metadata_scan = file_changed or not _has_scanned_metadata(existing_file)
             was_restored = existing_file.deleted_at is not None
 
             # Check if file was previously marked as deleted (restored!)
@@ -436,13 +453,9 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
 
             if needs_metadata_scan:
                 logger.info(f"Processing updated file: {file_path}")
-                metadata = await asyncio.to_thread(extract_video_metadata, file_path)
                 await _update_media_tracks(session, existing_file, metadata)
                 _update_media_file_metadata(existing_file, metadata, file_stat, modified_at)
 
-                thumbnail_path = await asyncio.to_thread(
-                    generate_video_thumbnail, file_path, metadata.get("duration"), force=file_changed
-                )
                 if thumbnail_path:
                     existing_file.thumbnail_path = thumbnail_path
 
@@ -459,8 +472,6 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
         else:
             # Extract metadata for new file
             logger.info(f"Processing new file: {file_path}")
-            metadata = await asyncio.to_thread(extract_video_metadata, file_path)
-            thumbnail_path = await asyncio.to_thread(generate_video_thumbnail, file_path, metadata.get("duration"))
 
             # Create new MediaFile entry
             media_file = MediaFile(
@@ -487,8 +498,9 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
             new_files_count += 1
             pending_changes += 1
 
-        # Batch commit every N files
-        if pending_changes >= batch_size:
+        # Persist extracted results immediately; keep cheap unchanged-file
+        # timestamp updates batched without retaining a lock during extraction.
+        if needs_metadata_scan or pending_changes >= batch_size:
             await session.commit()
             logger.debug(f"Batch commit: {pending_changes} changes committed")
             pending_changes = 0
@@ -623,15 +635,23 @@ async def scan_library_job(
     Raises:
         ValueError: If library not found
     """
-    async with async_session_maker() as session:
-        library = await session.get(Library, library_id)
-        if not library:
-            raise ValueError(f"Library {library_id} not found")
+    if library_id in _RUNNING_LIBRARY_SCANS:
+        logger.info("Library %s is already being scanned; skipping duplicate request", library_id)
+        return {"skipped": True}
 
-        logger.info(f"Starting scan job for library {library_id}: {library.path}")
-        stats = await scan_library_path(session, library, job_id)
-        logger.info(f"Library scan job completed: {stats}")
-        return stats
+    _RUNNING_LIBRARY_SCANS[library_id] = job_id
+    try:
+        async with async_session_maker() as session:
+            library = await session.get(Library, library_id)
+            if not library:
+                raise ValueError(f"Library {library_id} not found")
+
+            logger.info(f"Starting scan job for library {library_id}: {library.path}")
+            stats = await scan_library_path(session, library, job_id)
+            logger.info(f"Library scan job completed: {stats}")
+            return stats
+    finally:
+        _RUNNING_LIBRARY_SCANS.pop(library_id, None)
 
 
 def schedule_library_scan(scheduler: AsyncIOScheduler, library_id: int, library_name: str | None = None) -> str:
@@ -645,6 +665,13 @@ def schedule_library_scan(scheduler: AsyncIOScheduler, library_id: int, library_
     Returns:
         Job ID for tracking
     """
+    running_id = _RUNNING_LIBRARY_SCANS.get(library_id)
+    if running_id:
+        return running_id
+    for pending_job in scheduler.get_jobs():
+        if pending_job.func == scan_library_job and pending_job.kwargs.get("library_id") == library_id:
+            return pending_job.id
+
     job_id = f"scan_library_{library_id}_{uuid.uuid4().hex}"
 
     scheduler.add_job(

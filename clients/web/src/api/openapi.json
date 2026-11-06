@@ -6738,6 +6738,17 @@
               }
             ],
             "title": "Requestedresolution"
+          },
+          "AudioStreamIndex": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audiostreamindex"
           }
         },
         "type": "object",
@@ -7566,6 +7577,17 @@
             "title": "Mediastreams",
             "default": []
           },
+          "AudioStreamIndex": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audiostreamindex"
+          },
           "TranscodingContainer": {
             "anyOf": [
               {
@@ -8031,6 +8053,7 @@
         "enum": [
           "pending",
           "running",
+          "stopping",
           "completed",
           "failed",
           "cancelled"

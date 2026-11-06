@@ -2275,6 +2275,8 @@ export interface components {
             RequestedResolution?: {
                 [key: string]: unknown;
             } | null;
+            /** Audiostreamindex */
+            AudioStreamIndex?: number | null;
         };
         /**
          * PlaybackInfoResponse
@@ -2599,6 +2601,8 @@ export interface components {
             MediaStreams: {
                 [key: string]: unknown;
             }[];
+            /** Audiostreamindex */
+            AudioStreamIndex?: number | null;
             /** Transcodingcontainer */
             TranscodingContainer?: string | null;
             /** Transcodingvideocodec */
@@ -2754,7 +2758,7 @@ export interface components {
          * @description Status of transcoding jobs.
          * @enum {string}
          */
-        TranscodingJobStatus: "pending" | "running" | "completed" | "failed" | "cancelled";
+        TranscodingJobStatus: "pending" | "running" | "stopping" | "completed" | "failed" | "cancelled";
         /**
          * TranscodingJobType
          * @description Types of transcoding jobs.

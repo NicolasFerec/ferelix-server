@@ -1,23 +1,20 @@
 """Playback session helpers for direct, remux, and transcoded streaming."""
 
 import asyncio
-import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import MediaFile, Settings, TranscodingJob
+from app.models import MediaFile, PlaybackSession, PlaybackSessionStatus, Settings, TranscodingJob
 from app.models.playback import PlayMethod, StreamInfo
 from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
 from app.services.scanner import extract_video_metadata
 from app.services.transcoder import get_transcoder
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -72,38 +69,6 @@ class PlaybackSessionService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found on disk")
 
         return media_file
-
-    async def cleanup_previous_sessions(self, media_id: int, exclude_job_id: str | None = None) -> int:
-        """Stop previous running HLS jobs for the same media file.
-
-        Ferelix currently runs one active generated HLS timeline per media item,
-        similar to Jellyfin restarting an active encoding when a player jumps to
-        a new segment range.
-        """
-        query = select(TranscodingJob).where(
-            TranscodingJob.media_file_id == media_id,
-            TranscodingJob.status == TranscodingJobStatus.RUNNING,
-        )
-        if exclude_job_id:
-            query = query.where(TranscodingJob.id != exclude_job_id)
-
-        result = await self.session.execute(query)
-        previous_jobs = result.scalars().all()
-        cleanup_count = 0
-
-        for job in previous_jobs:
-            try:
-                await self.transcoder.stop_job(job.id)
-                job.status = TranscodingJobStatus.CANCELLED
-                job.completed_at = func.now()
-                cleanup_count += 1
-            except Exception as exc:
-                logger.warning("Failed to clean up previous job %s: %s", job.id, exc, exc_info=True)
-
-        if cleanup_count:
-            await self.session.commit()
-
-        return cleanup_count
 
     async def start_hls_job(
         self,
@@ -181,6 +146,11 @@ class PlaybackSessionService:
                     start_time=options.start_time,
                 )
 
+            if options.playback_session_id:
+                playback = await self.session.get(PlaybackSession, options.playback_session_id, populate_existing=True)
+                if playback is None or playback.status != PlaybackSessionStatus.ACTIVE:
+                    await self.transcoder.stop_job(job_id)
+                    raise HTTPException(status_code=410, detail="Playback session ended during startup")
             await self.session.refresh(job)
             return job
         except Exception:
@@ -211,7 +181,7 @@ class PlaybackSessionService:
                 media_id,
                 HlsStartOptions(
                     job_type=TranscodingJobType.REMUX,
-                    audio_stream_index=getattr(settings, "AudioStreamIndex", None),
+                    audio_stream_index=stream_info.AudioStreamIndex,
                 ),
                 client,
             )
@@ -232,6 +202,7 @@ class PlaybackSessionService:
                 audio_bitrate=getattr(settings, "AudioBitrate", None),
                 max_width=getattr(settings, "MaxWidth", None),
                 max_height=getattr(settings, "MaxHeight", None),
+                audio_stream_index=stream_info.AudioStreamIndex,
             ),
             client,
         )

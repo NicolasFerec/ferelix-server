@@ -125,6 +125,7 @@ class PlaybackInfoRequest(BaseModel):
     AllowAudioStreamCopy: bool = True
     IsPlayback: bool = True
     RequestedResolution: dict | None = None  # Manual resolution override {"width": 1920, "height": 1080}
+    AudioStreamIndex: int | None = None
 
 
 class TranscodeSettings(BaseModel):
@@ -165,6 +166,7 @@ class StreamInfo(BaseModel):
 
     # Media stream info
     MediaStreams: list[dict] = []  # Video, audio, subtitle stream info
+    AudioStreamIndex: int | None = None
 
     # Transcoding settings (when applicable)
     TranscodingContainer: str | None = None

@@ -36,6 +36,30 @@ export function defaultAudioStreamIndex(audioTracks: AudioTrackLike[]): number |
     return audioTracks.find((track) => track.is_default)?.stream_index ?? audioTracks[0]?.stream_index;
 }
 
+/** Serialize server mutations while discarding superseded user intentions. */
+export function createPlaybackOperations(lifetime: AbortSignal) {
+    let active: AbortController | undefined;
+    let tail: Promise<unknown> = Promise.resolve();
+    lifetime.addEventListener("abort", () => active?.abort(), { once: true });
+
+    return {
+        run<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+            active?.abort();
+            const controller = new AbortController();
+            active = controller;
+            if (lifetime.aborted) controller.abort();
+            const result = tail
+                .catch(() => {})
+                .then(async () => {
+                    controller.signal.throwIfAborted();
+                    return operation(controller.signal);
+                });
+            tail = result;
+            return result;
+        },
+    };
+}
+
 export async function startPlaybackJob(options: {
     mediaId: number;
     source: StreamSource;
@@ -92,33 +116,52 @@ export async function waitForHlsReady(
     maxWait = 120000,
     signal?: AbortSignal,
 ): Promise<TranscodingJob> {
-    const startedAt = Date.now();
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+    const timeout = setTimeout(() => controller.abort(new Error("Timeout waiting for transcode")), maxWait);
+    const waitSignal = controller.signal;
 
-    while (Date.now() - startedAt < maxWait) {
-        signal?.throwIfAborted();
-        const status = await media.getHlsStatus(jobId);
-        signal?.throwIfAborted();
-        onStatus?.(status);
+    try {
+        while (true) {
+            waitSignal.throwIfAborted();
+            const status = await media.getHlsStatus(jobId, waitSignal);
+            waitSignal.throwIfAborted();
+            onStatus?.(status);
 
-        if (status.status === "failed") {
-            throw new Error(status.error_message || "Transcoding failed");
-        }
-        if (status.status === "cancelled") {
-            throw new Error("Transcoding was cancelled");
-        }
-        if (status.status === "running" || status.status === "completed") {
-            try {
-                const response = await fetch(media.getHlsPlaylistUrl(jobId), { method: "HEAD", signal });
-                if (response.ok) {
-                    return status;
-                }
-            } catch {
-                // Playlist route blocks briefly server-side; keep polling if the request is interrupted.
+            if (status.status === "failed") {
+                throw new Error(status.error_message || "Transcoding failed");
             }
+            if (["cancelled", "stopping"].includes(status.status)) {
+                throw new Error("Transcoding was cancelled");
+            }
+            if (status.status === "running" || status.status === "completed") {
+                try {
+                    const response = await fetch(media.getHlsPlaylistUrl(jobId), {
+                        method: "HEAD",
+                        signal: waitSignal,
+                    });
+                    if (response.ok) return status;
+                } catch {
+                    waitSignal.throwIfAborted();
+                }
+            }
+            await new Promise<void>((resolve, reject) => {
+                const onAbort = () => {
+                    clearTimeout(timer);
+                    reject(waitSignal.reason);
+                };
+                const timer = setTimeout(() => {
+                    waitSignal.removeEventListener("abort", onAbort);
+                    resolve();
+                }, 500);
+                waitSignal.addEventListener("abort", onAbort, { once: true });
+                if (waitSignal.aborted) onAbort();
+            });
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 500));
+    } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", abort);
     }
-
-    throw new Error("Timeout waiting for transcode");
 }

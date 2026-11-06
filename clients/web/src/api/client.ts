@@ -327,9 +327,12 @@ export const media = {
             enableDirectStream?: boolean;
             enableTranscoding?: boolean;
             requestedResolution?: { width: number; height: number } | null;
+            audioStreamIndex?: number;
+            signal?: AbortSignal;
         },
     ): Promise<components["schemas"]["PlaybackInfoResponse"]> {
         const { data, error } = await client.POST("/api/v1/playback-info/{media_id}", {
+            signal: options?.signal,
             params: { path: { media_id: mediaId } },
             body: {
                 DeviceProfile: deviceProfile,
@@ -340,6 +343,7 @@ export const media = {
                 AllowAudioStreamCopy: true,
                 IsPlayback: true,
                 RequestedResolution: options?.requestedResolution,
+                AudioStreamIndex: options?.audioStreamIndex,
             },
         });
         if (error || !data) {
@@ -450,8 +454,9 @@ export const media = {
     /**
      * Get HLS job status
      */
-    async getHlsStatus(jobId: string): Promise<components["schemas"]["TranscodingJobSchema"]> {
+    async getHlsStatus(jobId: string, signal?: AbortSignal): Promise<components["schemas"]["TranscodingJobSchema"]> {
         const { data, error } = await client.GET("/api/v1/hls/{job_id}/status", {
+            signal,
             params: { path: { job_id: jobId } },
         });
         if (error || !data) {

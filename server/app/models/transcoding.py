@@ -25,6 +25,7 @@ class TranscodingJobStatus(StrEnum):
 
     PENDING = "pending"
     RUNNING = "running"
+    STOPPING = "stopping"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"

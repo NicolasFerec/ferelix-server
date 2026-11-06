@@ -487,6 +487,13 @@
             "transcodeReasons": "Transcode Reasons",
             "transcodingJob": "Transcoding Job",
             "jobId": "Job ID:"
-        }
+        },
+        "analyzing": "Analyzing media…",
+        "switchingAudio": "Switching audio track…",
+        "switchingSubtitles": "Switching subtitles…",
+        "switchingResolution": "Switching resolution…",
+        "transcodingProgress": "Preparing playback… {progress}%",
+        "transcodingFallback": "Format not supported, transcoding…",
+        "buffering": "Buffering…"
     }
 }

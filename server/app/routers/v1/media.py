@@ -79,13 +79,17 @@ async def get_playback_info(
 
     # Build stream info using device profile
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
-    stream_info = stream_builder.build_stream_info(
-        media_file,
-        enable_direct_play=playback_request.EnableDirectPlay,
-        enable_direct_stream=playback_request.EnableDirectStream,
-        enable_transcoding=playback_request.EnableTranscoding,
-        requested_resolution=playback_request.RequestedResolution,
-    )
+    try:
+        stream_info = stream_builder.build_stream_info(
+            media_file,
+            enable_direct_play=playback_request.EnableDirectPlay,
+            enable_direct_stream=playback_request.EnableDirectStream,
+            enable_transcoding=playback_request.EnableTranscoding,
+            requested_resolution=playback_request.RequestedResolution,
+            audio_stream_index=playback_request.AudioStreamIndex,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return PlaybackInfoResponse(MediaSources=[stream_info])
 
@@ -630,12 +634,17 @@ async def start_media_stream(
 
     # Get stream decision from StreamBuilder
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
-    stream_info = stream_builder.build_stream_info(
-        media_file,
-        enable_direct_play=playback_request.EnableDirectPlay,
-        enable_direct_stream=playback_request.EnableDirectStream,
-        enable_transcoding=playback_request.EnableTranscoding,
-    )
+    try:
+        stream_info = stream_builder.build_stream_info(
+            media_file,
+            enable_direct_play=playback_request.EnableDirectPlay,
+            enable_direct_stream=playback_request.EnableDirectStream,
+            enable_transcoding=playback_request.EnableTranscoding,
+            requested_resolution=playback_request.RequestedResolution,
+            audio_stream_index=playback_request.AudioStreamIndex,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     service = PlaybackSessionService(session)
     client = ClientContext(

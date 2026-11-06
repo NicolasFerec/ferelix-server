@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from app.models.media_file import MediaFile
+from app.models.media_file import AudioTrack, MediaFile
 from app.models.playback import (
     DeviceProfile,
     DeviceProfileCondition,
@@ -23,6 +23,17 @@ HLS_TS_COPY_AUDIO_CODECS = {"aac", "mp3"}
 HLS_FMP4_COPY_AUDIO_CODECS = {"aac", "mp3", "ac3", "eac3", "opus"}
 
 
+def select_audio_track(media_file: MediaFile, stream_index: int | None = None) -> AudioTrack | None:
+    """Resolve a requested/default track without mutating the ORM collection."""
+    tracks = media_file.audio_tracks
+    if stream_index is not None:
+        selected = next((track for track in tracks if track.stream_index == stream_index), None)
+        if selected is None:
+            raise ValueError(f"Audio stream index {stream_index} does not exist")
+        return selected
+    return next((track for track in tracks if track.is_default), tracks[0] if tracks else None)
+
+
 class StreamBuilder:
     """Builds stream info by comparing device capabilities with media metadata."""
 
@@ -39,18 +50,21 @@ class StreamBuilder:
         enable_direct_stream: bool = True,
         enable_transcoding: bool = True,
         requested_resolution: dict | None = None,
+        audio_stream_index: int | None = None,
     ) -> StreamInfo:
         """Build stream info for a media file based on device capabilities."""
 
         logger.debug(f"Building stream info for {media_file.file_name}")
+        audio_track = select_audio_track(media_file, audio_stream_index)
         stream_info = self._base_stream_info(media_file)
+        stream_info.AudioStreamIndex = audio_track.stream_index if audio_track is not None else None
 
         if requested_resolution:
             logger.debug(f"Manual resolution override requested: {requested_resolution}")
             return self._apply_resolution_override(stream_info, media_file, requested_resolution)
 
         if enable_direct_play:
-            direct_play_result = self._check_direct_play(media_file)
+            direct_play_result = self._check_direct_play(media_file, audio_track)
             if direct_play_result.can_play:
                 self._apply_direct_play(stream_info, media_file, direct_play_result.reasons)
                 logger.debug(f"Direct play enabled for {media_file.file_name}")
@@ -59,7 +73,7 @@ class StreamBuilder:
             stream_info.TranscodeReasons.extend(direct_play_result.reasons)
 
         if enable_direct_stream:
-            direct_stream_result = self._check_direct_stream(media_file)
+            direct_stream_result = self._check_direct_stream(media_file, audio_track)
             if direct_stream_result.can_play:
                 self._apply_direct_stream(stream_info, media_file)
                 logger.debug(f"Direct stream (remux) enabled for {media_file.file_name}")
@@ -67,7 +81,7 @@ class StreamBuilder:
 
             stream_info.TranscodeReasons.extend(direct_stream_result.reasons)
 
-            video_ok, audio_ok = self._needs_audio_transcode(media_file)
+            video_ok, audio_ok = self._needs_audio_transcode(media_file, audio_track)
             if video_ok and not audio_ok:
                 self._apply_audio_transcode(stream_info, media_file)
                 logger.debug(f"Audio-transcode (video copy) enabled for {media_file.file_name}")
@@ -156,7 +170,7 @@ class StreamBuilder:
         stream_info.TranscodingAudioCodec = "aac"
         stream_info.TranscodingType = "full"
 
-    def _check_direct_play(self, media_file: MediaFile) -> PlaybackResult:
+    def _check_direct_play(self, media_file: MediaFile, audio_track: AudioTrack | None) -> PlaybackResult:
         """Check if media can be played directly without any server processing."""
 
         reasons = []
@@ -177,17 +191,16 @@ class StreamBuilder:
             logger.debug(
                 f"Checking video codec: {video_track.codec}, resolution: {video_track.width}x{video_track.height}, bit_depth: {video_track.bit_depth}"
             )
-            video_codec_result = self._check_video_codec_support(video_track)
+            video_codec_result = self._check_video_codec_support(video_track, target_container=container)
             if not video_codec_result.can_play:
                 reasons.extend(video_codec_result.reasons)
                 logger.debug(f"Video codec check failed, reasons: {video_codec_result.reasons}")
                 return PlaybackResult(False, reasons)
 
         # Check audio codec support
-        if media_file.audio_tracks:
-            audio_track = media_file.audio_tracks[0]  # Use first audio track
+        if audio_track is not None:
             logger.debug(f"Checking audio codec: {audio_track.codec}")
-            audio_codec_result = self._check_audio_codec_support(audio_track)
+            audio_codec_result = self._check_audio_codec_support(audio_track, target_container=container)
             if not audio_codec_result.can_play:
                 reasons.extend(audio_codec_result.reasons)
                 logger.debug(f"Audio codec check failed, reasons: {audio_codec_result.reasons}")
@@ -196,7 +209,7 @@ class StreamBuilder:
         logger.debug("Direct play check passed!")
         return PlaybackResult(True, reasons)
 
-    def _check_direct_stream(self, media_file: MediaFile) -> PlaybackResult:
+    def _check_direct_stream(self, media_file: MediaFile, audio_track: AudioTrack | None) -> PlaybackResult:
         """Check if media can be remuxed to HLS with stream copy."""
 
         reasons = []
@@ -210,8 +223,7 @@ class StreamBuilder:
             if not self._can_copy_video_to_hls(video_track):
                 return PlaybackResult(False, [TranscodeReason.VIDEO_CODEC_NOT_SUPPORTED])
 
-        if media_file.audio_tracks:
-            audio_track = media_file.audio_tracks[0]
+        if audio_track is not None:
             audio_codec_result = self._check_audio_codec_support(audio_track, target_container="mp4")
             if not audio_codec_result.can_play:
                 reasons.extend(audio_codec_result.reasons)
@@ -221,7 +233,7 @@ class StreamBuilder:
 
         return PlaybackResult(True, reasons)
 
-    def _needs_audio_transcode(self, media_file: MediaFile) -> tuple[bool, bool]:
+    def _needs_audio_transcode(self, media_file: MediaFile, audio_track: AudioTrack | None) -> tuple[bool, bool]:
         """Return (video_ok, audio_ok) for HLS with copied video."""
         video_ok = True
         audio_ok = True
@@ -229,8 +241,7 @@ class StreamBuilder:
             video_track = media_file.video_tracks[0]
             video_res = self._check_video_codec_support(video_track, target_container="mp4")
             video_ok = video_res.can_play and self._can_copy_video_to_hls(video_track)
-        if media_file.audio_tracks:
-            audio_track = media_file.audio_tracks[0]
+        if audio_track is not None:
             audio_res = self._check_audio_codec_support(audio_track, target_container="mp4")
             audio_ok = audio_res.can_play and self._can_copy_audio_to_hls(audio_track, media_file)
         return video_ok, audio_ok
@@ -289,10 +300,8 @@ class StreamBuilder:
             if (
                 profile.AudioCodec
                 and codec in profile.AudioCodec.split(",")
-                and (
-                    profile.Type == "Audio"
-                    or (profile.Type in {"Video", "VideoAudio"} and container in profile.Container.split(","))
-                )
+                and profile.Type in {"Video", "VideoAudio"}
+                and container in profile.Container.split(",")
             ):
                 codec_supported = True
                 break

@@ -33,7 +33,7 @@ const durationLabel = computed(() => {
         </span>
       </span>
       <span v-if="mediaFile.user_view?.watched" class="absolute right-2 top-2 rounded-md bg-black/75 px-2 py-1 text-[11px] text-gray-100">{{ $t('mediaDetail.watched') }}</span>
-      <div v-if="progress > 0" role="progressbar" :aria-label="$t('mediaDetail.progress')" :aria-valuenow="Math.round(progress)" :aria-valuemin="0" :aria-valuemax="100" class="absolute inset-x-0 bottom-0 h-1.5 bg-gray-600">
+      <div v-if="progress > 0" role="progressbar" :aria-label="$t('mediaDetail.progress')" :aria-valuenow="Math.round(progress)" :aria-valuemin="0" :aria-valuemax="100" class="absolute inset-x-0 bottom-0 h-1.5 bg-black/30">
         <div class="h-full min-w-0.5 bg-primary-400" :style="{ width: `${progress}%` }"></div>
       </div>
     </div>

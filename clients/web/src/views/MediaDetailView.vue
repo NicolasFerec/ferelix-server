@@ -178,7 +178,7 @@ const backLocation = computed(() => route.query.returnTo ? safeReturnTo(route.qu
 function getResumePosition(): number {
   const view = mediaFile.value?.user_view;
   const duration = view?.duration_seconds || mediaFile.value?.duration;
-  if (!view || view.watched || !duration || duration <= 0) return 0;
+  if (!view || view.resume_active === false || (view.resume_active === undefined && view.watched) || !duration || duration <= 0) return 0;
   if (view.position_seconds < 10 || view.position_seconds >= duration - 10) return 0;
   return view.position_seconds;
 }

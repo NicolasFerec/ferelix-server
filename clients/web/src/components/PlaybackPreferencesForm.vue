@@ -9,6 +9,7 @@ const { t, locale } = useI18n();
 const audioLanguage = ref(props.user.preferred_audio_language || "");
 const subtitleLanguage = ref(props.user.preferred_subtitle_language || "");
 const subtitleMode = ref<User["subtitle_mode"]>(props.user.subtitle_mode || "off");
+const autoplayNext=ref(props.user.autoplay_next_episode ?? true);
 const pending = ref(false);
 const error = ref("");
 const saved = ref(false);
@@ -28,7 +29,7 @@ async function save() {
   saved.value = false;
   error.value = "";
   try {
-    const user = await auth.updateCurrentUser({preferred_audio_language:audioLanguage.value || null, preferred_subtitle_language:subtitleLanguage.value || null, subtitle_mode:subtitleMode.value});
+    const user = await auth.updateCurrentUser({preferred_audio_language:audioLanguage.value || null, preferred_subtitle_language:subtitleLanguage.value || null, subtitle_mode:subtitleMode.value,autoplay_next_episode:autoplayNext.value});
     emit("saved", user);
     saved.value = true;
   } catch { error.value = t("preferences.saveFailed"); }
@@ -43,6 +44,7 @@ async function save() {
     <div class="space-y-2"><label for="preferred-audio" class="field-label">{{ $t('preferences.audioLanguage') }}</label><select id="preferred-audio" v-model="audioLanguage" class="field-input"><option value="">{{ $t('preferences.defaultTrack') }}</option><option v-for="language in languages" :key="language.value" :value="language.value">{{ language.label }}</option></select></div>
     <div class="space-y-2"><label for="subtitle-mode" class="field-label">{{ $t('preferences.subtitleMode') }}</label><select id="subtitle-mode" v-model="subtitleMode" class="field-input"><option value="off">{{ $t('preferences.off') }}</option><option value="forced">{{ $t('preferences.forced') }}</option><option value="always">{{ $t('preferences.always') }}</option></select><p class="text-xs leading-relaxed text-muted">{{ $t('preferences.forcedHelp') }}</p></div>
     <div v-if="subtitleMode !== 'off'" class="space-y-2"><label for="preferred-subtitle" class="field-label">{{ $t('preferences.subtitleLanguage') }}</label><select id="preferred-subtitle" v-model="subtitleLanguage" class="field-input"><option value="">{{ $t('preferences.defaultTrack') }}</option><option v-for="language in languages" :key="language.value" :value="language.value">{{ language.label }}</option></select></div>
+    <label class="flex items-start gap-3 text-sm leading-6"><input v-model="autoplayNext" type="checkbox" class="mt-1 size-4 accent-primary-500" /><span>{{ $t('items.autoplayPreference') }}</span></label>
     <p class="text-xs leading-relaxed text-muted">{{ $t('preferences.fallback') }}</p>
     <p v-if="saved" role="status" class="text-sm text-emerald-300">{{ $t('preferences.saved') }}</p>
     <button type="submit" :disabled="pending" class="button-secondary w-full">{{ pending ? $t('common.loading') : $t('common.save') }}</button>

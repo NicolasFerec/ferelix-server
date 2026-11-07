@@ -1,5 +1,5 @@
 import Hls from "hls.js";
-import { computed, nextTick, onUnmounted, type Ref, ref, shallowRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, type Ref, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { type MediaAccess, type MediaFile, media, mediaSessionUrl, playbackSessions } from "@/api/client";
 import { useDeviceProfile } from "@/composables/useDeviceProfile";
@@ -22,8 +22,23 @@ import {
 } from "@/services/playerUi";
 import { adjustWebVttForOffset, isTextSubtitleCodec } from "@/services/subtitles";
 
+export interface PlaybackRestoreState {
+    positionSeconds: number;
+    playing: boolean;
+    volume?: number;
+    muted?: boolean;
+    videoStreamIndex?: number;
+    audioStreamIndex?: number;
+    subtitleStreamIndex?: number;
+    resolution?: ResolutionOption;
+}
+
 export interface PlayerProps {
     mediaFile: MediaFile;
+    restoreState?: PlaybackRestoreState;
+    itemId?: number;
+    initialPositionSeconds?: number;
+    continuationFromItemId?: number;
     initialVideoStreamIndex?: number;
     initialAudioStreamIndex?: number;
     initialSubtitleStreamIndex?: number;
@@ -36,6 +51,7 @@ export function usePlayerPlayback(
     volume: Ref<number>,
     isMuted: Ref<boolean>,
     onControls: () => void,
+    lifecycle: { onSuspend: () => void; onRestore: (state: PlaybackRestoreState) => void },
 ) {
     const { t } = useI18n();
     const { profile, buildProfile } = useDeviceProfile();
@@ -50,11 +66,14 @@ export function usePlayerPlayback(
     let playbackGeneration = 0;
     let mediaSourceRevision = 0;
     let initialTracksResolved = false;
-    let audioSelectionExplicit = props.initialAudioStreamIndex !== undefined;
-    let subtitleSelectionExplicit = props.initialSubtitleStreamIndex !== undefined;
+    const initialAudioStreamIndex = props.restoreState?.audioStreamIndex ?? props.initialAudioStreamIndex;
+    const initialSubtitleStreamIndex = props.restoreState?.subtitleStreamIndex ?? props.initialSubtitleStreamIndex;
+    const initialVideoStreamIndex = props.restoreState?.videoStreamIndex ?? props.initialVideoStreamIndex;
+    let audioSelectionExplicit = initialAudioStreamIndex !== undefined;
+    let subtitleSelectionExplicit = initialSubtitleStreamIndex !== undefined;
     const selectedVideoTrack = computed(
         () =>
-            props.mediaFile.video_tracks?.find((track) => track.stream_index === props.initialVideoStreamIndex) ||
+            props.mediaFile.video_tracks?.find((track) => track.stream_index === initialVideoStreamIndex) ||
             props.mediaFile.video_tracks?.find((track) => track.is_default) ||
             props.mediaFile.video_tracks?.[0],
     );
@@ -73,9 +92,10 @@ export function usePlayerPlayback(
 
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    let heartbeatInFlight = false;
+    let heartbeatInFlight: Promise<void> | null = null;
+    let endedRevision: number | null = null;
 
-    const requestedPlaying = ref(true);
+    const requestedPlaying = ref(props.restoreState?.playing ?? true);
 
     let resumeDirectPlayback = false;
 
@@ -151,7 +171,7 @@ export function usePlayerPlayback(
 
     const selectedSubtitleTrack = ref<SubtitleTrackOption | null>(null);
 
-    const selectedResolution = ref<ResolutionOption | null>(null);
+    const selectedResolution = ref<ResolutionOption | null>(props.restoreState?.resolution ?? null);
 
     const availableResolutions = ref<ResolutionOption[]>([]);
 
@@ -286,7 +306,7 @@ export function usePlayerPlayback(
 
     function applyInitialTrackSelection() {
         const initialAudio = audioTracks.value.find(
-            (track: AudioTrackOption) => track.stream_index === props.initialAudioStreamIndex,
+            (track: AudioTrackOption) => track.stream_index === initialAudioStreamIndex,
         );
         selectedAudioTrack.value =
             initialAudio ||
@@ -296,7 +316,7 @@ export function usePlayerPlayback(
 
         selectedSubtitleTrack.value =
             subtitleTracks.value.find(
-                (track: SubtitleTrackOption) => track.stream_index === props.initialSubtitleStreamIndex,
+                (track: SubtitleTrackOption) => track.stream_index === initialSubtitleStreamIndex,
             ) || null;
     }
 
@@ -339,6 +359,8 @@ export function usePlayerPlayback(
                 playbackSessions.create(
                     {
                         mediaFileId: props.mediaFile.id,
+                        itemId: props.itemId ?? props.mediaFile.item_id ?? undefined,
+                        continuationFromItemId: props.continuationFromItemId,
                         videoStreamIndex: selectedVideoTrack.value?.stream_index,
                         durationSeconds: props.mediaFile.duration ?? null,
                         audioStreamIndex: selectedAudioStreamIndex() ?? null,
@@ -376,9 +398,9 @@ export function usePlayerPlayback(
 
     async function sendHeartbeat() {
         const sessionId = playbackSessionId.value;
-        if (!sessionId || isEndingPlaybackSession.value || heartbeatInFlight) return;
-        heartbeatInFlight = true;
-        try {
+        if (heartbeatInFlight) return heartbeatInFlight;
+        if (!sessionId || isEndingPlaybackSession.value) return;
+        const pending = (async () => {
             const response = await playbackSessions.heartbeat(sessionId, {
                 positionSeconds: displayCurrentTime.value,
                 playbackGeneration,
@@ -394,9 +416,35 @@ export function usePlayerPlayback(
             if (response.kicked && sessionId === playbackSessionId.value && !playbackAbort.signal.aborted) {
                 handleAdminKick();
             }
+        })();
+        heartbeatInFlight = pending;
+        try {
+            await pending;
         } finally {
-            heartbeatInFlight = false;
+            if (heartbeatInFlight === pending) heartbeatInFlight = null;
         }
+    }
+
+    async function onEnded(): Promise<boolean> {
+        const revision = mediaSourceRevision;
+        if (
+            !videoElement.value?.ended ||
+            isInitializing.value ||
+            playbackAbort.signal.aborted ||
+            endedRevision === revision
+        )
+            return false;
+        endedRevision = revision;
+        requestedPlaying.value = false;
+        isPlaying.value = false;
+        onTimeUpdate();
+        onControls();
+        // Drain the previous snapshot before persisting the actual final position.
+        await heartbeatInFlight?.catch(() => undefined);
+        if (revision !== mediaSourceRevision || playbackAbort.signal.aborted || !videoElement.value?.ended)
+            return false;
+        await sendHeartbeat().catch((error) => console.warn("Final playback heartbeat failed:", error));
+        return revision === mediaSourceRevision && !playbackAbort.signal.aborted && !!videoElement.value?.ended;
     }
 
     function handleAdminKick() {
@@ -439,9 +487,23 @@ export function usePlayerPlayback(
     }
 
     function getResumePosition(): number {
+        if (props.restoreState) return props.restoreState.positionSeconds;
+        if (
+            props.initialPositionSeconds !== undefined &&
+            Number.isFinite(props.initialPositionSeconds) &&
+            props.initialPositionSeconds >= 0
+        )
+            return props.initialPositionSeconds;
         const view = props.mediaFile?.user_view;
         const mediaDuration = view?.duration_seconds || props.mediaFile?.duration;
-        if (!view || view.watched || !mediaDuration || mediaDuration <= 0) return 0;
+        if (
+            !view ||
+            view.resume_active === false ||
+            (view.resume_active === undefined && view.watched) ||
+            !mediaDuration ||
+            mediaDuration <= 0
+        )
+            return 0;
         if (view.position_seconds < 10 || view.position_seconds >= mediaDuration - 10) return 0;
         return view.position_seconds;
     }
@@ -649,6 +711,8 @@ export function usePlayerPlayback(
         }
 
         if (!videoElement.value) return;
+        videoElement.value.volume = volume.value;
+        videoElement.value.muted = isMuted.value;
 
         // Clear any direct play source
         videoSrc.value = "";
@@ -1050,6 +1114,7 @@ export function usePlayerPlayback(
     }
 
     function onPlay() {
+        endedRevision = null;
         if (!requestedPlaying.value) {
             videoElement.value?.pause();
             return;
@@ -1167,7 +1232,54 @@ export function usePlayerPlayback(
             "player.resolution_switch_failed",
         );
     }
+    let suspendedState: PlaybackRestoreState | null = null;
+    function onPageHide() {
+        if (playbackAbort.signal.aborted) return;
+        suspendedState = {
+            positionSeconds: absolutePosition(),
+            playing: requestedPlaying.value,
+            volume: volume.value,
+            muted: isMuted.value,
+            videoStreamIndex: selectedVideoTrack.value?.stream_index,
+            audioStreamIndex: initialTracksResolved || audioSelectionExplicit ? selectedAudioStreamIndex() : undefined,
+            subtitleStreamIndex:
+                initialTracksResolved || subtitleSelectionExplicit
+                    ? (selectedSubtitleTrack.value?.stream_index ?? -1)
+                    : undefined,
+            resolution: selectedResolution.value ? { ...selectedResolution.value } : undefined,
+        };
+        // A cached page also releases its lease. Restoration owns a fresh instance.
+        lifecycle.onSuspend();
+        playbackAbort.abort();
+        clearTimeout(retryTimer);
+        stopHeartbeat();
+        const sessionId = playbackSessionId.value;
+        playbackSessionId.value = null;
+        isEndingPlaybackSession.value = true;
+        if (sessionId)
+            void playbackSessions
+                .endKeepalive(sessionId)
+                .catch((error) => console.warn("Failed to close departing playback session:", error));
+        videoElement.value?.pause();
+        videoElement.value?.removeAttribute("src");
+        videoElement.value?.load();
+        videoSrc.value = "";
+        cleanup(false);
+    }
+    function onPageShow(event: PageTransitionEvent) {
+        if (!event.persisted || !suspendedState) return;
+        const state = suspendedState;
+        suspendedState = null;
+        lifecycle.onRestore(state);
+    }
+    onMounted(() => {
+        window.addEventListener("pagehide", onPageHide);
+        window.addEventListener("pageshow", onPageShow);
+    });
     onUnmounted(() => {
+        window.removeEventListener("pagehide", onPageHide);
+        window.removeEventListener("pageshow", onPageShow);
+        suspendedState = null;
         playbackAbort.abort();
         clearTimeout(retryTimer);
         stopHeartbeat();
@@ -1211,6 +1323,7 @@ export function usePlayerPlayback(
         onTimeUpdate,
         onProgress,
         onPlay,
+        onEnded,
         onPause,
         onError,
         onCanPlay,

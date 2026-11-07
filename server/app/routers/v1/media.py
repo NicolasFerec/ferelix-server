@@ -3,12 +3,12 @@
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -200,6 +200,7 @@ async def search_media_files(
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 48,
     after_id: Annotated[int | None, Query(ge=0)] = None,
+    sort: Literal["id", "relevance"] = "id",
 ) -> list[MediaCardSchema]:
     """Search the complete visible catalogue, interpreting SQL wildcards literally."""
     search = q.strip()
@@ -209,11 +210,32 @@ async def search_media_files(
         visible_media_filter(library_id),
         MediaFile.file_name.icontains(search, autoescape=True),
     )
+    if after_id is not None and sort == "relevance":
+        raise HTTPException(status_code=422, detail="Relevance sorting uses skip pagination")
     if after_id is not None:
         if skip:
             raise HTTPException(status_code=422, detail="Use either skip or after_id")
         query = query.where(MediaFile.id > after_id)
-    result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
+    if sort == "relevance":
+        # Rank across the whole catalogue before limiting suggestions, not within
+        # an arbitrary first page. Prefer title prefixes, then word boundaries.
+        relevance = case(
+            (MediaFile.file_name.istartswith(search, autoescape=True), 0),
+            (
+                or_(
+                    *(
+                        MediaFile.file_name.icontains(f"{separator}{search}", autoescape=True)
+                        for separator in (" ", ".", "_", "-")
+                    )
+                ),
+                1,
+            ),
+            else_=2,
+        )
+        query = query.order_by(relevance, func.length(MediaFile.file_name), MediaFile.id)
+    else:
+        query = query.order_by(MediaFile.id)
+    result = await session.execute(query.offset(skip).limit(limit))
     return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
 
 

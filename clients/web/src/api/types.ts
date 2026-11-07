@@ -3659,6 +3659,7 @@ export interface operations {
                 skip?: number;
                 limit?: number;
                 after_id?: number | null;
+                sort?: "id" | "relevance";
                 api_key?: string | null;
             };
             header?: never;

@@ -523,6 +523,8 @@
         "unavailable": "Le serveur est indisponible. Vérifiez votre connexion et réessayez."
     },
     "discovery": {
+        "bestMatches": "Résultats les plus pertinents",
+        "viewAll": "Voir tous les résultats",
         "title": "Rechercher",
         "searchLabel": "Rechercher dans vos bibliothèques",
         "placeholder": "Rechercher parmi tous vos films…",

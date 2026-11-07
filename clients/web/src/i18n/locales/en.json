@@ -523,6 +523,8 @@
         "unavailable": "The server could not be reached. Check your connection and try again."
     },
     "discovery": {
+        "bestMatches": "Best matches",
+        "viewAll": "View all results",
         "title": "Search",
         "searchLabel": "Search your libraries",
         "placeholder": "Search all your films…",

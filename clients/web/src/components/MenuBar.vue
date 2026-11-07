@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { auth, getAccessToken, type Library, libraries as libraryApi } from "@/api/client";
+import InlineSearch from "@/components/InlineSearch.vue";
 import { useUser } from "@/composables/useUser";
 
 const route = useRoute();
@@ -51,7 +52,7 @@ watch(() => route.fullPath, () => closeMenus());
         <RouterLink v-for="library in libraries" :key="library.id" :to="`/library/${library.id}`" class="max-w-48 shrink-0 truncate rounded-lg px-3 py-2 text-sm transition-colors" :class="activeLibrary === library.id ? 'bg-white/8 text-white' : 'text-muted hover:text-white'">{{ library.name }}</RouterLink>
       </nav>
       <div class="ml-auto flex shrink-0 items-center gap-3">
-        <RouterLink to="/search" class="flex size-10 items-center justify-center rounded-lg text-muted hover:bg-surface hover:text-white" :class="{'bg-white/8 text-white': route.name === 'search'}" :aria-label="$t('discovery.title')" :title="$t('discovery.title')"><svg aria-hidden="true" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></RouterLink>
+        <InlineSearch />
         <RouterLink v-if="isAdmin" to="/dashboard" class="hidden rounded-lg px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-white lg:block">{{ $t('common.dashboard') }}</RouterLink>
         <details ref="userMenu" class="relative">
           <summary class="flex size-10 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full border border-outline bg-surface text-sm font-semibold text-gray-200 hover:border-primary-400 [&::-webkit-details-marker]:hidden" :aria-label="$t('common.userMenu')">

@@ -205,3 +205,23 @@ async def test_concurrent_watchlist_adds_are_successful_and_unique(tmp_path):
             assert await session.scalar(select(func.count()).select_from(WatchlistEntry)) == 0
     finally:
         await engine.dispose()
+
+
+async def test_relevance_orders_before_limit_and_paginates_stably(client, db_session, test_library, auth_headers):
+    names = ["Animatrix.mkv", "The Matrix Revolutions.mkv", "Matrix Reloaded.mkv", "Matrix.mkv"]
+    films = [await add_media(db_session, f"{test_library.path}/{name}") for name in names]
+    await db_session.commit()
+    ordered = []
+    for skip in (0, 2):
+        response = await client.get(
+            "/api/v1/media-files/search",
+            params={"q": "mAtRiX", "sort": "relevance", "limit": 2, "skip": skip},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        ordered.extend(item["id"] for item in response.json())
+    assert ordered == [films[3].id, films[2].id, films[1].id, films[0].id]
+    invalid = await client.get(
+        "/api/v1/media-files/search", params={"q": "matrix", "sort": "relevance", "after_id": 1}, headers=auth_headers
+    )
+    assert invalid.status_code == 422

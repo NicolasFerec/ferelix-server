@@ -1001,6 +1001,20 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "relevance"
+              ],
+              "type": "string",
+              "default": "id",
+              "title": "Sort"
+            }
+          },
+          {
             "name": "api_key",
             "in": "query",
             "required": false,

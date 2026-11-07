@@ -364,7 +364,7 @@ export const media = {
     async search(q: string, skip = 0, limit = 49, signal?: AbortSignal): Promise<MediaCardInfo[]> {
         const { data, error } = await client.GET("/api/v1/media-files/search", {
             signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
-            params: { query: { q, skip, limit } },
+            params: { query: { q, skip, limit, sort: "relevance" } },
         });
         if (error || !data) throw new Error("Failed to search media");
         return data;

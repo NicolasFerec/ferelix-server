@@ -128,6 +128,8 @@ async def update_current_user(
             setattr(current_user, field, getattr(user_update, field))
     if user_update.subtitle_mode is not None:
         current_user.subtitle_mode = user_update.subtitle_mode
+    if user_update.autoplay_next_episode is not None:
+        current_user.autoplay_next_episode = user_update.autoplay_next_episode
 
     await commit_account_changes(session)
     await session.refresh(current_user)

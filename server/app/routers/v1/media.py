@@ -1,7 +1,6 @@
 """API endpoints for managing media library and files (v1 with authentication)."""
 
 import asyncio
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -39,12 +38,14 @@ from app.services.catalogue import (
     visible_media_filter,
     watchlist_membership,
 )
+from app.services.item_catalogue import enrich_file_cards
 from app.services.library_paths import library_file_filter
 from app.services.media_access import require_owned_playback_session
 from app.services.playback_preferences import resolve_playback_tracks
 from app.services.playback_session import ClientContext, PlaybackSessionService
 from app.services.stream_builder import StreamBuilder
 from app.services.thumbnails import generate_video_thumbnail
+from app.services.viewing import apply_file_progress_patch, set_file_watch_state
 from app.services.watchlist import add_to_watchlist, remove_from_watchlist
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
@@ -170,7 +171,9 @@ async def get_library_items(
             raise HTTPException(status_code=422, detail="Use either skip or after_id")
         query = query.where(MediaFile.id > after_id)
     result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
-    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    return await enrich_file_cards(
+        session, user.id, [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    )
 
 
 @router.get("/media-files", response_model=list[MediaCardSchema])
@@ -188,7 +191,9 @@ async def get_media_files(
             raise HTTPException(status_code=422, detail="Use either skip or after_id")
         query = query.where(MediaFile.id > after_id)
     result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
-    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    return await enrich_file_cards(
+        session, user.id, [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    )
 
 
 @router.get("/media-files/search", response_model=list[MediaCardSchema])
@@ -236,7 +241,9 @@ async def search_media_files(
     else:
         query = query.order_by(MediaFile.id)
     result = await session.execute(query.offset(skip).limit(limit))
-    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    return await enrich_file_cards(
+        session, user.id, [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    )
 
 
 @router.get("/users/me/watchlist", response_model=list[MediaCardSchema])
@@ -254,7 +261,9 @@ async def get_watchlist(
             raise HTTPException(status_code=422, detail="Use either skip or after_id")
         query = query.where(MediaFile.id > after_id)
     result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
-    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    return await enrich_file_cards(
+        session, user.id, [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    )
 
 
 @router.put("/users/me/watchlist/{media_id}", response_model=WatchlistState)
@@ -284,24 +293,19 @@ async def get_continue_watching_media_files(
     limit: Annotated[int, Query(ge=1, le=100)] = 24,
 ) -> list[MediaCardSchema]:
     """Get in-progress cards, filtering completed items before applying the limit."""
-    duration = func.coalesce(func.nullif(MediaView.duration_seconds, 0), MediaFile.duration)
     result = await session.execute(
         media_card_query(user.id)
         .where(
-            MediaFile.deleted_at.is_(None),
-            MediaView.watched.is_(False),
+            visible_media_filter(),
+            MediaView.resume_active.is_(True),
             MediaView.position_seconds > 10,
-            or_(
-                duration.is_(None),
-                duration <= 0,
-                (MediaView.position_seconds < duration * 0.9)
-                & ((duration < 120) | (duration - MediaView.position_seconds > 60)),
-            ),
         )
         .order_by(MediaView.last_viewed_at.desc(), MediaFile.id)
         .limit(limit)
     )
-    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    return await enrich_file_cards(
+        session, user.id, [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+    )
 
 
 # Media item endpoints (authenticated users)
@@ -345,6 +349,7 @@ async def get_media_file(
     view = await get_user_media_view(session, user.id, media_id)
     schema = media_file_with_user_view(media_file, view)
     schema.in_watchlist = bool(media_result and media_result[1])
+    await enrich_file_cards(session, user.id, [schema])
     return schema
 
 
@@ -371,26 +376,12 @@ async def update_media_view(
 ) -> MediaView:
     """Update the current user's saved watch state for a media file."""
     await require_media_file(session, media_id)
-    now = datetime.now(UTC).replace(tzinfo=None)
-    view = await get_user_media_view(session, user.id, media_id)
-    if not view:
-        view = MediaView(user_id=user.id, media_file_id=media_id)
-        session.add(view)
-        await session.flush()
-
-    view.position_seconds = max(payload.position_seconds, 0.0)
-    view.duration_seconds = payload.duration_seconds
-    view.last_viewed_at = now
-
     if payload.watched is not None:
-        view.watched = payload.watched
-    elif is_media_watched(view.position_seconds, payload.duration_seconds):
-        view.watched = True
-
-    if view.watched:
-        view.completed_at = view.completed_at or now
+        view = await set_file_watch_state(session, user.id, media_id, payload.watched)
     else:
-        view.completed_at = None
+        view = await apply_file_progress_patch(
+            session, user.id, media_id, payload.position_seconds, payload.duration_seconds
+        )
 
     await session.commit()
     await session.refresh(view)
@@ -603,21 +594,8 @@ def media_file_with_user_view(media_file: MediaFile, view: MediaView | None) -> 
     return schema
 
 
-def is_media_watched(position_seconds: float, duration_seconds: float | None) -> bool:
-    if not duration_seconds or duration_seconds <= 0:
-        return False
-    if position_seconds >= duration_seconds * 0.9:
-        return True
-    return duration_seconds >= 120 and duration_seconds - position_seconds <= 60
-
-
 def is_media_in_progress(view: MediaView, media_duration: float | None) -> bool:
-    duration = view.duration_seconds or media_duration
-    if view.watched or view.position_seconds <= 10:
-        return False
-    if not duration or duration <= 0:
-        return True
-    return not is_media_watched(view.position_seconds, duration)
+    return view.resume_active and view.position_seconds > 10
 
 
 @router.post("/start-stream/{media_id}")

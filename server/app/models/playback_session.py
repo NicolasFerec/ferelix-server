@@ -27,6 +27,8 @@ class PlaybackSession(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
     media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id", ondelete="CASCADE"), index=True)
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id", ondelete="SET NULL"), index=True)
+    state_revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     transcoding_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     playback_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     media_token_hash: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -56,6 +58,8 @@ class PlaybackSessionCreate(BaseModel):
     """Payload used by the player to create a playback session."""
 
     media_file_id: int
+    item_id: int | None = None
+    continuation_from_item_id: int | None = None
     duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     video_stream_index: int | None = None
     audio_stream_index: int | None = None
@@ -88,6 +92,8 @@ class PlaybackSessionSchema(BaseModel):
     playback_generation: int = 0
     user_id: int
     media_file_id: int
+    item_id: int | None = None
+    state_revision: int = 0
     transcoding_job_id: str | None = None
     play_method: str
     transcoding_type: str | None = None

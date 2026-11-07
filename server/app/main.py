@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import async_session_maker
 from app.dependencies import set_scheduler
-from app.routers.v1 import auth, dashboard, media, streaming, users
+from app.routers.v1 import auth, dashboard, items, media, metadata, metadata_associations, streaming, users, viewing
 from app.services.jobs import init_job_tracking
 from app.services.logging_config import configure_logging, protect_access_logs
 from app.services.settings import cleanup_stalled_jobs_job, get_or_create_settings, initialize_scheduler_jobs
@@ -103,6 +103,10 @@ app.include_router(users.router)
 app.include_router(media.router)
 app.include_router(streaming.router)
 app.include_router(dashboard.router)
+app.include_router(viewing.router)
+app.include_router(items.router)
+app.include_router(metadata.router)
+app.include_router(metadata_associations.router)
 
 
 @app.get("/health")

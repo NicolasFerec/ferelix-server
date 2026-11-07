@@ -314,6 +314,7 @@ class TestMediaViews:
             position_seconds=1200,
             duration_seconds=7200,
             watched=False,
+            resume_active=True,
             play_count=1,
         )
         db_session.add(view)

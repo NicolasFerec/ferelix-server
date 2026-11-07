@@ -118,6 +118,9 @@ async def create_library(
         path=library_data.path,
         library_type=library_data.library_type,
         enabled=library_data.enabled,
+        metadata_locale=library_data.metadata_locale,
+        metadata_profile=library_data.metadata_profile,
+        metadata_export_nfo=library_data.metadata_export_nfo,
     )
     session.add(library_path)
     await session.commit()
@@ -219,9 +222,22 @@ async def update_library(
     if update_data.enabled is not None:
         library_path.enabled = update_data.enabled
 
+    metadata_changed = False
+    for field in ("metadata_locale", "metadata_profile", "metadata_export_nfo"):
+        value = getattr(update_data, field)
+        if value is not None and value != getattr(library_path, field):
+            setattr(library_path, field, value)
+            metadata_changed = True
+
     session.add(library_path)
     await session.commit()
     await session.refresh(library_path)
+
+    if metadata_changed:
+        from app.services.item_catalogue import refresh_library_metadata
+
+        await refresh_library_metadata(session, library_path)
+        await session.commit()
 
     # Trigger scan if path was changed
     if path_changed:
@@ -1720,6 +1736,11 @@ async def update_settings(
                 detail="Hardware transcoding device cannot be empty",
             )
         settings.hardware_transcoding_device = update_data.hardware_transcoding_device.strip()
+
+    if update_data.watched_threshold_percent is not None:
+        settings.watched_threshold_percent = update_data.watched_threshold_percent
+    if update_data.next_up_retention_days is not None:
+        settings.next_up_retention_days = update_data.next_up_retention_days
 
     session.add(settings)
     await session.commit()

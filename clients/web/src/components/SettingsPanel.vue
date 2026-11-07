@@ -27,6 +27,8 @@ const formData = ref({
   cleanup_schedule_minute: 0,
   cleanup_grace_period_days: 30,
   hardware_transcoding_device: "auto",
+  watched_threshold_percent:90,
+  next_up_retention_days:90,
 });
 
 const hasChanges = computed(() => {
@@ -38,7 +40,9 @@ const hasChanges = computed(() => {
     formData.value.cleanup_schedule_hour !== originalSettings.value.cleanup_schedule_hour ||
     formData.value.cleanup_schedule_minute !== originalSettings.value.cleanup_schedule_minute ||
     formData.value.cleanup_grace_period_days !== originalSettings.value.cleanup_grace_period_days ||
-    formData.value.hardware_transcoding_device !== originalSettings.value.hardware_transcoding_device
+    formData.value.hardware_transcoding_device !== originalSettings.value.hardware_transcoding_device ||
+    formData.value.watched_threshold_percent !== originalSettings.value.watched_threshold_percent ||
+    formData.value.next_up_retention_days !== originalSettings.value.next_up_retention_days
   );
 });
 
@@ -87,6 +91,8 @@ async function loadSettings() {
       cleanup_schedule_minute: settings.cleanup_schedule_minute,
       cleanup_grace_period_days: settings.cleanup_grace_period_days,
       hardware_transcoding_device: settings.hardware_transcoding_device,
+      watched_threshold_percent:settings.watched_threshold_percent,
+      next_up_retention_days:settings.next_up_retention_days,
     };
   } catch (err) {
     console.error("Failed to load settings:", err);
@@ -141,6 +147,8 @@ async function saveSettings() {
       updateData.hardware_transcoding_device = formData.value.hardware_transcoding_device;
     }
 
+    if(formData.value.watched_threshold_percent!==originalSettings.value.watched_threshold_percent) updateData.watched_threshold_percent=formData.value.watched_threshold_percent;
+    if(formData.value.next_up_retention_days!==originalSettings.value.next_up_retention_days) updateData.next_up_retention_days=formData.value.next_up_retention_days;
     const updatedSettings = await settingsApi.updateSettings(updateData);
     originalSettings.value = { ...updatedSettings };
     formData.value.hardware_transcoding_device = updatedSettings.hardware_transcoding_device;
@@ -284,6 +292,12 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <section class="surface-panel space-y-5 p-5 sm:p-6">
+        <h3 class="text-xl font-semibold">{{ $t('items.viewingSettings') }}</h3>
+        <div class="space-y-2"><label for="watched-threshold" class="field-label">{{ $t('items.watchedThreshold') }}</label><input id="watched-threshold" v-model.number="formData.watched_threshold_percent" type="number" min="1" max="100" class="field-input max-w-36" :disabled="saving" /><p class="text-xs leading-5 text-muted">{{ $t('items.watchedThresholdHelp') }}</p></div>
+        <div class="space-y-2"><label for="next-up-retention" class="field-label">{{ $t('items.retention') }}</label><input id="next-up-retention" v-model.number="formData.next_up_retention_days" type="number" min="0" max="36500" class="field-input max-w-36" :disabled="saving" /><p class="text-xs leading-5 text-muted">{{ $t('items.retentionHelp') }}</p></div>
+      </section>
 
       <!-- Hardware Transcoding Settings -->
       <div class="surface-panel p-5 sm:p-6">

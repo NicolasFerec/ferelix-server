@@ -84,6 +84,7 @@ VOLUME /config
 
 # Set default environment variables
 ENV DATABASE_URL=sqlite+aiosqlite:////config/ferelix.db \
+    FERELIX_METADATA_DIR=/config/metadata \
     PUID=1000 \
     PGID=1000
 

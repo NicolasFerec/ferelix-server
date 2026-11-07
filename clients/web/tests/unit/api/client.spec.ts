@@ -200,4 +200,16 @@ describe("authentication retries", () => {
         await failed;
         expect(fetch).toHaveBeenCalledOnce();
     });
+    it("dispatches authenticated session shutdown immediately with keepalive for document teardown", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+        const { playbackSessions } = await import("@/api/client");
+        const pending = playbackSessions.endKeepalive("session-id");
+        expect(fetch).toHaveBeenCalledExactlyOnceWith("/api/v1/playback-sessions/session-id", {
+            method: "DELETE",
+            keepalive: true,
+            credentials: "same-origin",
+            headers: { Authorization: "Bearer expired" },
+        });
+        await pending;
+    });
 });

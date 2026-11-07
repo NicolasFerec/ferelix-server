@@ -2,8 +2,8 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
-import { type HomepageRow, type Library, libraries, type MediaCardInfo } from "@/api/client";
-import MediaCard from "@/components/MediaCard.vue";
+import { type ItemCard as Card, type HomepageRow, items as itemApi, type Library, libraries } from "@/api/client";
+import ItemCard from "@/components/ItemCard.vue";
 import MediaRow from "@/components/MediaRow.vue";
 import MenuBar from "@/components/MenuBar.vue";
 
@@ -12,7 +12,7 @@ const route = useRoute();
 const pageSize = 48;
 const library = ref<Library | null>(null);
 const rows = ref<HomepageRow[]>([]);
-const items = ref<MediaCardInfo[]>([]);
+const items = ref<Card[]>([]);
 const loading = ref(true);
 const error = ref("");
 const hasNext = ref(false);
@@ -47,7 +47,7 @@ watch(() => [libraryId.value, activeTab.value, page.value, revision.value], asyn
       rows.value = response;
     } else {
       // One look-ahead card tells us whether another page exists; no full-library crawl.
-      const response = await libraries.getLibraryItems(libraryId.value, (page.value - 1) * pageSize, pageSize + 1, controller.signal);
+      const response = await itemApi.list({library_id:libraryId.value,kind:library.value.library_type === "movie" ? "movie" : "series",skip:(page.value-1)*pageSize,limit:pageSize+1},controller.signal);
       controller.signal.throwIfAborted();
       hasNext.value = response.length > pageSize;
       items.value = response.slice(0, pageSize);
@@ -81,7 +81,7 @@ watch(() => [libraryId.value, activeTab.value, page.value, revision.value], asyn
       <template v-else>
         <p class="mb-5 text-sm text-muted" role="status">{{ $t('library.pageInfo', { page, count: items.length }) }}</p>
         <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-          <MediaCard v-for="item in items" :key="item.id" :media-file="item" :source-library-id="libraryId" />
+          <ItemCard v-for="item in items" :key="item.id" :item="item" :return-to="route.fullPath" @changed="revision++" />
         </div>
         <p v-else class="empty-state">{{ $t('home.noItems') }}</p>
         <nav v-if="page > 1 || hasNext" class="mt-10 flex items-center justify-between gap-4" :aria-label="$t('library.pagination')">

@@ -73,3 +73,7 @@ app/static/
 .github_token
 version.json
 transcode_cache/
+
+# Persistent editorial artwork (back up with the database)
+/server/metadata/
+/metadata/

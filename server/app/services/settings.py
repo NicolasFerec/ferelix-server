@@ -6,6 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Settings
+from app.services.metadata_jobs import metadata_tick
 from app.services.scanner import cleanup_deleted_media, scan_all_libraries
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,15 @@ def initialize_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -
         scheduler: APScheduler instance
         settings: Settings instance
     """
+    scheduler.add_job(
+        metadata_tick,
+        "interval",
+        seconds=15,
+        id="metadata_catalogue",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     # Schedule periodic library scans
     scheduler.add_job(
         scan_all_libraries_job,

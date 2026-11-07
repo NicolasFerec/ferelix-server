@@ -1,0 +1,33 @@
+--- a/server/app/services/continuation.py
++++ b/server/app/services/continuation.py
+@@ -378,6 +378,15 @@
+     days = settings.next_up_retention_days if settings else 90
+     candidates = []
+     by_id = {item.id: item for item in items}
++    roots_by_id = {root.id: root for root in roots}
++    children_by_root: dict[int, list[MediaItem]] = {root.id: [] for root in roots}
++    # Group once instead of scanning every episode for every active series.
++    # Deduplicate parent/series IDs: a season belongs to the same root via both.
++    for item in items:
++        for id_ in {item.series_id, item.collection_id, item.parent_id}:
++            root = roots_by_id.get(id_) if id_ is not None else None
++            if root is not None and item.metadata_library_id == root.metadata_library_id:
++                children_by_root[root.id].append(item)
+     resume_ids = {choice.item_id for choice in await resume_choices(session, user_id, limit=None)}
+     resuming_roots = {
+         id_
+@@ -389,13 +398,7 @@
+     for root in roots:
+         if root.id in resuming_roots:
+             continue
+-        children = [
+-            item
+-            for item in items
+-            if (item.series_id == root.id or item.collection_id == root.id or item.parent_id == root.id)
+-            and item.metadata_library_id == root.metadata_library_id
+-        ]
+-        choice = choose_logical_target(root, children, watched, root, "continue")
++        choice = choose_logical_target(root, children_by_root[root.id], watched, root, "continue")
+         selected = by_id.get(choice.item_id) if choice.item_id is not None else None
+         if selected is None:
+             continue

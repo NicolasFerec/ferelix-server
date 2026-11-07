@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { type PlayerProps, usePlayerPlayback } from "@/composables/usePlayerPlayback";
+import { type PlaybackRestoreState, type PlayerProps, usePlayerPlayback } from "@/composables/usePlayerPlayback";
 import PlayerInfoPanel from "./PlayerInfoPanel.vue";
 import PlayerControls from "./player/PlayerControls.vue";
 import PlayerStatusOverlays from "./player/PlayerStatusOverlays.vue";
 
 const props = defineProps<PlayerProps>();
-defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; ended: []; activity: []; restore: [state: PlaybackRestoreState] }>();
 const { t } = useI18n();
 const videoElement = ref<HTMLVideoElement | null>(null);
-const volume = ref(1);
-const isMuted = ref(false);
-const { togglePlay, canRetry, videoSrc, currentJobId, isPlaying, currentTime, duration, isLoading, loadingMessage, errorMessage, audioTracks, subtitleTracks, progressPercent, displayCurrentTime, bufferedPercentages, selectedResolutionLabel, playbackInfo, mediaInfo, codecInfo, transcodeReasons, selectedAudioTrack, selectedSubtitleTrack, selectedResolution, availableResolutions, isHlsPlayback, initializePlayback, applyInitialTrackSelection, selectAudioTrack, selectSubtitleTrack, selectResolution, seek, absolutePosition, onLoadedMetadata, onTimeUpdate, onProgress, onPlay, onPause, onError, onCanPlay, onWaiting, onPlaying } = usePlayerPlayback(props, videoElement, volume, isMuted, showControls);
+const volume = ref(props.restoreState?.volume ?? 1);
+const isMuted = ref(props.restoreState?.muted ?? false);
+const { togglePlay, canRetry, videoSrc, currentJobId, isPlaying, currentTime, duration, isLoading, loadingMessage, errorMessage, audioTracks, subtitleTracks, progressPercent, displayCurrentTime, bufferedPercentages, selectedResolutionLabel, playbackInfo, mediaInfo, codecInfo, transcodeReasons, selectedAudioTrack, selectedSubtitleTrack, selectedResolution, availableResolutions, isHlsPlayback, initializePlayback, applyInitialTrackSelection, selectAudioTrack, selectSubtitleTrack, selectResolution, seek, absolutePosition, onLoadedMetadata, onTimeUpdate, onProgress, onPlay, onEnded, onPause, onError, onCanPlay, onWaiting, onPlaying } = usePlayerPlayback(props, videoElement, volume, isMuted, showControls, { onSuspend: suspendControls, onRestore: state => emit("restore", state) });
 const controlsVisible = ref(true);
 
 const controlsTimeout = ref<ReturnType<typeof setTimeout> | null>(null);
@@ -36,7 +36,7 @@ const hoverPercent = computed(() => {
 
 onMounted(async () => {
   const savedVolume = localStorage.getItem("videoPlayerVolume");
-  if (savedVolume !== null) {
+  if (savedVolume !== null && props.restoreState?.volume === undefined) {
     const parsed = Number.parseFloat(savedVolume);
     if (Number.isFinite(parsed)) volume.value = Math.max(0, Math.min(1, parsed));
   }
@@ -154,10 +154,23 @@ function setupKeyboardShortcuts() {
   window.addEventListener("keydown", handleKeyDown);
 }
 
+function suspendControls() {
+  if (controlsTimeout.value) clearTimeout(controlsTimeout.value);
+  closeAllMenus();
+  playbackActivity();
+}
+let activityRevision = 0;
+function playbackActivity() { activityRevision++; emit("activity"); }
+async function handleEnded() {
+  const revision = activityRevision;
+  if (await onEnded() && revision === activityRevision) emit("ended");
+}
+
 function handleKeyDown(e: KeyboardEvent) {
   if (!videoElement.value) return;
   if (e.target instanceof Element && e.target.closest("button, input, select, textarea, [contenteditable=true]")) return;
 
+  if ([" ", "ArrowLeft", "ArrowRight"].includes(e.key)) playbackActivity();
   switch (e.key) {
     case " ":
       e.preventDefault();
@@ -243,10 +256,12 @@ function toggleInfoPanel() {
       @loadedmetadata="onLoadedMetadata"
       @timeupdate="onTimeUpdate"
       @progress="onProgress"
-      @play="onPlay"
+      @play="playbackActivity(); onPlay()"
+      @seeking="playbackActivity()"
+      @ended="handleEnded"
       @pause="onPause"
       @volumechange="onVolumeChange"
-      @error="onError"
+      @error="playbackActivity(); onError($event)"
       @canplay="onCanPlay"
       @waiting="onWaiting"
       @playing="onPlaying"
@@ -257,7 +272,7 @@ function toggleInfoPanel() {
       :is-loading="isLoading"
       :loading-message="loadingMessage"
       :error-message="errorMessage"
-      @retry="initializePlayback"
+      @retry="playbackActivity(); initializePlayback()"
       @close="$emit('close')"
     />
 
@@ -283,18 +298,18 @@ function toggleInfoPanel() {
       :show-audio-menu="showAudioMenu"
       :show-subtitle-menu="showSubtitleMenu"
       :show-resolution-menu="showResolutionMenu"
-      @toggle-play="togglePlay"
-      @seek="seek"
+      @toggle-play="playbackActivity(); togglePlay()"
+      @seek="playbackActivity(); seek($event)"
       @progress-hover="hoverTime = $event"
       @clear-hover="hoverTime = null"
       @set-volume="setVolume"
       @toggle-mute="toggleMute"
       @toggle-audio-menu="toggleAudioMenu"
-      @select-audio-track="showAudioMenu = false; selectAudioTrack($event)"
+      @select-audio-track="playbackActivity(); showAudioMenu = false; selectAudioTrack($event)"
       @toggle-subtitle-menu="toggleSubtitleMenu"
-      @select-subtitle-track="showSubtitleMenu = false; selectSubtitleTrack($event)"
+      @select-subtitle-track="playbackActivity(); showSubtitleMenu = false; selectSubtitleTrack($event)"
       @toggle-resolution-menu="toggleResolutionMenu"
-      @select-resolution="showResolutionMenu = false; selectResolution($event)"
+      @select-resolution="playbackActivity(); showResolutionMenu = false; selectResolution($event)"
       @toggle-info-panel="toggleInfoPanel"
       @toggle-fullscreen="toggleFullscreen"
       @close="$emit('close')"

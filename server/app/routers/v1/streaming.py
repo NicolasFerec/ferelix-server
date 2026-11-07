@@ -17,7 +17,6 @@ from app.database import get_session
 from app.dependencies import get_current_active_user
 from app.models import (
     MediaFile,
-    MediaView,
     PlaybackSession,
     PlaybackSessionCreate,
     PlaybackSessionHeartbeat,
@@ -29,6 +28,7 @@ from app.models import (
     User,
 )
 from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
+from app.services.continuation import resolve_continuation
 from app.services.media_access import get_playback_media_session, issue_media_token, require_owned_playback_session
 from app.services.playback_session import ClientContext, HlsStartOptions, PlaybackSessionService
 from app.services.streaming_io import (
@@ -44,6 +44,7 @@ from app.services.streaming_io import (
     wait_for_segment,
 )
 from app.services.transcoder import TEXT_SUBTITLE_CODECS, get_transcoder
+from app.services.viewing import record_playback_progress, record_playback_started
 
 router = APIRouter(prefix="/api/v1", tags=["streaming"])
 
@@ -127,6 +128,17 @@ async def create_playback_session(
     if not media_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
+    if payload.continuation_from_item_id is not None:
+        following = await resolve_continuation(
+            session, user.id, payload.continuation_from_item_id, "next", check_files=True
+        )
+        if (
+            following.status != "ready"
+            or following.item_id != payload.item_id
+            or following.media_file_id != payload.media_file_id
+        ):
+            raise HTTPException(status_code=409, detail="The next item or its availability changed")
+
     token, token_hash = issue_media_token()
     playback_session = PlaybackSession(
         user_id=user.id,
@@ -141,7 +153,7 @@ async def create_playback_session(
         user_agent=request.headers.get("user-agent"),
     )
     session.add(playback_session)
-    await record_media_view_started(session, user.id, payload.media_file_id, payload.duration_seconds)
+    await record_playback_started(session, playback_session, payload.item_id)
     await session.commit()
     await session.refresh(playback_session)
     return PlaybackSessionSchema.model_validate(playback_session).model_copy(update={"media_access_token": token})
@@ -224,13 +236,7 @@ async def heartbeat_playback_session(
         if touched_id is None:
             await session.rollback()
             raise HTTPException(status_code=410, detail="Transcoding job has stopped")
-    await record_media_view_progress(
-        session,
-        user.id,
-        playback_session.media_file_id,
-        playback_session.position_seconds,
-        playback_session.duration_seconds,
-    )
+    await record_playback_progress(session, playback_session)
 
     await session.commit()
     await session.refresh(playback_session)
@@ -252,13 +258,7 @@ async def end_playback_session(
     if playback_session.status == PlaybackSessionStatus.ACTIVE:
         playback_session.status = PlaybackSessionStatus.ENDED
         playback_session.ended_at = datetime.now(UTC).replace(tzinfo=None)
-        await record_media_view_progress(
-            session,
-            user.id,
-            playback_session.media_file_id,
-            playback_session.position_seconds,
-            playback_session.duration_seconds,
-        )
+        await record_playback_progress(session, playback_session)
         await session.commit()
 
     # Stop every timeline belonging to this viewer, including a job whose start
@@ -279,66 +279,6 @@ async def end_playback_session(
     for job_id in job_ids.all():
         if not await transcoder.stop_job(job_id):
             raise HTTPException(status_code=503, detail="Playback ended but its encoder could not be stopped yet")
-
-
-async def record_media_view_started(
-    session: AsyncSession,
-    user_id: int,
-    media_file_id: int,
-    duration_seconds: float | None,
-) -> MediaView:
-    """Create or update watch state when playback starts."""
-    view = await get_or_create_media_view(session, user_id, media_file_id)
-    view.play_count += 1
-    if duration_seconds is not None:
-        view.duration_seconds = duration_seconds
-    view.last_viewed_at = datetime.now(UTC).replace(tzinfo=None)
-    return view
-
-
-async def record_media_view_progress(
-    session: AsyncSession,
-    user_id: int,
-    media_file_id: int,
-    position_seconds: float,
-    duration_seconds: float | None,
-) -> MediaView:
-    """Persist a user's latest watch position."""
-    now = datetime.now(UTC).replace(tzinfo=None)
-    view = await get_or_create_media_view(session, user_id, media_file_id)
-    view.position_seconds = max(position_seconds, 0.0)
-    view.duration_seconds = duration_seconds
-    view.last_viewed_at = now
-
-    if is_media_watched(view.position_seconds, duration_seconds):
-        view.watched = True
-        view.completed_at = view.completed_at or now
-
-    return view
-
-
-async def get_or_create_media_view(session: AsyncSession, user_id: int, media_file_id: int) -> MediaView:
-    view = await session.scalar(
-        select(MediaView).where(
-            MediaView.user_id == user_id,
-            MediaView.media_file_id == media_file_id,
-        )
-    )
-    if view:
-        return view
-
-    view = MediaView(user_id=user_id, media_file_id=media_file_id)
-    session.add(view)
-    await session.flush()
-    return view
-
-
-def is_media_watched(position_seconds: float, duration_seconds: float | None) -> bool:
-    if not duration_seconds or duration_seconds <= 0:
-        return False
-    if position_seconds >= duration_seconds * 0.9:
-        return True
-    return duration_seconds >= 120 and duration_seconds - position_seconds <= 60
 
 
 @router.get("/stream/{media_id}")

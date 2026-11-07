@@ -98,6 +98,7 @@ For detailed setup instructions, configuration, and development guidelines, refe
 
 - Server setup: [server/README.md](./server/README.md)
 - Web setup: [clients/web/README.md](./clients/web/README.md)
+- Metadata providers, local storage and viewing continuity: [docs/metadata-and-viewing.md](./docs/metadata-and-viewing.md)
 
 ## License
 

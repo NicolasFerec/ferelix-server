@@ -1,0 +1,82 @@
+{
+  "dataset": {
+    "series": 100,
+    "episodes_per_series": 24,
+    "movies": 1000
+  },
+  "iterations": 20,
+  "warmups_per_operation": 1,
+  "p95_method": "nearest_rank",
+  "notes": [
+    "Current implementation only; not a historical before/after comparison.",
+    "http_* includes ASGI, authentication and response serialization; other samples are service calls.",
+    "Legacy with/without metadata isolates current enrichment overhead on identical fixtures.",
+    "Temporary SQLite database; synthetic paths; no FFmpeg, networking, scans or production database."
+  ],
+  "measurements": {
+    "http_resume_50": {
+      "p50_ms": 26.402,
+      "p95_ms": 35.935,
+      "sql_count_min": 7,
+      "sql_count_max": 7,
+      "returned_rows": 50,
+      "cpu_ms_total": 542.037
+    },
+    "http_next_up_50": {
+      "p50_ms": 218.623,
+      "p95_ms": 313.716,
+      "sql_count_min": 15,
+      "sql_count_max": 15,
+      "returned_rows": 50,
+      "cpu_ms_total": 4549.699
+    },
+    "http_heartbeat": {
+      "p50_ms": 5.938,
+      "p95_ms": 7.972,
+      "sql_count_min": 9,
+      "sql_count_max": 9,
+      "returned_rows": 1,
+      "cpu_ms_total": 122.145
+    },
+    "item_cards_1": {
+      "p50_ms": 4.976,
+      "p95_ms": 7.435,
+      "sql_count_min": 4,
+      "sql_count_max": 4,
+      "returned_rows": 1,
+      "cpu_ms_total": 104.186
+    },
+    "item_cards_50": {
+      "p50_ms": 6.039,
+      "p95_ms": 10.731,
+      "sql_count_min": 4,
+      "sql_count_max": 4,
+      "returned_rows": 50,
+      "cpu_ms_total": 140.705
+    },
+    "http_list_items_50": {
+      "p50_ms": 12.353,
+      "p95_ms": 19.539,
+      "sql_count_min": 6,
+      "sql_count_max": 6,
+      "returned_rows": 50,
+      "cpu_ms_total": 258.161
+    },
+    "legacy_cards_50_without_metadata": {
+      "p50_ms": 1.524,
+      "p95_ms": 1.928,
+      "sql_count_min": 1,
+      "sql_count_max": 1,
+      "returned_rows": 50,
+      "cpu_ms_total": 31.275
+    },
+    "legacy_cards_50_with_metadata": {
+      "p50_ms": 3.64,
+      "p95_ms": 5.694,
+      "sql_count_min": 2,
+      "sql_count_max": 2,
+      "returned_rows": 50,
+      "cpu_ms_total": 75.168
+    }
+  }
+}

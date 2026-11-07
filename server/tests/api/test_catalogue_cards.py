@@ -60,7 +60,7 @@ async def test_homepage_batches_rows_and_current_user_progress(
         rows = await get_homepage_rows(test_user, db_session)
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", record)
-    assert len(statements) == 2
+    assert len(statements) == 3  # Rows, batched file cards, then one batched editorial projection.
     assert len(rows) == 10
     assert [card.id for card in rows[0].items] == [file.id for file in files[:3]]
     assert rows[0].items[0].user_view is not None
@@ -91,6 +91,7 @@ async def test_recommendation_rows_have_default_and_maximum_limits(
 async def test_continue_watching_filters_completion_before_limit(
     db_session: AsyncSession,
     test_user: User,
+    test_library: Library,
 ) -> None:
     files = await seed_media(db_session, 10)
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -99,6 +100,8 @@ async def test_continue_watching_filters_completion_before_limit(
             user_id=test_user.id,
             media_file_id=file.id,
             position_seconds=950 if index < 9 else 100,
+            watched=index < 9,
+            resume_active=index == 9,
             last_viewed_at=now - timedelta(minutes=index),
         )
         for index, file in enumerate(files)

@@ -92,4 +92,7 @@ async def recommendation_cards(
     cards: dict[int, list[MediaCardSchema]] = {row.id: [] for row, _library in rows}
     for media_file, view, in_watchlist, row_id in result:
         cards[row_id].append(media_card(media_file, view, in_watchlist))
+    from app.services.item_catalogue import enrich_file_cards
+
+    await enrich_file_cards(session, user_id, [card for group in cards.values() for card in group])
     return cards

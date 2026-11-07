@@ -33,7 +33,7 @@ watch(() => props.items, async () => { await nextTick(); updateArrows(); });
       </div>
     </div>
     <div ref="scroller" class="ferelix-hide-scrollbar -mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-3 pt-1" @scroll.passive="updateArrows">
-      <div v-for="item in items" :key="item.id" class="w-[220px] shrink-0 snap-start sm:w-[270px]"><MediaCard :media-file="item" :source-library-id="sourceLibraryId" /></div>
+      <div v-for="item in items" :key="item.id" class="w-[150px] shrink-0 snap-start sm:w-[180px]"><MediaCard :media-file="item" :source-library-id="sourceLibraryId" /></div>
       <p v-if="!items.length" class="empty-state w-full">{{ $t('home.noItems') }}</p>
     </div>
   </section>

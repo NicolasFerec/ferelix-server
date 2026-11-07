@@ -6,6 +6,7 @@ import { auth, clearTokens, getAccessToken, type User } from "@/api/client";
 import PasswordField from "@/components/auth/PasswordField.vue";
 import ImageUploadEditor from "@/components/ImageUploadEditor.vue";
 import MenuBar from "@/components/MenuBar.vue";
+import PlaybackPreferencesForm from "@/components/PlaybackPreferencesForm.vue";
 import { useToast } from "@/composables/useToast";
 import { useUser } from "@/composables/useUser";
 
@@ -102,6 +103,8 @@ onMounted(load);
           <div class="space-y-2"><label for="language" class="field-label">{{ $t('settings.language') }}</label><select id="language" v-model="form.language" name="language" autocomplete="language" class="field-input"><option value="en">English</option><option value="fr">Français</option></select></div>
           <button type="submit" :disabled="submitting" class="button-primary w-full">{{ submitting ? $t('common.loading') : $t('common.save') }}</button>
         </form>
+        <div class="space-y-8">
+        <PlaybackPreferencesForm v-if="user" :user="user" @saved="updateUser" />
         <form class="surface-panel space-y-6 p-6 sm:p-8" :aria-busy="changingPassword" @submit.prevent="changePassword">
           <div><h2 class="text-xl font-semibold">{{ $t('auth.security') }}</h2><p class="mt-2 text-sm leading-6 text-muted">{{ $t('auth.securityDescription') }}</p></div>
           <p v-if="passwordError" role="alert" class="form-error">{{ passwordError }}</p>
@@ -110,6 +113,7 @@ onMounted(load);
           <PasswordField id="confirm-password" v-model="passwordForm.confirm" :label="$t('settings.confirmPassword')" autocomplete="new-password" required />
           <button type="submit" :disabled="changingPassword" class="button-secondary w-full">{{ changingPassword ? $t('common.loading') : $t('auth.changePassword') }}</button>
         </form>
+        </div>
       </div>
     </main>
   </div>

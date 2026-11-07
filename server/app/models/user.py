@@ -18,6 +18,14 @@ class UserRole(StrEnum):
     ADMIN = "admin"
 
 
+class SubtitleMode(StrEnum):
+    """Initial subtitle selection; explicit playback choices always take priority."""
+
+    OFF = "off"
+    FORCED = "forced"
+    ALWAYS = "always"
+
+
 class User(Base):
     """User accounts with authentication credentials."""
 
@@ -39,6 +47,9 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     language: Mapped[str] = mapped_column(String, default="en")
+    preferred_audio_language: Mapped[str | None] = mapped_column(String, nullable=True)
+    preferred_subtitle_language: Mapped[str | None] = mapped_column(String, nullable=True)
+    subtitle_mode: Mapped[str] = mapped_column(String, default=SubtitleMode.OFF, server_default="off")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
@@ -81,6 +92,9 @@ class UserSchema(BaseModel):
     is_admin: bool
     is_active: bool
     language: str
+    preferred_audio_language: str | None = None
+    preferred_subtitle_language: str | None = None
+    subtitle_mode: SubtitleMode = SubtitleMode.OFF
     created_at: datetime
     updated_at: datetime
 
@@ -112,6 +126,18 @@ class UserUpdate(BaseModel):
     language: str | None = None
     is_admin: bool | None = None
     is_active: bool | None = None
+    preferred_audio_language: str | None = Field(
+        default=None, pattern=r"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$", max_length=35
+    )
+    preferred_subtitle_language: str | None = Field(
+        default=None, pattern=r"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$", max_length=35
+    )
+    subtitle_mode: SubtitleMode | None = None
+
+    @field_validator("preferred_audio_language", "preferred_subtitle_language", mode="before")
+    @classmethod
+    def normalize_preference_language(cls, value: str | None) -> str | None:
+        return value.strip().lower().replace("_", "-") or None if isinstance(value, str) else value
 
     @field_validator("username", mode="before")
     @classmethod

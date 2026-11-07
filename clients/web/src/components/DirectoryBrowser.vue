@@ -177,7 +177,7 @@ onMounted(() => {
           v-model="currentPath"
           type="text"
           @keyup.enter="navigateToPath"
-          class="flex-1 px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 text-sm"
+          class="flex-1 px-3 py-2 bg-surface-raised text-white rounded-md text-sm"
           :placeholder="$t('libraries.enterPath')"
         />
       </div>

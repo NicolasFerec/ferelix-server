@@ -183,7 +183,7 @@ onMounted(async () => {
               id="row-library" v-model="form.library_id"
               required
               :disabled="!!row || !!libraryId"
-              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">{{ $t('common.select') }}</option>
               <option v-for="lib in libraries" :key="lib.id" :value="lib.id">
@@ -201,7 +201,7 @@ onMounted(async () => {
               id="row-name" v-model="form.name"
               type="text"
               required
-              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md"
               :placeholder="$t('recommendationRows.namePlaceholder')"
             />
           </div>
@@ -223,7 +223,7 @@ onMounted(async () => {
               id="row-filterCriteria" v-model="filterCriteriaJson"
               :disabled="row?.is_special"
               rows="6"
-              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               :placeholder="$t('recommendationRows.filterCriteriaPlaceholder')"
             ></textarea>
             <p v-if="row?.is_special" class="mt-1 text-xs text-yellow-400">

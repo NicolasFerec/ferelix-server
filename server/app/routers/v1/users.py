@@ -123,6 +123,12 @@ async def update_current_user(
     if user_update.language is not None:
         current_user.language = user_update.language
 
+    for field in ("preferred_audio_language", "preferred_subtitle_language"):
+        if field in user_update.model_fields_set:
+            setattr(current_user, field, getattr(user_update, field))
+    if user_update.subtitle_mode is not None:
+        current_user.subtitle_mode = user_update.subtitle_mode
+
     await commit_account_changes(session)
     await session.refresh(current_user)
 

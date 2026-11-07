@@ -247,9 +247,7 @@
         "loadingMediaFiles": "Chargement des fichiers multimédias...",
         "loadFailed": "Échec du chargement de la bibliothèque. Veuillez réessayer.",
         "noRows": "Aucune ligne disponible. Configurez les listes de lecture pour afficher le contenu.",
-        "continueWatching": "Continuer de regarder",
-        "inYourLibrary": "Dans votre bibliothèque",
-        "details": "Voir les détails"
+        "continueWatching": "Continuer de regarder"
     },
     "recommendationRows": {
         "title": "Lignes de recommandation",
@@ -523,5 +521,43 @@
         "securityDescription": "Changer votre mot de passe vous déconnecte de tous vos appareils.",
         "passwordChangeFailed": "Impossible de modifier le mot de passe. Vérifiez le mot de passe actuel et réessayez.",
         "unavailable": "Le serveur est indisponible. Vérifiez votre connexion et réessayez."
+    },
+    "discovery": {
+        "bestMatches": "Résultats les plus pertinents",
+        "viewAll": "Voir tous les résultats",
+        "title": "Rechercher",
+        "searchLabel": "Rechercher dans vos bibliothèques",
+        "placeholder": "Rechercher parmi tous vos films…",
+        "action": "Rechercher",
+        "prompt": "Retrouvez un titre dans toutes vos bibliothèques.",
+        "empty": "Aucun titre trouvé pour « {query} ».",
+        "searchFailed": "La recherche est indisponible. Veuillez réessayer."
+    },
+    "watchlist": {
+        "title": "Ma liste",
+        "description": "Les films que vous souhaitez voir, enregistrés pour votre compte.",
+        "add": "Ajouter à ma liste",
+        "remove": "Retirer de ma liste",
+        "empty": "Votre liste est vide. Ajoutez des films depuis leur fiche pour les retrouver ici.",
+        "browse": "Parcourir mes bibliothèques",
+        "viewAll": "Voir ma liste",
+        "loadFailed": "Impossible de charger votre liste. Veuillez réessayer.",
+        "updateFailed": "La modification n’a pas été confirmée. Veuillez réessayer."
+    },
+    "preferences": {
+        "title": "Préférences de lecture",
+        "description": "Appliquées automatiquement au lancement d’un film. Vous pouvez toujours choisir une autre piste dans le lecteur.",
+        "audioLanguage": "Langue audio",
+        "subtitleLanguage": "Langue des sous-titres",
+        "subtitleMode": "Sous-titres",
+        "defaultTrack": "Piste par défaut",
+        "off": "Désactivés",
+        "forced": "Forcés uniquement",
+        "always": "Toujours si disponibles",
+        "forcedHelp": "Les sous-titres forcés traduisent généralement les dialogues étrangers ou les panneaux. Ils doivent être identifiés comme forcés dans le fichier.",
+        "fallback": "Si la langue choisie est absente, la piste par défaut est utilisée. Les changements s’appliquent à votre prochaine lecture.",
+        "saved": "Préférences de lecture enregistrées.",
+        "saveFailed": "Impossible d’enregistrer les préférences. Veuillez réessayer.",
+        "auto": "Automatique · mes préférences"
     }
 }

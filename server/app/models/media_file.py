@@ -73,6 +73,7 @@ class MediaCardSchema(BaseModel):
     bitrate: int | None = None
     created_at: datetime
     user_view: MediaViewSchema | None = None
+    in_watchlist: bool = False
 
 
 class MediaFileSchema(BaseModel):
@@ -98,6 +99,7 @@ class MediaFileSchema(BaseModel):
     scan_error: str | None = None
     deleted_at: datetime | None = None
     user_view: MediaViewSchema | None = None
+    in_watchlist: bool = False
     video_tracks: list[VideoTrackSchema] = []
     audio_tracks: list[AudioTrackSchema] = []
     subtitle_tracks: list[SubtitleTrackSchema] = []

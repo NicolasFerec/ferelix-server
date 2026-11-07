@@ -136,7 +136,7 @@
         @apply block text-sm font-medium text-gray-200;
     }
     .field-input {
-        @apply w-full rounded-xl border border-outline bg-background px-4 py-3 text-base text-white transition-colors placeholder:text-gray-500 focus:border-primary-400 focus:outline-2 focus:outline-primary-400/30;
+        @apply w-full rounded-xl border border-outline bg-background px-4 py-3 text-base text-white transition-colors placeholder:text-gray-500;
     }
     .button-primary {
         @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50;
@@ -149,6 +149,36 @@
     }
     .empty-state {
         @apply rounded-2xl border border-dashed border-outline px-6 py-14 text-center text-muted;
+    }
+}
+
+/* Keep field focus inside the control, including fields without .field-input. */
+:where(
+    input:not(
+        [type="checkbox"],
+        [type="radio"],
+        [type="range"],
+        [type="file"],
+        [type="hidden"],
+        [type="button"],
+        [type="submit"],
+        [type="reset"],
+        [type="image"],
+        [type="color"]
+    ),
+    textarea,
+    select
+) {
+    /* A transparent inset outline preserves focus in forced-colors mode. */
+    outline: 0 solid transparent;
+    outline-offset: -2px;
+    /* Never animate an outline from the browser's default white currentColor. */
+    transition-property: border-color, background-color, color;
+
+    &:focus {
+        outline-width: 2px;
+        border-color: var(--color-primary-400);
+        box-shadow: inset 0 0 0 1px var(--color-primary-400);
     }
 }
 

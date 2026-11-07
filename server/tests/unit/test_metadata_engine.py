@@ -299,6 +299,105 @@ async def test_incomplete_remote_season_fails_instead_of_claiming_complete():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["movie", "series"])
+@pytest.mark.parametrize("source", ["filename", "nfo"])
+async def test_explicit_imdb_identifies_correct_work_despite_conflicting_title(
+    db_session, tmp_path, monkeypatch, kind, source
+):
+    identifier = "tt0133093"
+    provenance = {"source": "filename", "path": "Completely unrelated title [imdb-tt0133093].mkv"}
+    item = await make_item(
+        db_session,
+        kind=kind,
+        provider_ids={"imdb": identifier} if source == "filename" else {},
+        provenance={"provider_ids": provenance} if source == "filename" else {},
+    )
+    path = tmp_path / "Completely unrelated title.mkv" if kind == "movie" else tmp_path
+    nfo = path.with_suffix(".nfo") if kind == "movie" else tmp_path / "tvshow.nfo"
+    if source == "nfo":
+        nfo.write_text(f'<movie><uniqueid type="imdb">{identifier}</uniqueid></movie>')
+    result_key = "movie_results" if kind == "movie" else "tv_results"
+    request = AsyncMock(
+        side_effect=[
+            {result_key: [{"id": 123}]},
+            {"id": 123, "title" if kind == "movie" else "name": "Correct work", "seasons": []},
+        ]
+    )
+    monkeypatch.setattr(TMDB, "get", request)
+    search = AsyncMock(side_effect=AssertionError("Explicit IMDb identity must never fall back to a title search"))
+    monkeypatch.setattr(TMDB, "search", search)
+    result = await enrichment._fetch(item, None, path, CachedHTTP())
+    search.assert_not_awaited()
+    assert request.await_args_list[0].args == (f"find/{identifier}",)
+    assert request.await_args_list[0].kwargs == {"external_source": "imdb_id", "language": "fr-FR"}
+    assert request.await_args_list[1].args == ("movie/123" if kind == "movie" else "tv/123",)
+    assert result.fields["provider_ids"] == {"tmdb": "123", "imdb": identifier}
+    assert result.fields["title"] == "Correct work"
+    assert result.provenance["provider_ids"]["resolved_from"]["id"] == identifier
+    if source == "filename":
+        assert result.provenance["provider_ids"]["resolved_from"]["provenance"] == provenance
+    else:
+        assert result.provenance["provider_ids"]["source"] == "nfo"
+        assert result.provenance["provider_ids"]["path"] == str(nfo)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "results",
+    [
+        {"movie_results": []},
+        {"movie_results": [{"id": 123}, {"id": 456}]},
+        {"movie_results": [], "tv_results": [{"id": 123}]},
+        {"movie_results": [{"id": 0}]},
+    ],
+)
+async def test_unresolved_imdb_requires_identification_without_title_fallback(db_session, monkeypatch, results):
+    item = await make_item(db_session, provider_ids={"imdb": "tt0133093"})
+    await enqueue_metadata(db_session, item)
+    await db_session.commit()
+    monkeypatch.setattr(TMDB, "get", AsyncMock(return_value=results))
+    search = AsyncMock(side_effect=AssertionError("No title fallback is allowed"))
+    fetch = AsyncMock(side_effect=AssertionError("Unresolved identity must not download another work"))
+    monkeypatch.setattr(TMDB, "search", search)
+    monkeypatch.setattr(TMDB, "fetch", fetch)
+    factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    assert await process_metadata_jobs(session_factory=factory) == 0
+    search.assert_not_awaited()
+    fetch.assert_not_awaited()
+    await db_session.refresh(item)
+    assert item.metadata_status == "needs_identification" and item.title == "Original"
+    assert item.provider_ids == {"imdb": "tt0133093"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("identifier", ["", "../movie/123", "nm0000001"])
+async def test_invalid_explicit_imdb_never_falls_back_to_title(db_session, monkeypatch, identifier):
+    item = await make_item(db_session, provider_ids={"imdb": identifier})
+    request = AsyncMock(side_effect=AssertionError("Invalid identifiers must not make a provider request"))
+    monkeypatch.setattr(TMDB, "get", request)
+    with pytest.raises(IdentificationRequired):
+        await enrichment._fetch_remote(item, None, dict(item.provider_ids), CachedHTTP(), [])
+    request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_imdb_resolution_rejects_conflicting_detail_identity(db_session, monkeypatch):
+    item = await make_item(db_session, provider_ids={"imdb": "tt0133093"})
+    monkeypatch.setattr(
+        TMDB,
+        "get",
+        AsyncMock(
+            side_effect=[
+                {"movie_results": [{"id": 123}]},
+                {"id": 123, "title": "Wrong identity", "external_ids": {"imdb_id": "tt9999999"}},
+            ]
+        ),
+    )
+    with pytest.raises(IdentificationRequired, match="contradicts"):
+        await enrichment._fetch_remote(item, None, dict(item.provider_ids), CachedHTTP(), [])
+
+
+@pytest.mark.asyncio
 async def test_collection_import_keeps_existing_movie_and_creates_missing_parts(db_session, monkeypatch):
     item = await make_item(db_session, provider_ids={"tmdb": "10"})
     await enqueue_metadata(db_session, item)

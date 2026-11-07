@@ -73,6 +73,19 @@ class TMDB:
             )
         return results
 
+    async def find_imdb(self, identifier: str, kind: str, locale: str) -> str:
+        """Resolve a supplied IMDb title ID without weakening it into a title search."""
+        if kind not in {"movie", "series"} or not re.fullmatch(r"tt[0-9]+", identifier):
+            raise IdentificationRequired("A valid IMDb title identifier is required")
+        data = await self.get(f"find/{identifier}", external_source="imdb_id", language=locale)
+        matches = data.get("movie_results" if kind == "movie" else "tv_results")
+        if not isinstance(matches, list) or len(matches) != 1 or not isinstance(matches[0], dict):
+            raise IdentificationRequired("The IMDb identifier does not resolve to exactly one work of this type")
+        try:
+            return positive_id(str(matches[0].get("id", "")))
+        except ValueError as error:
+            raise IdentificationRequired("TMDB returned an invalid identity for this IMDb identifier") from error
+
     async def fetch(self, identifier: str, kind: str, locale: str) -> MetadataProposal:
         identifier = positive_id(identifier)
         if kind == "collection":

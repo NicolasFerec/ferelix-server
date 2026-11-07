@@ -44,8 +44,12 @@ async def _fetch(
             return local
         raise
     if local:
+        identifiers = {**remote.fields.get("provider_ids", {}), **local.fields.get("provider_ids", {})}
+        identity_provenance = {**remote.provenance.get("provider_ids", {}), **local.provenance.get("provider_ids", {})}
         remote.fields.update(local.fields)
         remote.provenance.update(local.provenance)
+        remote.fields["provider_ids"] = identifiers
+        remote.provenance["provider_ids"] = identity_provenance
         remote.artwork.update(local.artwork)
         remote.locked_fields = local.locked_fields
     _overlay_child_nfos(remote, child_files or {}, item.metadata_locale)
@@ -73,10 +77,25 @@ async def _fetch_remote(
             _confirm_anidb_entry_order(remote, absolute_numbers)
         return remote
     tmdb = TMDB(http)
+    imdb_lookup = ids.get("imdb") if "tmdb" not in ids else None
     if "tmdb" not in ids:
-        match = select_match(await tmdb.search(item.title, item.kind, item.metadata_locale), item.title, year)
-        ids["tmdb"] = match.provider_id
+        if imdb_lookup is not None:
+            ids["tmdb"] = await tmdb.find_imdb(imdb_lookup, item.kind, item.metadata_locale)
+        else:
+            match = select_match(await tmdb.search(item.title, item.kind, item.metadata_locale), item.title, year)
+            ids["tmdb"] = match.provider_id
     remote = await tmdb.fetch(ids["tmdb"], item.kind, item.metadata_locale)
+    if imdb_lookup is not None:
+        identifiers = remote.fields.setdefault("provider_ids", {})
+        if identifiers.get("imdb", imdb_lookup) != imdb_lookup:
+            raise IdentificationRequired("The retrieved work contradicts the supplied IMDb identifier")
+        identifiers["imdb"] = imdb_lookup
+        remote.provenance.setdefault("provider_ids", {})["resolved_from"] = {
+            "provider": "imdb",
+            "id": imdb_lookup,
+            "source": "tmdb/find",
+            "provenance": (item.provenance or {}).get("provider_ids", {}),
+        }
     if anime_profile:
         await _enrich_anime(item, ids, remote, http, absolute_numbers)
     return remote

@@ -23,12 +23,14 @@ const durationLabel = computed(() => {
 
 <template>
   <RouterLink :to="destination" class="media-card group block min-w-0 rounded-xl" :aria-label="displayInfo.title">
-    <div class="relative aspect-video overflow-hidden rounded-xl border border-white/5 bg-surface transition-[border-color,transform] duration-200 group-hover:-translate-y-1 group-hover:border-primary-400/60 group-focus-visible:border-primary-300">
+    <div class="relative aspect-video overflow-hidden rounded-xl border border-white/5 bg-surface transition-colors duration-200 group-hover:border-primary-400/60 group-focus-visible:border-primary-300">
       <img v-if="!thumbnailFailed" :src="media.getThumbnailUrl(mediaFile.id)" alt="" width="480" height="270" class="size-full object-cover" loading="lazy" decoding="async" @error="thumbnailFailed = true" />
       <div v-else class="flex size-full items-center justify-center bg-linear-to-br from-gray-800 to-background px-6 text-center text-sm font-medium text-muted">{{ displayInfo.title }}</div>
       <div class="pointer-events-none absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"></div>
       <span class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden="true">
-        <span class="flex size-11 items-center justify-center rounded-full bg-white/95 text-background shadow-lg">▶</span>
+        <span class="flex size-11 items-center justify-center rounded-full bg-white/95 text-background shadow-lg">
+          <svg class="size-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 5v14l11-7z" /></svg>
+        </span>
       </span>
       <span v-if="mediaFile.user_view?.watched" class="absolute right-2 top-2 rounded-md bg-black/75 px-2 py-1 text-[11px] text-gray-100">{{ $t('mediaDetail.watched') }}</span>
       <div v-if="progress > 0" class="absolute inset-x-0 bottom-0 h-1 bg-black/50"><div class="h-full bg-primary-400" :style="{ width: `${progress}%` }"></div></div>

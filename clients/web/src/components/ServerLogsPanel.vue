@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
   <div class="server-logs-panel flex h-full min-h-[calc(100vh-137px)] flex-col">
     <div class="mb-4 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h2 class="text-2xl font-semibold text-white">{{ $t("logs.title") }}</h2>
+        <h2 class="page-heading">{{ $t("logs.title") }}</h2>
         <p class="mt-1 text-sm text-gray-400">{{ $t("logs.subtitle") }}</p>
         <p v-if="logPath" class="mt-2 font-mono text-xs text-gray-500">{{ logPath }}</p>
       </div>
@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
         <input
           v-model="searchQuery"
           type="search"
-          class="w-full rounded-md border border-gray-600 bg-gray-800 py-2 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-primary-500 focus:outline-none"
+          class="w-full rounded-md border border-gray-600 bg-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-primary-500 focus:outline-none"
           :placeholder="$t('logs.search')"
         />
       </label>
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
       <div>
         <select
           v-model="selectedRange"
-          class="rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+          class="rounded-md border border-gray-600 bg-surface px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
           @change="loadLogs"
         >
           <option v-for="option in rangeOptions" :key="option.value" :value="option.value">
@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
         <button
           ref="levelTriggerRef"
           type="button"
-          class="flex min-w-56 cursor-pointer list-none items-center justify-between gap-3 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-600"
+          class="flex min-w-56 cursor-pointer list-none items-center justify-between gap-3 rounded-md border border-outline bg-surface px-3 py-2 text-sm text-white hover:border-gray-600"
           :aria-expanded="isLevelDropdownOpen"
           @click="toggleLevelDropdown"
           @keydown="onLevelTriggerKeydown"
@@ -404,17 +404,17 @@ onBeforeUnmount(() => {
           >⌄</span>
         </button>
         <Teleport to="body">
-          <div
+          <fieldset
             v-if="isLevelDropdownOpen"
-            ref="levelMenuRef"
-            class="fixed z-[1000] w-64 overflow-x-hidden overflow-y-auto rounded-md border border-gray-700 bg-gray-800 p-2 shadow-xl"
+            ref="levelMenuRef" :aria-label="$t('logs.levels')"
+            class="fixed z-[1000] w-64 overflow-x-hidden overflow-y-auto rounded-md border border-outline bg-surface p-2 shadow-xl"
             :style="levelMenuStyle"
             @keydown.esc.stop.prevent="closeLevelDropdown"
           >
-            <div class="mb-2 border-b border-gray-700 pb-2">
+            <div class="mb-2 border-b border-outline pb-2">
               <button
                 type="button"
-                class="rounded px-2 py-1 text-xs font-medium text-primary-200 hover:bg-gray-700 hover:text-white"
+                class="rounded px-2 py-1 text-xs font-medium text-primary-200 hover:bg-surface-raised hover:text-white"
                 @click="toggleAllLevels"
               >
                 {{ areAllLevelsSelected ? $t("logs.clearAll") : $t("logs.selectAll") }}
@@ -423,17 +423,17 @@ onBeforeUnmount(() => {
             <label
               v-for="level in levelOptions"
               :key="level"
-              class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+              class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-200 hover:bg-surface-raised"
             >
               <input
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                class="h-4 w-4 rounded border-gray-600 bg-background text-primary-600 focus:ring-primary-500"
                 :checked="selectedLevels.includes(level)"
                 @change="toggleLevel(level)"
               />
               <span>{{ level }}</span>
             </label>
-          </div>
+          </fieldset>
         </Teleport>
       </div>
 
@@ -441,7 +441,7 @@ onBeforeUnmount(() => {
         <button
           ref="channelTriggerRef"
           type="button"
-          class="flex min-w-64 cursor-pointer list-none items-center justify-between gap-3 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white hover:border-gray-600"
+          class="flex min-w-64 cursor-pointer list-none items-center justify-between gap-3 rounded-md border border-outline bg-surface px-3 py-2 text-sm text-white hover:border-gray-600"
           :aria-expanded="isChannelDropdownOpen"
           @click="toggleChannelDropdown"
           @keydown="onChannelTriggerKeydown"
@@ -456,17 +456,17 @@ onBeforeUnmount(() => {
           >⌄</span>
         </button>
         <Teleport to="body">
-          <div
+          <fieldset
             v-if="isChannelDropdownOpen"
-            ref="channelMenuRef"
-            class="fixed z-[1000] w-72 overflow-x-hidden overflow-y-auto rounded-md border border-gray-700 bg-gray-800 p-2 shadow-xl"
+            ref="channelMenuRef" :aria-label="$t('logs.channels')"
+            class="fixed z-[1000] w-72 overflow-x-hidden overflow-y-auto rounded-md border border-outline bg-surface p-2 shadow-xl"
             :style="channelMenuStyle"
             @keydown.esc.stop.prevent="closeChannelDropdown"
           >
-            <div class="mb-2 border-b border-gray-700 pb-2">
+            <div class="mb-2 border-b border-outline pb-2">
               <button
                 type="button"
-                class="rounded px-2 py-1 text-xs font-medium text-primary-200 hover:bg-gray-700 hover:text-white"
+                class="rounded px-2 py-1 text-xs font-medium text-primary-200 hover:bg-surface-raised hover:text-white"
                 @click="toggleAllChannels"
               >
                 {{ areAllChannelsSelected ? $t("logs.clearAll") : $t("logs.selectAll") }}
@@ -475,24 +475,24 @@ onBeforeUnmount(() => {
             <label
               v-for="channel in channelOptions"
               :key="channel"
-              class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-200 hover:bg-gray-700"
+              class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-200 hover:bg-surface-raised"
             >
               <input
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                class="h-4 w-4 rounded border-gray-600 bg-background text-primary-600 focus:ring-primary-500"
                 :checked="selectedChannels.includes(channel)"
                 @change="toggleChannel(channel)"
               />
               <span>{{ $t(`logs.channelNames.${channel}`) }}</span>
             </label>
-          </div>
+          </fieldset>
         </Teleport>
       </div>
     </div>
 
     <div
       ref="logViewport"
-      class="min-h-0 flex-1 overflow-auto rounded-md border border-gray-700 bg-black px-4 py-3 font-mono text-xs leading-5 text-gray-200"
+      class="min-h-0 flex-1 overflow-auto rounded-md border border-outline bg-black px-4 py-3 font-mono text-xs leading-5 text-gray-200"
     >
       <div v-if="lines.length === 0" class="py-12 text-center font-sans text-sm text-gray-500">
         {{ loading ? $t("common.loading") : $t("logs.empty") }}
@@ -536,7 +536,7 @@ onBeforeUnmount(() => {
     <label class="mt-2 flex w-max items-center gap-2 text-sm text-gray-400">
       <input
         type="checkbox"
-        class="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+        class="h-4 w-4 rounded border-gray-600 bg-background text-primary-600 focus:ring-primary-500"
         :checked="autoscroll"
         @change="setAutoscroll(($event.target as HTMLInputElement).checked)"
       />

@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,9 +23,14 @@ router = APIRouter(prefix="/api/v1/setup", tags=["setup"])
 class AdminSetupRequest(BaseModel):
     """Request schema for first-run admin setup."""
 
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=255)
+    password: str = Field(min_length=1, max_length=1024)
     language: str = "en"
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def strip_username(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
 
 
 class TokenResponse(BaseModel):
@@ -100,8 +105,8 @@ async def create_first_admin(
     await session.flush()
 
     # Create tokens
-    access_token = create_access_token(data={"sub": str(admin_user.id)})
-    refresh_token_str = create_refresh_token(data={"sub": str(admin_user.id)})
+    access_token = create_access_token(data={"sub": str(admin_user.id), "cv": admin_user.credentials_version})
+    refresh_token_str = create_refresh_token(data={"sub": str(admin_user.id), "cv": admin_user.credentials_version})
 
     # Store refresh token in database
     refresh_token = RefreshToken(

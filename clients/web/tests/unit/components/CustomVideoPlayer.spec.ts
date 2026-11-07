@@ -51,6 +51,13 @@ vi.mock("@/composables/useDeviceProfile", () => ({
 }));
 vi.mock("@/api/client", () => ({
     getAccessToken: vi.fn(() => "token"),
+    mediaSessionUrl: (value: string, access: { sessionId: string; token: string }) => {
+        const url = new URL(value, window.location.origin);
+        url.searchParams.delete("api_key");
+        url.searchParams.set("session_id", access.sessionId);
+        url.searchParams.set("media_token", access.token);
+        return `${url.pathname}${url.search}`;
+    },
     media: {
         getPlaybackInfo: vi.fn(),
         startRemux: vi.fn(),
@@ -96,7 +103,10 @@ beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "WEBVTT\n" }));
     URL.createObjectURL = vi.fn(() => "blob:subtitle");
     URL.revokeObjectURL = vi.fn();
-    vi.mocked(playbackSessions.create).mockResolvedValue({ id: "session" } as never);
+    vi.mocked(playbackSessions.create).mockResolvedValue({
+        id: "session",
+        media_access_token: "playback-grant",
+    } as never);
     vi.mocked(playbackSessions.heartbeat).mockResolvedValue({ kicked: false } as never);
     vi.mocked(playbackSessions.end).mockResolvedValue();
     vi.mocked(media.stopHls).mockResolvedValue();
@@ -120,11 +130,17 @@ afterEach(async () => {
     vi.useRealTimers();
 });
 
-async function openPlayer(extra = {}, initialAudioStreamIndex?: number, realOverlays = false) {
+async function openPlayer(
+    extra = {},
+    initialAudioStreamIndex?: number,
+    realOverlays = false,
+    initialVideoStreamIndex?: number,
+) {
     wrapper = mount(CustomVideoPlayer, {
         props: {
             mediaFile: { id: 1, duration: 3600, audio_tracks: audio, subtitle_tracks: [imageSubtitle], ...extra },
             initialAudioStreamIndex,
+            initialVideoStreamIndex,
         },
         global: { stubs: { PlayerControls: true, PlayerInfoPanel: true, PlayerStatusOverlays: !realOverlays } },
     });
@@ -199,14 +215,16 @@ it("serializes rapid audio changes and only attaches the latest stream", async (
     expect(hlsPlayers.some((hls) => hls.source.includes("stale-job"))).toBe(false);
 });
 
-it("uses the refreshed access token for HLS URLs containing an expired token", async () => {
+it("uses the playback grant for HLS even when the API access token has expired", async () => {
     await openPlayer();
     vi.mocked(getAccessToken).mockReturnValue("refreshed-token");
     const xhr = { open: vi.fn() };
     hlsPlayers[0].config.xhrSetup(xhr as unknown as XMLHttpRequest, "/hls/job-1/segment.ts?api_key=expired-token");
     expect(xhr.open).toHaveBeenCalledOnce();
-    const requestUrl = new URL(xhr.open.mock.calls[0][1]);
-    expect(requestUrl.searchParams.getAll("api_key")).toEqual(["refreshed-token"]);
+    const requestUrl = new URL(xhr.open.mock.calls[0][1], window.location.origin);
+    expect(requestUrl.searchParams.has("api_key")).toBe(false);
+    expect(requestUrl.searchParams.get("media_token")).toBe("playback-grant");
+    expect(requestUrl.searchParams.get("session_id")).toBe("session");
     xhr.open.mockClear();
     hlsPlayers[0].config.xhrSetup(xhr as unknown as XMLHttpRequest, "https://other.invalid/segment.ts");
     expect(xhr.open).not.toHaveBeenCalled();
@@ -438,4 +456,131 @@ it("allows closing the player from a fatal error overlay", async () => {
     expect(closeButton).toBeDefined();
     await closeButton?.trigger("click");
     expect(player.emitted("close")).toHaveLength(1);
+});
+
+it("propagates the selected video and monotone generation through negotiation, start and heartbeat", async () => {
+    const player = await openPlayer(
+        { video_tracks: [{ stream_index: 0, is_default: true }, { stream_index: 5 }] },
+        undefined,
+        false,
+        5,
+    );
+    expect(playbackSessions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ videoStreamIndex: 5 }),
+        expect.any(AbortSignal),
+    );
+    expect(media.getPlaybackInfo).toHaveBeenLastCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ videoStreamIndex: 5, enableDirectPlay: false, playbackGeneration: 1 }),
+    );
+    expect(media.startRemux).toHaveBeenLastCalledWith(
+        1,
+        expect.objectContaining({ videoStreamIndex: 5, playbackGeneration: 1, sessionId: "session" }),
+    );
+    expect(playbackSessions.heartbeat).toHaveBeenLastCalledWith(
+        "session",
+        expect.objectContaining({ videoStreamIndex: 5, playbackGeneration: 1 }),
+    );
+    player.findComponent(PlayerControls).vm.$emit("select-audio-track", audio[1]);
+    await flushPromises();
+    expect(media.startRemux).toHaveBeenLastCalledWith(
+        1,
+        expect.objectContaining({ videoStreamIndex: 5, playbackGeneration: 2 }),
+    );
+    expect(playbackSessions.heartbeat).toHaveBeenLastCalledWith(
+        "session",
+        expect.objectContaining({ playbackGeneration: 2 }),
+    );
+});
+
+it("closes the session and suppresses retries after an unknown start outcome", async () => {
+    vi.mocked(media.startRemux).mockRejectedValue(new TypeError("Network lost after send"));
+    const player = await openPlayer({}, undefined, true);
+    expect(playbackSessions.end).toHaveBeenCalledWith("session", expect.any(AbortSignal));
+    expect(media.startRemux).toHaveBeenCalledOnce();
+    expect(player.findComponent(PlayerStatusOverlays).props("canRetry")).toBe(false);
+    expect(player.findComponent(PlayerStatusOverlays).props("errorMessage")).toBe("player.sessionUnknown");
+});
+
+it("honors Pause clicked while a quality replacement is still starting", async () => {
+    const player = await openPlayer();
+    await player.find("video").trigger("play");
+    let complete: (job: never) => void = () => {};
+    vi.mocked(media.startTranscode).mockReturnValueOnce(
+        new Promise((resolve) => {
+            complete = resolve;
+        }),
+    );
+    vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+        MediaSources: [{ ...remuxSource, IsRemuxOnly: false, TranscodingType: "full", PlayMethod: "Transcode" }],
+    } as never);
+    const controls = player.findComponent(PlayerControls);
+    controls.vm.$emit("select-resolution", smaller);
+    await flushPromises();
+    expect(controls.props("isPlaying")).toBe(true);
+    controls.vm.$emit("toggle-play");
+    await flushPromises();
+    expect(controls.props("isPlaying")).toBe(false);
+    const job = { id: "replacement", status: "running", start_time: 0 };
+    jobs.set(job.id, job);
+    vi.mocked(HTMLMediaElement.prototype.play).mockClear();
+    complete(job as never);
+    await flushPromises();
+    hlsPlayers.at(-1)?.listeners.get("buffer")?.();
+    await flushPromises();
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(controls.props("isPlaying")).toBe(false);
+});
+
+it.each(["hls", "direct"])("offers Play after %s autoplay is denied and retries on user action", async (method) => {
+    if (method === "direct")
+        vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+            MediaSources: [{ PlayMethod: "DirectPlay", DirectStreamUrl: "/direct" }],
+        } as never);
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(
+        new DOMException("User gesture required", "NotAllowedError"),
+    );
+    const player = await openPlayer();
+    if (method === "hls") hlsPlayers.at(-1)?.listeners.get("buffer")?.();
+    else await player.find("video").trigger("canplay");
+    await flushPromises();
+    const controls = player.findComponent(PlayerControls);
+    expect(controls.props("isPlaying")).toBe(false);
+    controls.vm.$emit("toggle-play");
+    await flushPromises();
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
+    expect(controls.props("isPlaying")).toBe(true);
+});
+
+it.each([
+    ["hls", "AbortError"],
+    ["direct", "AbortError"],
+    ["hls", "NotAllowedError"],
+    ["direct", "NotAllowedError"],
+])("ignores an old %s play rejection (%s) after a replacement starts", async (method, errorName) => {
+    if (method === "direct")
+        vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+            MediaSources: [{ PlayMethod: "DirectPlay", DirectStreamUrl: "/direct" }],
+        } as never);
+    let rejectOldPlay: (reason: Error) => void = () => {};
+    vi.mocked(HTMLMediaElement.prototype.play).mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+            rejectOldPlay = reject;
+        }),
+    );
+    const player = await openPlayer();
+    if (method === "hls") hlsPlayers.at(-1)?.listeners.get("buffer")?.();
+    else await player.find("video").trigger("canplay");
+    await flushPromises();
+    vi.mocked(media.getPlaybackInfo).mockResolvedValue({ MediaSources: [remuxSource] } as never);
+    const controls = player.findComponent(PlayerControls);
+    controls.vm.$emit("select-audio-track", audio[1]);
+    await flushPromises();
+    hlsPlayers.at(-1)?.listeners.get("buffer")?.();
+    await flushPromises();
+    rejectOldPlay(new DOMException("Previous source was replaced", errorName));
+    await flushPromises();
+    expect(controls.props("isPlaying")).toBe(true);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
 });

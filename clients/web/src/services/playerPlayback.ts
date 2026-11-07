@@ -1,4 +1,4 @@
-import { media } from "@/api/client";
+import { type MediaAccess, media } from "@/api/client";
 import type { components } from "@/api/types";
 
 export type TranscodingJob = components["schemas"]["TranscodingJobSchema"];
@@ -10,6 +10,7 @@ export interface TranscodeSettings {
     AudioBitrate?: number;
     MaxWidth?: number;
     MaxHeight?: number;
+    MaxFrameRate?: number;
     IsRemuxOnly?: boolean;
 }
 
@@ -60,51 +61,85 @@ export function createPlaybackOperations(lifetime: AbortSignal) {
     };
 }
 
+/** A cancelled POST may have reached the server. Close the session before trying again. */
+export async function playbackMutation<T>(
+    request: (signal: AbortSignal) => Promise<T>,
+    onUnknownOutcome?: () => void,
+    maxWait = 30000,
+): Promise<T> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error("Playback request timed out")), maxWait);
+    try {
+        return await request(controller.signal);
+    } catch (error) {
+        const status = error && typeof error === "object" && "status" in error ? Number(error.status) : undefined;
+        if (controller.signal.aborted || status === undefined || status >= 500) onUnknownOutcome?.();
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
 export async function startPlaybackJob(options: {
     mediaId: number;
     source: StreamSource;
+    videoStreamIndex?: number;
     audioStreamIndex?: number;
     subtitleStreamIndex?: number;
     startTime?: number;
-    sessionId?: string | null;
+    sessionId: string;
+    playbackGeneration: number;
     signal?: AbortSignal;
+    onUnknownOutcome?: () => void;
 }): Promise<TranscodingJob> {
-    const { mediaId, source, audioStreamIndex, subtitleStreamIndex, startTime, sessionId } = options;
     options.signal?.throwIfAborted();
-    let job: TranscodingJob;
+    const {
+        mediaId,
+        source,
+        audioStreamIndex,
+        videoStreamIndex,
+        subtitleStreamIndex,
+        startTime,
+        sessionId,
+        playbackGeneration,
+    } = options;
     const settings = source.TranscodeSettings;
-    const transcodingType = source.TranscodingType || "full";
-
-    if (transcodingType === "remux" || source.IsRemuxOnly) {
-        job = await media.startRemux(mediaId, {
+    const job = await playbackMutation(async (signal) => {
+        const shared = {
             audioStreamIndex,
+            videoStreamIndex,
             startTime: startTime || undefined,
             sessionId,
-        });
-    } else if (transcodingType === "audio-only") {
-        job = await media.startAudioTranscode(mediaId, {
-            audioCodec: settings?.AudioCodec,
-            audioBitrate: settings?.AudioBitrate,
-            audioStreamIndex,
-            startTime: startTime || undefined,
-            sessionId,
-        });
-    } else {
-        job = await media.startTranscode(mediaId, {
+            playbackGeneration,
+            signal,
+        };
+        if (source.TranscodingType === "remux" || source.IsRemuxOnly) return media.startRemux(mediaId, shared);
+        if (source.TranscodingType === "audio-only") {
+            return media.startAudioTranscode(mediaId, {
+                ...shared,
+                audioCodec: settings?.AudioCodec,
+                audioBitrate: settings?.AudioBitrate,
+            });
+        }
+        return media.startTranscode(mediaId, {
+            ...shared,
             videoCodec: settings?.VideoCodec,
             audioCodec: settings?.AudioCodec,
             videoBitrate: settings?.VideoBitrate,
             audioBitrate: settings?.AudioBitrate,
             maxWidth: settings?.MaxWidth,
             maxHeight: settings?.MaxHeight,
-            audioStreamIndex,
+            maxFrameRate: settings?.MaxFrameRate,
             subtitleStreamIndex,
-            startTime: startTime || undefined,
-            sessionId,
         });
-    }
+    }, options.onUnknownOutcome);
     if (options.signal?.aborted) {
-        await media.stopHls(job.id);
+        try {
+            await media.stopHls(job.id);
+        } catch (error) {
+            options.onUnknownOutcome?.();
+            throw error;
+        }
         options.signal.throwIfAborted();
     }
     return job;
@@ -115,6 +150,7 @@ export async function waitForHlsReady(
     onStatus?: (status: TranscodingJob) => void,
     maxWait = 120000,
     signal?: AbortSignal,
+    access?: MediaAccess,
 ): Promise<TranscodingJob> {
     const controller = new AbortController();
     const abort = () => controller.abort(signal?.reason);
@@ -138,7 +174,7 @@ export async function waitForHlsReady(
             }
             if (status.status === "running" || status.status === "completed") {
                 try {
-                    const response = await fetch(media.getHlsPlaylistUrl(jobId), {
+                    const response = await fetch(media.getHlsPlaylistUrl(jobId, access), {
                         method: "HEAD",
                         signal: waitSignal,
                     });

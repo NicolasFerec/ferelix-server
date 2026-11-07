@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from sqlalchemy import Select, asc, desc
+from sqlalchemy import Select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import MediaFile
 from app.services.library_paths import library_file_filter
@@ -134,11 +135,23 @@ def parse_where_clause(where_clause: list[dict[str, Any]]) -> list[Any]:  # ruff
     return filters
 
 
-def apply_filter_criteria(
-    query: Select[MediaFile],
+def recommendation_ordering(filter_criteria: dict[str, Any]) -> list[ColumnElement[Any]]:
+    """Stable order shared by row selection and its window ranking."""
+    ordering: list[ColumnElement[Any]] = []
+    if "order_by" in filter_criteria:
+        field = filter_criteria["order_by"]
+        validate_order_by(field)
+        column = getattr(MediaFile, field)
+        ordering.append(column.desc() if filter_criteria.get("order", "ASC").upper() == "DESC" else column.asc())
+    ordering.append(MediaFile.id.asc())
+    return ordering
+
+
+def apply_filter_criteria[*Ts](
+    query: Select[*Ts],
     filter_criteria: dict[str, Any],
     library_path: str,
-) -> Select[MediaFile]:
+) -> Select[*Ts]:
     """Apply filter criteria to a MediaFile query.
 
     Args:
@@ -169,15 +182,7 @@ def apply_filter_criteria(
         for where_filter in where_filters:
             query = query.where(where_filter)
 
-    # Apply ordering
-    if "order_by" in filter_criteria:
-        order_field = filter_criteria["order_by"]
-        validate_order_by(order_field)
-
-        column = getattr(MediaFile, order_field)
-        order_direction = filter_criteria.get("order", "ASC").upper()
-
-        query = query.order_by(desc(column)) if order_direction == "DESC" else query.order_by(asc(column))
+    query = query.order_by(*recommendation_ordering(filter_criteria))
 
     # Apply limit
     if "limit" in filter_criteria:

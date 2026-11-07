@@ -88,7 +88,7 @@ onMounted(() => {
   <div class="recommendation-row-list">
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-semibold text-white">{{ $t('recommendationRows.title') }}</h2>
-      <button
+      <button type="button"
         @click="
           showForm = true;
           editingRow = null;
@@ -118,7 +118,7 @@ onMounted(() => {
     <!-- Error state -->
     <div v-else-if="error" class="text-center text-red-400 py-12">
       <p>{{ error }}</p>
-      <button
+      <button type="button"
         @click="loadRows"
         class="mt-4 px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
       >

@@ -425,8 +425,9 @@ class TestStreamBuilderDisabledOptions:
             enable_transcoding=False,
         )
 
-        # Should fall back to transcode with error reason
-        assert stream_info.PlayMethod == PlayMethod.TRANSCODE
+        # A disabled transport must not be returned as an executable fallback.
+        assert stream_info.PlayMethod == PlayMethod.NONE
+        assert stream_info.TranscodingUrl is None
 
 
 class TestPlaybackResult:

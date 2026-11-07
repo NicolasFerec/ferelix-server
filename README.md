@@ -9,6 +9,8 @@ Ferelix is organized into two main subprojects:
 - **[Server](./server)** - The backend API and media management engine built with Python
 - **[Web](./clients/web)** - The Vue dashboard and media player, with playback orchestration split from reusable player controls and UI helpers
 
+Run one API worker per installation. The process owns the scheduler, active FFmpeg processes and per-library scan coordination; multiple workers or replicas sharing a database would break those ownership rules. The Docker command explicitly selects one worker. With a custom ASGI command, use `--workers 1`. Horizontal scaling requires a shared job queue and persistent process ownership first; it is not supported by this deployment.
+
 ## Quick Start
 
 ### Prerequisites
@@ -25,7 +27,7 @@ pnpm bootstrap
 
 # Or manually
 (cd server && uv sync --locked)
-(cd web && pnpm install --frozen-lockfile)
+(cd clients/web && pnpm install --frozen-lockfile)
 ```
 
 ### Run Development Servers
@@ -104,6 +106,10 @@ The backend applies Alembic migrations before starting and watches only `server/
 Root commands: `pnpm test`, `pnpm type-check`, `pnpm build`, `pnpm dev:server`, and `pnpm dev:web`. Frontend dependencies and their lockfile stay in `clients/web/`; root scripts delegate to that package.
 
 ### Playback quality
+
+Playback creates an owned session before attaching a media URL. The session grants access only to that film and its HLS timelines; authenticated heartbeats renew a ten-minute idle lease without changing native video URLs. Closing the session or changing credentials invalidates subsequent media requests. HLS starts and heartbeats carry a generation so delayed requests cannot replace a newer timeline.
+
+On POSIX hosts, FFmpeg pauses once it has approximately 120 seconds of playable output ahead and resumes below 60 seconds. It is resumed before shutdown so a suspended process can terminate. Segment readiness gates the pause; the thresholds are not exact output caps because FFmpeg buffers and flushes packets. `FERELIX_TRANSCODE_AHEAD_SECONDS` can adjust the upper threshold (minimum 30 seconds). Non-POSIX hosts currently do not pause ahead-of-playback encoding.
 
 The web client checks HEVC Main and Main 10 support on its HLS playback path using MediaSource and MediaCapabilities (or native HLS where available). Supported video is copied into HLS; incompatible audio can be converted independently. An unsupported decoder still requires video transcoding.
 

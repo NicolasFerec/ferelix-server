@@ -97,7 +97,9 @@ def test_bitmap_subtitles_are_composited_before_resizing_and_vaapi_upload() -> N
         )
     )
     graph = command[command.index("-filter_complex") + 1]
-    assert graph.startswith("[0:v][0:2]overlay,scale=w=640:h=360")
+    assert graph.startswith("[0:v:0][0:2]overlay,scale=w='max(2,trunc(iw*sar*")
+    assert "640/(iw*sar)" in graph and "360/ih" in graph
+    assert "setsar=1" in graph
     assert graph.endswith(",format=nv12,hwupload[vout]")
 
 
@@ -246,3 +248,20 @@ def test_fmp4_hls_uses_fragment_discontinuity_segment_option() -> None:
     assert cmd[cmd.index("-hls_segment_type") + 1] == "fmp4"
     assert cmd[cmd.index("-hls_fmp4_init_filename") + 1] == "init.mp4"
     assert cmd[cmd.index("-hls_segment_options") + 1] == "movflags=+frag_discont"
+
+
+def test_remux_selects_requested_video_and_normalizes_hevc_codec_tag():
+    hardware = HardwareAcceleration(selected_device="software")
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_remux(
+        input_path="movie.mkv",
+        playlist_path="playlist.m3u8",
+        segment_pattern="%03d.m4s",
+        video_stream_index=2,
+        audio_stream_index=3,
+        source_video_codec="hevc",
+        hls_segment_type="fmp4",
+    )
+    maps = [command[index + 1] for index, option in enumerate(command) if option == "-map"]
+    assert maps == ["0:2", "0:3"]
+    assert command[command.index("-tag:v") + 1] == "hvc1"

@@ -1,0 +1,75 @@
+{
+  "baseline": "db5fede",
+  "media": 10000,
+  "homepage_rows": 20,
+  "tracks_per_media": {
+    "video": 1,
+    "audio": 2,
+    "subtitles": 3
+  },
+  "repeats": 7,
+  "method": "Actual authenticated ASGI routes, disk SQLite, warm-cache alternating before/after; SQL includes auth; no network or FFmpeg",
+  "limitations": "Synthetic metadata, timing includes current runtime/models. Two new diagnostic fields removed from baseline JSON byte count. Not a production latency or CPU estimate.",
+  "results": {
+    "/api/v1/media-files?limit=48": {
+      "before": {
+        "sql_queries": 6,
+        "json_bytes": 78303,
+        "median_ms": 11.615,
+        "samples_ms": [
+          11.615,
+          14.894,
+          10.3,
+          14.094,
+          10.098,
+          15.474,
+          10.397
+        ]
+      },
+      "after": {
+        "sql_queries": 2,
+        "json_bytes": 14883,
+        "median_ms": 3.957,
+        "samples_ms": [
+          3.371,
+          10.563,
+          3.957,
+          3.562,
+          3.724,
+          4.111,
+          6.661
+        ]
+      }
+    },
+    "/api/v1/homepage/rows": {
+      "before": {
+        "sql_queries": 102,
+        "json_bytes": 791961,
+        "median_ms": 200.356,
+        "samples_ms": [
+          213.716,
+          215.489,
+          198.354,
+          187.296,
+          200.53,
+          198.077,
+          200.356
+        ]
+      },
+      "after": {
+        "sql_queries": 3,
+        "json_bytes": 152172,
+        "median_ms": 49.603,
+        "samples_ms": [
+          53.338,
+          48.818,
+          49.603,
+          46.095,
+          50.146,
+          49.7,
+          46.567
+        ]
+      }
+    }
+  }
+}

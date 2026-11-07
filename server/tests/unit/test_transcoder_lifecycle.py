@@ -249,3 +249,47 @@ async def test_cleanup_claim_blocks_late_reader_lease_renewal(job, db_session, m
     monkeypatch.setattr("app.services.transcoder.remove_output_path", MagicMock())
     assert await transcoder.cleanup_transcode_files() == 1
     transcoder._stop_process.assert_awaited_once()
+
+
+async def test_failed_persisted_stop_keeps_job_and_files_for_retry(job, monkeypatch):
+    job.process_id = 123
+    transcoder = object.__new__(FFmpegTranscoder)
+    transcoder._active_jobs = {}
+    monkeypatch.setattr("app.services.transcoder.terminate_process", lambda *_args: False)
+    remove = MagicMock()
+    monkeypatch.setattr("app.services.transcoder.remove_output_path", remove)
+    assert await transcoder.stop_job(job.id) is False
+    assert job.status == TranscodingJobStatus.RUNNING
+    remove.assert_not_called()
+
+
+async def test_failed_active_stop_retains_the_process_handle(job, monkeypatch):
+    transcoder = object.__new__(FFmpegTranscoder)
+    process = MagicMock(returncode=None)
+    transcoder._active_jobs = {job.id: process}
+    transcoder._stop_process = AsyncMock(side_effect=RuntimeError("stop failed"))
+    remove = MagicMock()
+    monkeypatch.setattr("app.services.transcoder.remove_output_path", remove)
+    assert await transcoder.stop_job(job.id) is False
+    assert transcoder._active_jobs[job.id] is process
+    remove.assert_not_called()
+
+
+async def test_progress_bursts_are_coalesced_without_losing_the_last_value():
+    import asyncio
+
+    transcoder = object.__new__(FFmpegTranscoder)
+    process = MagicMock(returncode=0)
+    process.stderr = asyncio.StreamReader()
+    process.stderr.feed_data("\n".join(str(index) for index in range(100)).encode())
+    process.stderr.feed_eof()
+    process.wait = AsyncMock(return_value=0)
+    transcoder._active_jobs = {"job": process}
+    transcoder._get_job_start_time = AsyncMock(return_value=0)
+    transcoder._parse_ffmpeg_progress = MagicMock(side_effect=lambda line, *_args: {"transcoded_duration": int(line)})
+    transcoder._update_job_progress = AsyncMock()
+    transcoder._job_has_status = AsyncMock(return_value=False)
+    transcoder._mark_job_completed = AsyncMock()
+    await transcoder._monitor_progress("job", process, 100)
+    assert transcoder._update_job_progress.await_count == 2
+    assert transcoder._update_job_progress.call_args.args == ("job", {"transcoded_duration": 99})

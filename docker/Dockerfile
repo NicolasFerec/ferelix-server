@@ -89,4 +89,4 @@ ENV DATABASE_URL=sqlite+aiosqlite:////config/ferelix.db \
 
 # Run entrypoint
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["uv", "run", "--no-sync", "fastapi", "run"]
+CMD ["uv", "run", "--no-sync", "fastapi", "run", "--workers", "1"]

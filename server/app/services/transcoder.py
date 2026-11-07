@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import math
 import os
 import re
 import shlex
@@ -13,14 +14,16 @@ from fastapi import HTTPException
 from sqlalchemy import delete, or_, select, update
 
 from app.database import async_session_maker
-from app.models import MediaFile, TranscodingJob
+from app.models import MediaFile, PlaybackSession, TranscodingJob
 from app.models.transcoding import TranscodingJobStatus
+from app.services.stream_builder import select_video_track
 from app.services.streaming_io import is_playlist_ready
 from app.services.transcoding.codecs import IMAGE_SUBTITLE_CODECS, TEXT_SUBTITLE_CODECS
 from app.services.transcoding.commands import HlsCommandBuilder, HlsCommandOptions
 from app.services.transcoding.files import read_process_messages, remove_output_path, terminate_process
 from app.services.transcoding.hardware import HardwareAcceleration, HardwareAccelerationStatus
 from app.services.transcoding.subtitles import extract_subtitle_to_webvtt
+from app.services.transcoding.throttling import PlaybackBuffer, resume_before_stop
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,7 @@ def _float_from_env(name: str, default: float) -> float:
         value = float(os.getenv(name, str(default)))
     except ValueError:
         return default
-    return max(value, 1.0)
+    return max(value, 1.0) if math.isfinite(value) else default
 
 
 class FFmpegTranscoder:
@@ -46,6 +49,7 @@ class FFmpegTranscoder:
 
         self._active_jobs: dict[str, asyncio.subprocess.Process] = {}
         self._background_tasks: set[asyncio.Task[None]] = set()
+        self._playback_buffers: dict[str, PlaybackBuffer] = {}
 
         self.hw_accel = HardwareAcceleration(self.ffmpeg_path)
         self.hw_accel.detect()
@@ -80,31 +84,38 @@ class FFmpegTranscoder:
         audio_bitrate: int | None = None,
         max_width: int | None = None,
         max_height: int | None = None,
+        max_frame_rate: float | None = None,
         segment_duration: int = 6,
         session_id: str | None = None,
         client_ip: str | None = None,
         user_agent: str | None = None,
+        video_stream_index: int | None = None,
         audio_stream_index: int | None = None,
         subtitle_stream_index: int | None = None,
         start_time: float | None = None,
     ) -> str:
-        hls_segment_type = self._copy_hls_segment_type(media_file) if video_codec == "copy" else "mpegts"
+        hls_segment_type = (
+            self._copy_hls_segment_type(media_file, video_stream_index) if video_codec == "copy" else "mpegts"
+        )
         job_dir, playlist_path, segment_pattern = self._prepare_job_paths(job_id, hls_segment_type)
         burn_subtitle, is_image_subtitle = self._subtitle_burn_options(media_file, subtitle_stream_index)
+        selected_video = select_video_track(media_file, video_stream_index)
         cmd = self.commands.build_transcode(
             HlsCommandOptions(
                 input_path=media_file.file_path,
                 playlist_path=str(playlist_path),
                 segment_pattern=segment_pattern,
-                source_video_codec=self._source_video_codec(media_file),
-                source_color_transfer=media_file.video_tracks[0].color_transfer if media_file.video_tracks else None,
+                source_video_codec=self._source_video_codec(media_file, video_stream_index),
+                source_color_transfer=selected_video.color_transfer if selected_video else None,
                 video_codec=video_codec,
                 audio_codec=audio_codec,
                 video_bitrate=video_bitrate,
                 audio_bitrate=audio_bitrate,
                 max_width=max_width,
                 max_height=max_height,
+                max_frame_rate=max_frame_rate,
                 segment_duration=segment_duration,
+                video_stream_index=video_stream_index,
                 audio_stream_index=audio_stream_index,
                 subtitle_stream_index=subtitle_stream_index if burn_subtitle else None,
                 subtitle_filter_index=next(
@@ -120,7 +131,7 @@ class FFmpegTranscoder:
                 is_image_subtitle=is_image_subtitle,
                 start_time=start_time,
                 hls_segment_type=hls_segment_type,
-                real_frame_rate=self._source_video_frame_rate(media_file),
+                real_frame_rate=self._source_video_frame_rate(media_file, video_stream_index),
             )
         )
 
@@ -133,6 +144,7 @@ class FFmpegTranscoder:
             client_ip,
             user_agent,
             start_time=start_time,
+            video_stream_index=video_stream_index,
             video_codec=video_codec,
             audio_codec=audio_codec,
             video_bitrate=video_bitrate,
@@ -157,16 +169,19 @@ class FFmpegTranscoder:
         session_id: str | None = None,
         client_ip: str | None = None,
         user_agent: str | None = None,
+        video_stream_index: int | None = None,
         audio_stream_index: int | None = None,
         start_time: float | None = None,
     ) -> str:
-        hls_segment_type = self._copy_hls_segment_type(media_file)
+        hls_segment_type = self._copy_hls_segment_type(media_file, video_stream_index)
         job_dir, playlist_path, segment_pattern = self._prepare_job_paths(job_id, hls_segment_type)
         cmd = self.commands.build_remux(
             input_path=media_file.file_path,
             playlist_path=str(playlist_path),
             segment_pattern=segment_pattern,
             segment_duration=segment_duration,
+            video_stream_index=video_stream_index,
+            source_video_codec=self._source_video_codec(media_file, video_stream_index),
             audio_stream_index=audio_stream_index,
             start_time=start_time,
             hls_segment_type=hls_segment_type,
@@ -181,6 +196,7 @@ class FFmpegTranscoder:
             client_ip,
             user_agent,
             start_time=start_time,
+            video_stream_index=video_stream_index,
             video_codec="copy",
             audio_codec="copy",
         )
@@ -203,8 +219,10 @@ class FFmpegTranscoder:
             await asyncio.to_thread(remove_output_path, output_path)
             return True
 
+        stopped = False
         try:
             await self._stop_process(process)
+            stopped = True
             # Only report cancellation once the process has actually exited.
             # Conditional monitor updates cannot overwrite this terminal state.
             output_path = await self._set_terminal_status(job_id, TranscodingJobStatus.CANCELLED)
@@ -215,10 +233,13 @@ class FFmpegTranscoder:
             await self._mark_job_failed(job_id, f"Failed to stop job: {exc}")
             return False
         finally:
-            self._active_jobs.pop(job_id, None)
+            if stopped or process.returncode is not None:
+                self._active_jobs.pop(job_id, None)
+                getattr(self, "_playback_buffers", {}).pop(job_id, None)
 
     async def _stop_process(self, process: asyncio.subprocess.Process) -> None:
         """Reap FFmpeg even when its control pipe closed or it ignores quit."""
+        resume_before_stop(process)
         if process.returncode is None:
             try:
                 if process.stdin and not process.stdin.is_closing():
@@ -279,8 +300,8 @@ class FFmpegTranscoder:
                 process = getattr(self, "_active_jobs", {}).get(job_id)
                 if process:
                     await self._stop_process(process)
-                elif job.process_id:
-                    await asyncio.to_thread(terminate_process, job.process_id, job.output_path)
+                elif job.process_id and not await asyncio.to_thread(terminate_process, job.process_id, job.output_path):
+                    raise RuntimeError("Persisted FFmpeg process did not stop")
                 await asyncio.to_thread(remove_output_path, job.output_path)
                 async with async_session_maker() as session:
                     await session.execute(delete(TranscodingJob).where(TranscodingJob.id == job_id))
@@ -295,22 +316,25 @@ class FFmpegTranscoder:
         return cleanup_count
 
     async def cleanup_stalled_jobs(self) -> int:
-        """Clean up all persisted transcode files after server restart."""
+        """Reap prior server encoders before deleting their persisted files/rows."""
         cleanup_count = 0
         async with async_session_maker() as session:
             result = await session.execute(select(TranscodingJob).where(TranscodingJob.output_path.isnot(None)))
-            for job in result.scalars().all():
-                if job.status in {TranscodingJobStatus.RUNNING, TranscodingJobStatus.STOPPING} and job.process_id:
-                    terminate_process(job.process_id, job.output_path)
-
-                remove_output_path(job.output_path)
-                await session.delete(job)
-                cleanup_count += 1
-
-            await session.commit()
-
+            jobs = result.scalars().all()
+        for job in jobs:
+            process = getattr(self, "_active_jobs", {}).get(job.id)
+            if process is not None:
+                await self._stop_process(process)
+            elif job.process_id and not await asyncio.to_thread(terminate_process, job.process_id, job.output_path):
+                logger.warning("Keeping job %s because its persisted encoder could not be stopped", job.id)
+                continue
+            await asyncio.to_thread(remove_output_path, job.output_path)
+            async with async_session_maker() as session:
+                await session.execute(delete(TranscodingJob).where(TranscodingJob.id == job.id))
+                await session.commit()
+            cleanup_count += 1
         if cleanup_count:
-            logger.info("Cleaned up %s stalled transcoding jobs at startup", cleanup_count)
+            logger.info("Cleaned up %s stalled transcoding jobs", cleanup_count)
         return cleanup_count
 
     async def get_job_status(self, job_id: str) -> TranscodingJob | None:
@@ -341,19 +365,17 @@ class FFmpegTranscoder:
         segment_extension = "m4s" if hls_segment_type == "fmp4" else "ts"
         return job_dir, playlist_path, str(job_dir / f"segment_%03d.{segment_extension}")
 
-    def _copy_hls_segment_type(self, media_file: MediaFile) -> str:
-        video_codec = (media_file.video_tracks[0].codec or "").lower() if media_file.video_tracks else ""
+    def _copy_hls_segment_type(self, media_file: MediaFile, video_stream_index: int | None = None) -> str:
+        video_codec = (self._source_video_codec(media_file, video_stream_index) or "").lower()
         return "fmp4" if video_codec in {"hevc", "h265", "av1", "vp9"} else "mpegts"
 
-    def _source_video_codec(self, media_file: MediaFile) -> str | None:
-        if media_file.video_tracks:
-            return media_file.video_tracks[0].codec
-        return media_file.codec
+    def _source_video_codec(self, media_file: MediaFile, video_stream_index: int | None = None) -> str | None:
+        track = select_video_track(media_file, video_stream_index)
+        return track.codec if track is not None else media_file.codec
 
-    def _source_video_frame_rate(self, media_file: MediaFile) -> float | None:
-        if media_file.video_tracks:
-            return media_file.video_tracks[0].fps
-        return None
+    def _source_video_frame_rate(self, media_file: MediaFile, video_stream_index: int | None = None) -> float | None:
+        track = select_video_track(media_file, video_stream_index)
+        return track.fps if track is not None else None
 
     def _subtitle_burn_options(
         self,
@@ -434,6 +456,7 @@ class FFmpegTranscoder:
             await self._ensure_process_running(job_id, process)
             self._active_jobs[job_id] = process
             await self._set_process_id(job_id, process.pid)
+            await self._register_playback_buffer(job_id)
 
             task = asyncio.create_task(self._monitor_progress(job_id, process, total_duration))
             self._background_tasks.add(task)
@@ -491,6 +514,9 @@ class FFmpegTranscoder:
         deadline = asyncio.get_running_loop().time() + timeout_seconds
         while asyncio.get_running_loop().time() < deadline:
             if await is_playlist_ready(playlist_path):
+                if buffer := getattr(self, "_playback_buffers", {}).get(job_id):
+                    buffer.ready = True
+                    buffer.reconcile(process)
                 return
             if process.returncode is not None:
                 return
@@ -513,14 +539,23 @@ class FFmpegTranscoder:
         total_duration: float | None,
     ) -> None:
         stderr_lines: deque[str] = deque(maxlen=100)
+        last_persisted = 0.0
+        latest_progress: dict[str, Any] | None = None
         try:
             job_start_time = await self._get_job_start_time(job_id)
             if process.stderr:
                 async for line in read_process_messages(process.stderr):
                     stderr_lines.append(line)
                     if progress_data := self._parse_ffmpeg_progress(line, total_duration, job_start_time):
-                        await self._update_job_progress(job_id, progress_data)
+                        latest_progress = progress_data
+                        changed = self._regulate_playback_buffer(job_id, process, progress_data)
+                        now = asyncio.get_running_loop().time()
+                        if changed or now - last_persisted >= 1.0:
+                            await self._update_job_progress(job_id, progress_data)
+                            last_persisted = now
 
+            if latest_progress:
+                await self._update_job_progress(job_id, latest_progress)
             await process.wait()
             if await self._job_has_status(job_id, TranscodingJobStatus.CANCELLED):
                 return
@@ -549,6 +584,51 @@ class FFmpegTranscoder:
             await self._mark_job_failed(job_id, f"Progress monitoring failed: {exc}")
         finally:
             self._active_jobs.pop(job_id, None)
+            getattr(self, "_playback_buffers", {}).pop(job_id, None)
+
+    async def _register_playback_buffer(self, job_id: str) -> None:
+        async with async_session_maker() as session:
+            job = await session.get(TranscodingJob, job_id)
+            if job is None or not job.session_id:
+                return
+            playback = await session.get(PlaybackSession, job.session_id)
+            if playback is None:
+                return
+            high_water = max(30.0, _float_from_env("FERELIX_TRANSCODE_AHEAD_SECONDS", 120.0))
+            self._playback_buffers[job_id] = PlaybackBuffer(
+                session_id=job.session_id,
+                generation=job.playback_generation,
+                start_time=job.start_time or 0.0,
+                position=job.start_time if job.start_time is not None else playback.position_seconds,
+                high_water=high_water,
+                low_water=high_water / 2,
+                ready=False,
+            )
+
+    def update_playback_position(self, session_id: str, position: float, generation: int) -> None:
+        for job_id, buffer in getattr(self, "_playback_buffers", {}).items():
+            if buffer.session_id == session_id and buffer.generation == generation:
+                buffer.position = max(position, 0.0)
+                if process := self._active_jobs.get(job_id):
+                    buffer.reconcile(process)
+
+    def throttle_status(self, job_id: str) -> dict[str, Any]:
+        buffer = getattr(self, "_playback_buffers", {}).get(job_id)
+        return {
+            "is_throttled": buffer.paused if buffer else False,
+            "encoded_ahead_seconds": buffer.ahead_seconds if buffer else None,
+        }
+
+    def _regulate_playback_buffer(
+        self, job_id: str, process: asyncio.subprocess.Process, progress: dict[str, Any]
+    ) -> bool:
+        buffer = getattr(self, "_playback_buffers", {}).get(job_id)
+        if buffer is None:
+            return False
+        buffer.encoded_duration = progress.get("transcoded_duration", buffer.encoded_duration)
+        changed = buffer.reconcile(process)
+        progress.update(self.throttle_status(job_id))
+        return changed
 
     def _parse_ffmpeg_progress(
         self,
@@ -598,6 +678,11 @@ class FFmpegTranscoder:
                     transcoded_duration=progress_data.get("transcoded_duration"),
                     current_fps=progress_data.get("current_fps"),
                     current_bitrate=progress_data.get("current_bitrate"),
+                    **{
+                        key: progress_data[key]
+                        for key in ("is_throttled", "encoded_ahead_seconds")
+                        if key in progress_data
+                    },
                 )
             )
             await session.commit()
@@ -664,8 +749,12 @@ class FFmpegTranscoder:
             if not job:
                 return False, None
 
-            if terminate_by_pid and job.process_id:
-                terminate_process(job.process_id, job.output_path)
+            if (
+                terminate_by_pid
+                and job.process_id
+                and not await asyncio.to_thread(terminate_process, job.process_id, job.output_path)
+            ):
+                return False, job.output_path
 
             output_path = job.output_path
             job.status = TranscodingJobStatus.CANCELLED

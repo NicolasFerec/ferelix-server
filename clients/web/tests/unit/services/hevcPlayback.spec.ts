@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { probeHevcPlayback } from "@/services/deviceProfile";
+import { probeHDRSupport, probeHevcPlayback } from "@/services/deviceProfile";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -55,5 +55,41 @@ describe("HEVC HLS capabilities", () => {
             },
         });
         expect(await probeHevcPlayback()).toEqual({ main: false, main10: false });
+    });
+});
+
+describe("HDR evidence", () => {
+    it("does not advertise HDR from Main10 or a wide-gamut screen alone", async () => {
+        const decodingInfo = vi.fn();
+        vi.stubGlobal("navigator", { mediaCapabilities: { decodingInfo } });
+        vi.spyOn(window, "matchMedia").mockImplementation(
+            (query) => ({ matches: query.includes("color-gamut") }) as MediaQueryList,
+        );
+        expect(await probeHDRSupport(true)).toMatchObject({
+            hdr10: false,
+            hlg: false,
+            bitDepth10: true,
+            wideColorGamut: true,
+        });
+        expect(decodingInfo).not.toHaveBeenCalled();
+    });
+    it("distinguishes PQ from HLG decoding on an HDR display", async () => {
+        vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
+        vi.stubGlobal("MediaSource", { isTypeSupported: () => true });
+        const decodingInfo = vi.fn(async (config: MediaDecodingConfiguration) => ({
+            supported: config.video?.transferFunction === "pq",
+            smooth: true,
+        }));
+        vi.stubGlobal("navigator", { mediaCapabilities: { decodingInfo } });
+        expect(await probeHDRSupport(true)).toMatchObject({ hdr10: true, hlg: false, dolbyVision: false });
+        expect(decodingInfo).toHaveBeenCalledTimes(2);
+    });
+    it("keeps unsupported or non-smooth HDR decoders on the SDR transcode path", async () => {
+        vi.spyOn(window, "matchMedia").mockReturnValue({ matches: true } as MediaQueryList);
+        vi.stubGlobal("MediaSource", { isTypeSupported: () => true });
+        vi.stubGlobal("navigator", {
+            mediaCapabilities: { decodingInfo: async () => ({ supported: true, smooth: false }) },
+        });
+        expect(await probeHDRSupport(true)).toMatchObject({ hdr10: false, hlg: false });
     });
 });

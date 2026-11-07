@@ -28,7 +28,9 @@
         "user": "Utilisateur",
         "unknown": "Inconnu",
         "previous": "Précédent",
-        "next": "Suivant"
+        "next": "Suivant",
+        "skipToContent": "Aller au contenu",
+        "library": "Bibliothèque"
     },
     "imageUpload": {
         "chooseImage": "Choisir une image",
@@ -88,7 +90,8 @@
             "scheduleHint": "Heure de la journée à laquelle la tâche de nettoyage s'exécute (format 24 heures)",
             "gracePeriod": "Période de grâce",
             "days": "jours",
-            "gracePeriodHint": "Nombre de jours pendant lesquels conserver les fichiers supprimés avant suppression définitive"
+            "gracePeriodHint": "Nombre de jours pendant lesquels conserver les fichiers supprimés avant suppression définitive",
+            "minute": "Minute"
         },
         "hardwareTranscoding": {
             "title": "Accélération matérielle",
@@ -99,7 +102,8 @@
             "loadError": "Échec du chargement du statut de l'accélération matérielle",
             "decode": "décodage",
             "encode": "encodage"
-        }
+        },
+        "profile": "Profil"
     },
     "dashboard": {
         "title": "Tableau de bord",
@@ -243,7 +247,9 @@
         "loadingMediaFiles": "Chargement des fichiers multimédias...",
         "loadFailed": "Échec du chargement de la bibliothèque. Veuillez réessayer.",
         "noRows": "Aucune ligne disponible. Configurez les listes de lecture pour afficher le contenu.",
-        "continueWatching": "Continuer de regarder"
+        "continueWatching": "Continuer de regarder",
+        "inYourLibrary": "Dans votre bibliothèque",
+        "details": "Voir les détails"
     },
     "recommendationRows": {
         "title": "Lignes de recommandation",
@@ -286,7 +292,10 @@
         "allItems": "Tous les éléments",
         "invalidId": "Identifiant de bibliothèque invalide",
         "notFound": "Bibliothèque introuvable",
-        "loadFailed": "Échec du chargement de la bibliothèque"
+        "loadFailed": "Échec du chargement de la bibliothèque",
+        "title": "Bibliothèque",
+        "pageInfo": "Page {page} · {count} titres",
+        "pagination": "Pages de la bibliothèque"
     },
     "mediaDetail": {
         "loading": "Chargement du média...",
@@ -494,6 +503,25 @@
         "switchingResolution": "Changement de résolution…",
         "transcodingProgress": "Préparation de la lecture… {progress} %",
         "transcodingFallback": "Format non pris en charge, transcodage…",
-        "buffering": "Mise en mémoire tampon…"
+        "buffering": "Mise en mémoire tampon…",
+        "sessionUnknown": "Le serveur n’a pas confirmé la demande de lecture. Fermez le lecteur puis réessayez.",
+        "noCompatibleMethod": "Aucun mode de lecture compatible n’est disponible pour ce navigateur.",
+        "seek": "Position de lecture"
+    },
+    "auth": {
+        "yourLibrary": "Votre bibliothèque. Votre écran.",
+        "tagline": "Tous vos films, chez vous.",
+        "description": "Vos médias, réunis. Reprenez votre lecture et profitez de votre collection sur votre propre serveur.",
+        "accountHelp": "Connectez-vous avec le compte fourni par l’administrateur de votre serveur.",
+        "showPassword": "Afficher",
+        "hidePassword": "Masquer",
+        "sessionExpired": "Votre session a expiré. Connectez-vous pour reprendre là où vous en étiez.",
+        "passwordChanged": "Mot de passe modifié. Reconnectez-vous avec votre nouveau mot de passe.",
+        "currentPassword": "Mot de passe actuel",
+        "changePassword": "Changer le mot de passe",
+        "security": "Sécurité",
+        "securityDescription": "Changer votre mot de passe vous déconnecte de tous vos appareils.",
+        "passwordChangeFailed": "Impossible de modifier le mot de passe. Vérifiez le mot de passe actuel et réessayez.",
+        "unavailable": "Le serveur est indisponible. Vérifiez votre connexion et réessayez."
     }
 }

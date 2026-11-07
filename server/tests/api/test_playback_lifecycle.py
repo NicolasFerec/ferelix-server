@@ -52,7 +52,7 @@ async def test_closed_session_cannot_start_encoder(client, db_session, auth_head
     response = await client.post(
         f"/api/v1/hls/{playback.media_file_id}/remux",
         headers=auth_headers,
-        params={"session_id": playback.id},
+        params={"session_id": playback.id, "playback_generation": 1},
     )
     assert response.status_code == 410
     start.assert_not_awaited()
@@ -123,7 +123,8 @@ async def test_session_ending_while_hls_starts_stops_new_job(db_session, playbac
     monkeypatch.setattr("app.services.playback_session.get_transcoder", lambda: transcoder)
     with pytest.raises(HTTPException) as error:
         await PlaybackSessionService(db_session).start_hls_job(
-            media.id, HlsStartOptions(job_type=TranscodingJobType.REMUX, playback_session_id=playback.id)
+            media.id,
+            HlsStartOptions(job_type=TranscodingJobType.REMUX, playback_session_id=playback.id, playback_generation=1),
         )
     assert error.value.status_code == 410
     transcoder.stop_job.assert_awaited_once()
@@ -158,6 +159,7 @@ async def test_hls_job_is_private_to_its_session_owner(
         "DELETE" if endpoint == "stop" else "GET",
         f"/api/v1/hls/other-job/{endpoint}",
         headers=auth_headers,
+        params={"session_id": playback.id},
     )
     assert response.status_code == 404
 
@@ -183,3 +185,103 @@ async def test_heartbeat_cannot_renew_a_job_claimed_for_cleanup(client, db_sessi
     await db_session.refresh(job)
     assert job.last_accessed_at == old
     assert job.status == TranscodingJobStatus.STOPPING
+
+
+async def test_stale_heartbeat_cannot_overwrite_new_timeline(client, db_session, auth_headers, playback, monkeypatch):
+    playback.playback_generation = 2
+    playback.position_seconds = 25
+    playback.transcoding_job_id = "new"
+    db_session.add_all([
+        TranscodingJob(
+            id="old",
+            media_file_id=playback.media_file_id,
+            session_id=playback.id,
+            playback_generation=1,
+            type=TranscodingJobType.HLS,
+            status=TranscodingJobStatus.CANCELLED,
+        ),
+        TranscodingJob(
+            id="new",
+            media_file_id=playback.media_file_id,
+            session_id=playback.id,
+            playback_generation=2,
+            type=TranscodingJobType.HLS,
+            status=TranscodingJobStatus.RUNNING,
+        ),
+    ])
+    await db_session.commit()
+    transcoder = MagicMock()
+    monkeypatch.setattr("app.routers.v1.streaming.get_transcoder", lambda: transcoder)
+    response = await client.post(
+        f"/api/v1/playback-sessions/{playback.id}/heartbeat",
+        headers=auth_headers,
+        json={"playback_generation": 1, "transcoding_job_id": "old", "position_seconds": 500},
+    )
+    assert response.status_code == 409
+    await db_session.refresh(playback)
+    assert playback.transcoding_job_id == "new"
+    assert playback.position_seconds == pytest.approx(25)
+    transcoder.update_playback_position.assert_not_called()
+
+
+async def test_heartbeat_compare_and_set_rechecks_generation_after_loading_session(
+    client, db_session, auth_headers, playback, monkeypatch
+):
+    from sqlalchemy import update
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.routers.v1 import streaming
+
+    factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    original = streaming.get_playback_session_or_404
+
+    async def newer_intent_after_read(session, session_id, user):
+        snapshot = await original(session, session_id, user)
+        async with factory() as concurrent:
+            await concurrent.execute(
+                update(PlaybackSession).where(PlaybackSession.id == session_id).values(playback_generation=1)
+            )
+            await concurrent.commit()
+        return snapshot
+
+    monkeypatch.setattr(streaming, "get_playback_session_or_404", newer_intent_after_read)
+    response = await client.post(
+        f"/api/v1/playback-sessions/{playback.id}/heartbeat",
+        headers=auth_headers,
+        json={"playback_generation": 0, "position_seconds": 500},
+    )
+    assert response.status_code == 409
+    await db_session.refresh(playback)
+    assert playback.playback_generation == 1
+    assert playback.position_seconds == pytest.approx(0)
+
+
+@pytest.mark.parametrize("field", ["position_seconds", "duration_seconds"])
+async def test_heartbeat_rejects_non_finite_positions(client, auth_headers, playback, field):
+    response = await client.post(
+        f"/api/v1/playback-sessions/{playback.id}/heartbeat",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        content='{"' + field + '":1e309}',
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("operation", ["stop", "end"])
+async def test_failed_encoder_stop_is_not_reported_as_success(
+    client, db_session, auth_headers, playback, monkeypatch, operation
+):
+    db_session.add(
+        TranscodingJob(
+            id="job",
+            media_file_id=playback.media_file_id,
+            session_id=playback.id,
+            type=TranscodingJobType.HLS,
+            status=TranscodingJobStatus.RUNNING,
+        )
+    )
+    await db_session.commit()
+    transcoder = MagicMock()
+    transcoder.stop_job = AsyncMock(return_value=False)
+    monkeypatch.setattr("app.routers.v1.streaming.get_transcoder", lambda: transcoder)
+    path = "/api/v1/hls/job/stop" if operation == "stop" else f"/api/v1/playback-sessions/{playback.id}"
+    assert (await client.delete(path, headers=auth_headers)).status_code == 503

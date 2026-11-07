@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 class PlayMethod(StrEnum):
     """Playback methods supported by the client."""
 
+    NONE = "None"  # No permitted, compatible playback plan
     DIRECT_PLAY = "DirectPlay"  # Native playback, no server processing
     DIRECT_STREAM = "DirectStream"  # Remux only (container change, no re-encoding)
     TRANSCODE = "Transcode"  # Full transcoding
@@ -124,8 +125,11 @@ class PlaybackInfoRequest(BaseModel):
     AllowVideoStreamCopy: bool = True
     AllowAudioStreamCopy: bool = True
     IsPlayback: bool = True
+    PlaybackSessionId: str | None = None
+    PlaybackGeneration: int = 1
     RequestedResolution: dict | None = None  # Manual resolution override {"width": 1920, "height": 1080}
     AudioStreamIndex: int | None = None
+    VideoStreamIndex: int | None = None
 
 
 class TranscodeSettings(BaseModel):
@@ -137,7 +141,11 @@ class TranscodeSettings(BaseModel):
     AudioBitrate: int | None = None
     MaxWidth: int | None = None
     MaxHeight: int | None = None
+    MaxFrameRate: float | None = None
     IsRemuxOnly: bool = False  # True for container conversion only
+
+
+TranscodeSettingsModel = TranscodeSettings
 
 
 class StreamInfo(BaseModel):
@@ -167,13 +175,14 @@ class StreamInfo(BaseModel):
     # Media stream info
     MediaStreams: list[dict] = []  # Video, audio, subtitle stream info
     AudioStreamIndex: int | None = None
+    VideoStreamIndex: int | None = None
 
     # Transcoding settings (when applicable)
     TranscodingContainer: str | None = None
     TranscodingVideoCodec: str | None = None
     TranscodingAudioCodec: str | None = None
     TranscodingType: str | None = None  # "audio-only", "video-only", "full", "remux"
-    TranscodeSettings: Any = None
+    TranscodeSettings: TranscodeSettingsModel | None = None
 
     # Runtime info
     RunTimeTicks: int | None = None  # Duration in 100-nanosecond ticks

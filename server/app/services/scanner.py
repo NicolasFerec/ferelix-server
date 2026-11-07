@@ -29,6 +29,10 @@ VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".flv", ".w
 _RUNNING_LIBRARY_SCANS: dict[int, str | None] = {}
 
 
+class MetadataExtractionError(RuntimeError):
+    """The probe failed; its output must never replace a known-good snapshot."""
+
+
 def _parse_fps(r_frame_rate: str | None) -> float | None:
     """Parse frame rate from ffprobe format (e.g., '30/1' or '30000/1001')."""
     if not r_frame_rate or "/" not in str(r_frame_rate):
@@ -167,9 +171,11 @@ def extract_video_metadata(file_path: Path) -> dict:  # ruff: ignore[complex-str
 
         if result.returncode != 0:
             logger.warning(f"ffprobe failed for {file_path}: {result.stderr}")
-            return {}
+            raise MetadataExtractionError(f"ffprobe exited with status {result.returncode}")
 
         data = json.loads(result.stdout)
+        if not any(stream.get("codec_type") == "video" for stream in data.get("streams", [])):
+            raise MetadataExtractionError("ffprobe found no video stream")
 
         metadata = {}
 
@@ -190,6 +196,7 @@ def extract_video_metadata(file_path: Path) -> dict:  # ruff: ignore[complex-str
                 track = {
                     "stream_index": stream.get("index"),
                     "codec": stream.get("codec_name"),
+                    "codec_tag": stream.get("codec_tag_string"),
                     "width": stream.get("width"),
                     "height": stream.get("height"),
                     "bitrate": stream.get("bit_rate"),
@@ -260,15 +267,15 @@ def extract_video_metadata(file_path: Path) -> dict:  # ruff: ignore[complex-str
 
         return metadata
 
-    except subprocess.TimeoutExpired:
-        logger.error(f"ffprobe timeout for {file_path}")
-        return {}
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse ffprobe output for {file_path}")
-        return {}
-    except Exception:
+    except MetadataExtractionError:
+        raise
+    except subprocess.TimeoutExpired as exc:
+        raise MetadataExtractionError("ffprobe timed out after 30 seconds") from exc
+    except json.JSONDecodeError as exc:
+        raise MetadataExtractionError("ffprobe returned invalid JSON") from exc
+    except Exception as exc:
         logger.exception("Error extracting metadata for %s", file_path)
-        return {}
+        raise MetadataExtractionError(f"ffprobe metadata extraction failed ({type(exc).__name__})") from exc
 
 
 async def _update_media_tracks(session: AsyncSession, media_file: MediaFile, metadata: dict) -> None:
@@ -300,6 +307,7 @@ async def _update_media_tracks(session: AsyncSession, media_file: MediaFile, met
             media_file_id=media_file.id,
             stream_index=track_data.get("stream_index", 0),
             codec=track_data.get("codec", "unknown"),
+            codec_tag=track_data.get("codec_tag"),
             width=track_data.get("width"),
             height=track_data.get("height"),
             bitrate=track_data.get("bitrate"),
@@ -374,11 +382,12 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
     path = Path(library_path.path)
     if not (await asyncio.to_thread(path.exists)) or not (await asyncio.to_thread(path.is_dir)):
         logger.warning(f"Library path does not exist or is not a directory: {path}")
-        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": False}
+        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": False, "failed": 0}
 
     new_files_count = 0
     updated_files_count = 0
     restored_files_count = 0
+    failed_files_count = 0
     scanned_paths: set[str] = set()
     batch_size = 10  # Commit every 10 files
     pending_changes = 0
@@ -392,7 +401,7 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
     if video_files is None:
         if job_id:
             mark_job_cancelled(job_id)
-        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": True}
+        return {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": True, "failed": 0}
 
     files_total = len(video_files)
     logger.info(f"Found {files_total} video files to process")
@@ -428,16 +437,41 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
         existing_file = await session.scalar(select(MediaFile).where(MediaFile.file_path == file_path_str))
 
         file_changed = existing_file is not None and _has_file_changed(existing_file, file_stat, modified_at)
-        needs_metadata_scan = existing_file is None or file_changed or not _has_scanned_metadata(existing_file)
+        needs_metadata_scan = (
+            existing_file is None
+            or file_changed
+            or bool(existing_file.scan_error)
+            or not _has_scanned_metadata(existing_file)
+        )
         metadata: dict = {}
         thumbnail_path = None
+        attempted_at = None
         if needs_metadata_scan:
             # Release both pending writes and the read transaction before slow
             # subprocesses. SQLite otherwise blocks playback progress/heartbeats
             # for the duration of up to ten ffprobe/thumbnail operations.
             await session.commit()
             pending_changes = 0
-            metadata = await asyncio.to_thread(extract_video_metadata, file_path)
+            attempted_at = datetime.now(UTC)
+            try:
+                metadata = await asyncio.to_thread(extract_video_metadata, file_path)
+            except MetadataExtractionError as exc:
+                # Preserve tracks, thumbnail, modification fingerprint and last
+                # successful scan. A later scan retries even if the file is unchanged.
+                failed_file = existing_file or MediaFile(
+                    file_path=file_path_str,
+                    file_name=file_name,
+                    file_size=file_stat.st_size,
+                    file_extension=file_extension,
+                )
+                failed_file.last_scan_attempt_at = attempted_at
+                failed_file.scan_error = str(exc)[:500]
+                failed_file.deleted_at = None
+                session.add(failed_file)
+                await session.commit()
+                failed_files_count += 1
+                logger.warning("Keeping previous metadata for %s: %s", file_path, exc)
+                continue
             thumbnail_path = await asyncio.to_thread(
                 generate_video_thumbnail, file_path, metadata.get("duration"), force=file_changed
             )
@@ -452,6 +486,8 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
                 restored_files_count += 1
 
             if needs_metadata_scan:
+                existing_file.last_scan_attempt_at = attempted_at
+                existing_file.scan_error = None
                 logger.info(f"Processing updated file: {file_path}")
                 await _update_media_tracks(session, existing_file, metadata)
                 _update_media_file_metadata(existing_file, metadata, file_stat, modified_at)
@@ -481,6 +517,7 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
                 file_extension=file_extension,
                 thumbnail_path=thumbnail_path,
                 file_modified_at=modified_at,
+                last_scan_attempt_at=attempted_at,
                 duration=metadata.get("duration"),
                 width=metadata.get("width"),
                 height=metadata.get("height"),
@@ -543,6 +580,7 @@ async def scan_library_path(  # ruff: ignore[complex-structure]
         "deleted": deleted_files_count,
         "restored": restored_files_count,
         "cancelled": was_cancelled,
+        "failed": failed_files_count,
     }
 
     if was_cancelled:

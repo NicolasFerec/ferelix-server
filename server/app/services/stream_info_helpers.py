@@ -2,7 +2,7 @@
 
 from typing import TypedDict
 
-from app.models.media_file import MediaFile
+from app.models.media_file import MediaFile, VideoTrack
 
 
 class ResolutionOption(TypedDict):
@@ -20,6 +20,7 @@ def build_media_streams(media_file: MediaFile) -> list[dict]:
             "Index": video_track.stream_index,
             "Type": "Video",
             "Codec": video_track.codec,
+            "CodecTag": video_track.codec_tag,
             "Width": video_track.width,
             "Height": video_track.height,
             "BitRate": video_track.bitrate,
@@ -63,12 +64,12 @@ def build_media_streams(media_file: MediaFile) -> list[dict]:
     return streams
 
 
-def calculate_available_resolutions(media_file: MediaFile) -> list[dict]:
+def calculate_available_resolutions(media_file: MediaFile, video_track: VideoTrack | None = None) -> list[dict]:
     """Calculate standard downscale targets for manual quality selection."""
     if not media_file.video_tracks:
         return []
 
-    video_track = media_file.video_tracks[0]
+    video_track = video_track or media_file.video_tracks[0]
     original_width = video_track.width or 1920
     original_height = video_track.height or 1080
     available_resolutions = [

@@ -1,0 +1,45 @@
+{
+  "scenario": "Injected ffprobe exit 1; cooperative cancellation; 1000 completed one-off tasks",
+  "baseline_revision": "db5fede",
+  "before": {
+    "scanner": {
+      "tracks_before": 2,
+      "tracks_after_failed_probe": 0,
+      "duration_after_failed_probe": null,
+      "scan_error": null,
+      "reported_stats": {
+        "new": 0,
+        "updated": 1,
+        "deleted": 0,
+        "restored": 0,
+        "cancelled": false
+      }
+    },
+    "jobs": {
+      "cancelled_task_final_status": "success",
+      "completed_tasks": 1000,
+      "retained_states": 1000
+    }
+  },
+  "after": {
+    "scanner": {
+      "tracks_before": 2,
+      "tracks_after_failed_probe": 2,
+      "duration_after_failed_probe": 120.0,
+      "scan_error": "ffprobe exited with status 1",
+      "reported_stats": {
+        "new": 0,
+        "updated": 0,
+        "deleted": 0,
+        "restored": 0,
+        "cancelled": false,
+        "failed": 1
+      }
+    },
+    "jobs": {
+      "cancelled_task_final_status": "cancelled",
+      "completed_tasks": 1000,
+      "retained_states": 100
+    }
+  }
+}

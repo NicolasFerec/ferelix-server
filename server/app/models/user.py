@@ -3,9 +3,9 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Boolean, DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, validates
 from sqlalchemy_utils import PasswordType
 
 from .base import Base
@@ -25,7 +25,10 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String, index=True, unique=True)
+    username_normalized: Mapped[str] = mapped_column(String, unique=True)
     email: Mapped[str | None]
+    email_normalized: Mapped[str | None] = mapped_column(String, unique=True)
+    credentials_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     profile_image_path: Mapped[str | None] = mapped_column(String, nullable=True)
     password: Mapped[str | None] = mapped_column(
         PasswordType(
@@ -39,6 +42,18 @@ class User(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    @validates("username")
+    def normalize_username(self, _key: str, value: str) -> str:
+        value = value.strip()
+        self.username_normalized = value.casefold()
+        return value
+
+    @validates("email")
+    def normalize_email(self, _key: str, value: str | None) -> str | None:
+        normalized = value.strip().casefold() if value and value.strip() else None
+        self.email_normalized = normalized
+        return normalized
 
     @property
     def role(self) -> UserRole:
@@ -73,21 +88,32 @@ class UserSchema(BaseModel):
 class UserCreate(BaseModel):
     """Schema for creating a new user."""
 
-    username: str
+    username: str = Field(min_length=1, max_length=255)
     email: str | None
-    password: str
+    password: str = Field(min_length=1, max_length=1024)
     role: UserRole = UserRole.READER
     is_admin: bool = False
     language: str = "en"
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def strip_username(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
 
 
 class UserUpdate(BaseModel):
     """Schema for updating user information."""
 
-    username: str | None = None
+    username: str | None = Field(default=None, min_length=1, max_length=255)
     email: str | None = None
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=1, max_length=1024)
+    current_password: str | None = None
     role: UserRole | None = None
     language: str | None = None
     is_admin: bool | None = None
     is_active: bool | None = None
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def strip_username(cls, value: str | None) -> str | None:
+        return value.strip() if isinstance(value, str) else value

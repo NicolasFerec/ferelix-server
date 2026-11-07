@@ -28,23 +28,33 @@ async def benchmark(url: str, media_id: int, pid: int, byte_count: int, iteratio
     token = os.environ["FERELIX_BENCHMARK_TOKEN"]
     samples = []
     async with httpx.AsyncClient(base_url=url, headers={"Authorization": f"Bearer {token}"}, timeout=30) as client:
-        for iteration in range(iterations + 1):
-            cpu_start, wall_start = server_cpu_seconds(pid), time.perf_counter()
-            received = 0
-            async with client.stream(
-                "GET", f"/api/v1/stream/{media_id}", headers={"Range": f"bytes=0-{byte_count - 1}"}
-            ) as response:
-                response.raise_for_status()
-                if response.status_code != 206:
-                    raise RuntimeError("Expected HTTP 206 Partial Content")
-                async for chunk in response.aiter_bytes():
-                    received += len(chunk)
-            wall_seconds = time.perf_counter() - wall_start
-            cpu_seconds = server_cpu_seconds(pid) - cpu_start
-            if received != byte_count:
-                raise RuntimeError(f"Expected {byte_count} bytes, received {received}")
-            if iteration:  # First download warms the page cache and connection.
-                samples.append({"wall_seconds": wall_seconds, "server_cpu_seconds": cpu_seconds, "bytes": received})
+        created = await client.post("/api/v1/playback-sessions", json={"media_file_id": media_id})
+        created.raise_for_status()
+        session_id = created.json()["id"]
+        try:
+            for iteration in range(iterations + 1):
+                cpu_start, wall_start = server_cpu_seconds(pid), time.perf_counter()
+                received = 0
+                async with client.stream(
+                    "GET",
+                    f"/api/v1/stream/{media_id}",
+                    params={"session_id": session_id},
+                    headers={"Range": f"bytes=0-{byte_count - 1}"},
+                ) as response:
+                    response.raise_for_status()
+                    if response.status_code != 206:
+                        raise RuntimeError("Expected HTTP 206 Partial Content")
+                    async for chunk in response.aiter_bytes():
+                        received += len(chunk)
+                wall_seconds = time.perf_counter() - wall_start
+                cpu_seconds = server_cpu_seconds(pid) - cpu_start
+                if received != byte_count:
+                    raise RuntimeError(f"Expected {byte_count} bytes, received {received}")
+                if iteration:  # First download warms the page cache and connection.
+                    samples.append({"wall_seconds": wall_seconds, "server_cpu_seconds": cpu_seconds, "bytes": received})
+        finally:
+            stopped = await client.delete(f"/api/v1/playback-sessions/{session_id}")
+            stopped.raise_for_status()
     return {
         "mode": "HTTP range with one unmeasured warmup",
         "samples": samples,

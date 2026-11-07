@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { libraries as libraryApi } from "@/api/client";
+import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps({
   initialPath: {
@@ -119,24 +120,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-    @click.self="$emit('close')"
-  >
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] flex flex-col" @click.stop>
+  <ModalDialog :label="$t('libraries.browseDirectory')" @close="$emit('close')">
+    <div class="surface-panel p-5 sm:p-6 w-full max-w-2xl max-h-[80vh] flex flex-col">
       <h3 class="text-xl font-semibold text-white mb-4">
         {{ $t('libraries.browseDirectory') }}
       </h3>
 
       <!-- Navigation Controls -->
       <div class="mb-4 flex items-center space-x-2">
-        <button
+        <button type="button"
           @click="goBack"
           :disabled="!canGoBack"
-          class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-3 py-2 bg-surface-raised hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :title="$t('libraries.goBack')"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -145,13 +143,13 @@ onMounted(() => {
             />
           </svg>
         </button>
-        <button
+        <button type="button"
           @click="goForward"
           :disabled="!canGoForward"
-          class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-3 py-2 bg-surface-raised hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :title="$t('libraries.goForward')"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -160,13 +158,13 @@ onMounted(() => {
             />
           </svg>
         </button>
-        <button
+        <button type="button"
           @click="goUp"
           :disabled="currentPath === '/'"
-          class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-3 py-2 bg-surface-raised hover:bg-gray-600 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :title="$t('libraries.goUp')"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -179,13 +177,13 @@ onMounted(() => {
           v-model="currentPath"
           type="text"
           @keyup.enter="navigateToPath"
-          class="flex-1 px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 text-sm"
+          class="flex-1 px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 text-sm"
           :placeholder="$t('libraries.enterPath')"
         />
       </div>
 
       <!-- Directory Contents -->
-      <div class="flex-1 overflow-y-auto border border-gray-700 rounded-md bg-gray-900">
+      <div class="flex-1 overflow-y-auto border border-outline rounded-md bg-background">
         <div v-if="loading" class="p-8 text-center text-gray-400">
           {{ $t('common.loading') }}...
         </div>
@@ -195,14 +193,14 @@ onMounted(() => {
         <div v-else-if="items.length === 0" class="p-8 text-center text-gray-400">
           {{ $t('libraries.emptyDirectory') }}
         </div>
-        <div v-else class="divide-y divide-gray-700">
-          <button
+        <div v-else class="divide-y divide-outline">
+          <button type="button"
             v-for="item in items"
             :key="item.path"
             @click="handleItemClick(item)"
-            class="w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors flex items-center space-x-3"
+            class="w-full px-4 py-3 text-left hover:bg-surface-raised transition-colors flex items-center space-x-3"
           >
-            <svg
+            <svg aria-hidden="true"
               v-if="item.is_directory"
               class="w-5 h-5 text-yellow-400"
               fill="none"
@@ -216,7 +214,7 @@ onMounted(() => {
                 d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
               />
             </svg>
-            <svg
+            <svg aria-hidden="true"
               v-else
               class="w-5 h-5 text-gray-400"
               fill="none"
@@ -240,7 +238,7 @@ onMounted(() => {
         <button
           type="button"
           @click="$emit('close')"
-          class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+          class="px-4 py-2 text-sm font-medium text-gray-300 bg-surface-raised hover:bg-gray-600 rounded-md transition-colors"
         >
           {{ $t('common.cancel') }}
         </button>
@@ -254,5 +252,5 @@ onMounted(() => {
         </button>
       </div>
     </div>
-  </div>
+  </ModalDialog>
 </template>

@@ -4,7 +4,7 @@ import asyncio
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 import aiofiles
 from fastapi import HTTPException, status
@@ -17,13 +17,13 @@ from app.models.transcoding import TranscodingJobStatus
 HLS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
-    "Cache-Control": "no-cache",
+    "Cache-Control": "private, no-store",
 }
 
 SEGMENT_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
-    "Cache-Control": "public, max-age=3600",
+    "Cache-Control": "private, no-store",
 }
 
 VIDEO_CONTENT_TYPES = {
@@ -232,46 +232,25 @@ def first_playlist_segment(content: str) -> str | None:
     return None
 
 
-def append_api_key_to_playlist_segments(content: str, api_key: str | None) -> str:
-    """Append query auth to relative HLS segment URLs for native HLS players."""
-    if not api_key:
-        return content
+def append_media_token_to_playlist(content: str, session_id: str, media_token: str | None) -> str:
+    """Propagate only the playback-scoped credential to relative native HLS assets."""
+    query = urlencode({"session_id": session_id, **({"media_token": media_token} if media_token else {})})
 
-    encoded_key = quote(api_key, safe="")
-    rewritten_lines: list[str] = []
+    def scoped_uri(uri: str) -> str:
+        if not uri or "://" in uri or uri.startswith("/"):
+            return uri
+        return f"{uri}{'&' if '?' in uri else '?'}{query}"
+
+    lines = []
     for raw_line in content.splitlines():
         line = raw_line.strip()
         if line.startswith("#EXT-X-MAP:"):
-            rewritten_lines.append(_append_api_key_to_ext_x_map(raw_line, encoded_key))
-            continue
-        if not line or line.startswith(("#", "/")) or "://" in line or "api_key=" in line:
-            rewritten_lines.append(raw_line)
-            continue
-
-        separator = "&" if "?" in line else "?"
-        rewritten_lines.append(f"{line}{separator}api_key={encoded_key}")
-
-    suffix = "\n" if content.endswith("\n") else ""
-    return "\n".join(rewritten_lines) + suffix
-
-
-def _append_api_key_to_ext_x_map(line: str, encoded_key: str) -> str:
-    uri_marker = 'URI="'
-    marker_start = line.find(uri_marker)
-    if marker_start == -1:
-        return line
-
-    uri_start = marker_start + len(uri_marker)
-    uri_end = line.find('"', uri_start)
-    if uri_end == -1:
-        return line
-
-    uri = line[uri_start:uri_end]
-    if not uri or "://" in uri or uri.startswith("/") or "api_key=" in uri:
-        return line
-
-    separator = "&" if "?" in uri else "?"
-    return f"{line[:uri_start]}{uri}{separator}api_key={encoded_key}{line[uri_end:]}"
+            lines.append(re.sub(r'URI="([^"\n]+)"', lambda match: f'URI="{scoped_uri(match.group(1))}"', raw_line))
+        elif line and not line.startswith("#"):
+            lines.append(scoped_uri(line))
+        else:
+            lines.append(raw_line)
+    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
 
 
 def raise_invalid_range(file_size: int) -> None:

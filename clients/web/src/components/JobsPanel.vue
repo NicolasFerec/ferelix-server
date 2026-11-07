@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="jobs-panel">
     <div class="flex justify-between items-center mb-6">
-      <h2 class="text-2xl font-semibold text-white">{{ $t('jobs.title') }}</h2>
+      <h2 class="page-heading">{{ $t('jobs.title') }}</h2>
     </div>
 
     <!-- Loading state -->
@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
     <!-- Error state -->
     <div v-else-if="error" class="text-center text-red-400 py-12">
       <p>{{ error }}</p>
-      <button
+      <button type="button"
         @click="loadAll()"
         class="mt-4 px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
       >
@@ -348,13 +348,13 @@ onBeforeUnmount(() => {
       <h3 class="text-xl font-semibold text-white mb-4">{{ $t('jobs.scheduled') }}</h3>
 
       <!-- Empty state -->
-      <div v-if="jobs.length === 0" class="text-center text-gray-400 py-12 bg-gray-800 rounded-lg">
+      <div v-if="jobs.length === 0" class="text-center text-gray-400 py-12 bg-surface rounded-lg">
         <p>{{ $t('jobs.noJobs') }}</p>
       </div>
 
       <!-- Jobs table -->
       <DashboardTable v-else>
-          <thead class="bg-gray-700">
+          <thead class="bg-surface-raised">
             <tr>
               <th
                 class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
@@ -383,8 +383,8 @@ onBeforeUnmount(() => {
               </th>
             </tr>
           </thead>
-          <tbody class="bg-gray-800 divide-y divide-gray-700">
-            <tr v-for="job in jobs" :key="job.id" class="hover:bg-gray-750">
+          <tbody class="bg-surface divide-y divide-outline">
+            <tr v-for="job in jobs" :key="job.id" class="hover:bg-white/5">
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
                 {{ getJobName(job) }}
               </td>
@@ -405,7 +405,7 @@ onBeforeUnmount(() => {
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button
+                <button type="button"
                   @click="triggerJob(job.id)"
                   :disabled="triggeringJobs.has(job.id)"
                   class="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md transition-colors text-sm"
@@ -425,14 +425,14 @@ onBeforeUnmount(() => {
       <!-- Empty state -->
       <div
         v-if="jobHistory.length === 0"
-        class="text-center text-gray-400 py-12 bg-gray-800 rounded-lg"
+        class="text-center text-gray-400 py-12 bg-surface rounded-lg"
       >
         <p>{{ $t('jobs.noHistory') }}</p>
       </div>
 
       <!-- History table -->
       <DashboardTable v-else>
-          <thead class="bg-gray-700">
+          <thead class="bg-surface-raised">
             <tr>
               <th
                 class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
@@ -466,13 +466,13 @@ onBeforeUnmount(() => {
               </th>
             </tr>
           </thead>
-          <tbody class="bg-gray-800 divide-y divide-gray-700">
-            <tr v-for="record in jobHistory" :key="record.job_id" class="hover:bg-gray-750">
+          <tbody class="bg-surface divide-y divide-outline">
+            <tr v-for="record in jobHistory" :key="record.job_id" class="hover:bg-white/5">
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
                 {{ getHistoryJobName(record) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                <span class="px-2 py-1 rounded-sm text-xs bg-gray-700 text-gray-300">
+                <span class="px-2 py-1 rounded-sm text-xs bg-surface-raised text-gray-300">
                   {{ getJobTypeLabel(record.job_type) }}
                 </span>
               </td>
@@ -488,11 +488,11 @@ onBeforeUnmount(() => {
                     {{ record.files_processed || 0 }} / {{ record.files_total }}
                     {{ $t('jobs.files') }}
                   </div>
-                  <div class="w-full bg-gray-700 rounded-full h-2">
+                  <div class="w-full bg-surface-raised rounded-full h-2">
                     <div
                       class="bg-primary-600 h-2 rounded-full transition-all duration-300"
                       :style="{
-                        width: ((record.files_processed || 0) / record.files_total) * 100 + '%',
+                        width: `${((record.files_processed || 0) / record.files_total) * 100}%`,
                       }"
                     ></div>
                   </div>
@@ -514,7 +514,7 @@ onBeforeUnmount(() => {
                       {{ record.error }}
                     </div>
                   </div>
-                  <button
+                  <button type="button"
                     v-if="record.status === 'running'"
                     @click="cancelJob(record.job_id)"
                     :disabled="cancellingJobs.has(record.job_id)"

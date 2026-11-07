@@ -198,3 +198,135 @@ def test_thumbnail_for_short_limited_range_video(tmp_path: Path, monkeypatch) ->
     output = generate_video_thumbnail(source, 1.0)
     assert output is not None
     assert Path(output).read_bytes().startswith(b"\xff\xd8")
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg is not installed")
+def test_selected_video_and_target_framerate_are_applied_to_real_hls(tmp_path):
+    import json
+
+    source = tmp_path / "two-videos.mkv"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:s=320x180:r=60:d=0.6",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=blue:s=160x90:r=60:d=0.6",
+            "-map",
+            "0:v",
+            "-map",
+            "1:v",
+            "-c:v",
+            "libx264",
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=15,
+    )
+    hardware = HardwareAcceleration(selected_device="software")
+    hardware._detected = True
+    command = HlsCommandBuilder("ffmpeg", hardware).build_transcode(
+        HlsCommandOptions(
+            input_path=str(source),
+            playlist_path=str(tmp_path / "playlist.m3u8"),
+            segment_pattern=str(tmp_path / "segment_%03d.ts"),
+            video_stream_index=1,
+            real_frame_rate=60,
+            max_frame_rate=10,
+        )
+    )
+    subprocess.run(command, check=True, capture_output=True, timeout=15)
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,avg_frame_rate",
+            "-of",
+            "json",
+            str(tmp_path / "segment_000.ts"),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    stream = json.loads(probe.stdout)["streams"][0]
+    assert (stream["width"], stream["height"]) == (160, 90)
+    assert stream["avg_frame_rate"] == "10/1"
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg is not installed")
+@pytest.mark.parametrize(
+    "max_width,max_height,expected", [(1280, 720, (1280, 532)), (1280, None, (1280, 532)), (None, 534, (1280, 534))]
+)
+def test_scaled_output_has_square_pixels_and_never_exceeds_bounds(tmp_path, max_width, max_height, expected):
+    import json
+
+    hardware = HardwareAcceleration(selected_device="software")
+    hardware._detected = True
+    builder = HlsCommandBuilder("ffmpeg", hardware)
+    filters = builder._video_filters(
+        HlsCommandOptions(
+            input_path="unused",
+            playlist_path="unused",
+            segment_pattern="unused",
+            max_width=max_width,
+            max_height=max_height,
+        ),
+        "libx264",
+        False,
+    )
+    output = tmp_path / "scaled.mp4"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red:s=3840x1600:r=1:d=1",
+            "-vf",
+            ",".join(filters),
+            "-frames:v",
+            "1",
+            "-c:v",
+            "libx264",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=15,
+    )
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,sample_aspect_ratio",
+            "-of",
+            "json",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    stream = json.loads(probe.stdout)["streams"][0]
+    assert (stream["width"], stream["height"]) == expected
+    assert stream["sample_aspect_ratio"] == "1:1"

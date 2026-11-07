@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,6 +47,6 @@ class MediaViewSchema(BaseModel):
 class MediaViewUpdate(BaseModel):
     """Manual watch-state update payload."""
 
-    position_seconds: float = 0.0
-    duration_seconds: float | None = None
+    position_seconds: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     watched: bool | None = None

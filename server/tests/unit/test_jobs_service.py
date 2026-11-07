@@ -1,7 +1,11 @@
 """Unit tests for the jobs service."""
 
 from datetime import UTC, datetime
+from unittest.mock import Mock
 
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_SUBMITTED, JobExecutionEvent, JobSubmissionEvent
+
+from app.services import jobs
 from app.services.jobs import (
     _JOB_EXECUTION_HISTORY,
     _JOB_STATES,
@@ -342,3 +346,36 @@ class TestGetJobState:
         state = get_job_state("nonexistent_job")
 
         assert state is None
+
+
+def test_scheduler_completion_preserves_cooperative_cancellation() -> None:
+    job_id = "scan_library_99_cancelled"
+    scheduler = Mock()
+    scheduler.get_job.return_value = None
+    now = datetime.now(UTC)
+    jobs._handle_job_event(JobSubmissionEvent(EVENT_JOB_SUBMITTED, job_id, "default", [now]), scheduler)
+    assert request_job_cancellation(job_id)
+    mark_job_cancelled(job_id)
+    jobs._handle_job_event(JobExecutionEvent(EVENT_JOB_EXECUTED, job_id, "default", now), scheduler)
+    assert _JOB_STATES[job_id].status == "cancelled"
+    assert next(record for record in get_job_history() if record.job_id == job_id).status == "cancelled"
+    # A later scheduled run must not inherit cancellation or old progress.
+    jobs._handle_job_event(JobSubmissionEvent(EVENT_JOB_SUBMITTED, job_id, "default", [now]), scheduler)
+    assert _JOB_STATES[job_id].status == "running"
+    assert not is_cancellation_requested(job_id)
+    assert _JOB_STATES[job_id].cancelled_at is None
+    _JOB_STATES.pop(job_id)
+
+
+def test_completed_one_off_state_retention_is_bounded(monkeypatch) -> None:
+    states = {
+        "library_scanner": JobState("library_scanner", "scanner", "Scanner", status="success"),
+        "active": JobState("active", "active", "Active", status="running"),
+        "pending": JobState("pending", "pending", "Pending"),
+    }
+    monkeypatch.setattr(jobs, "_JOB_STATES", states)
+    for index in range(1000):
+        mark_manual_run(f"scan_library_99_{index}", "success")
+    assert len(states) == jobs.MAX_COMPLETED_JOB_STATES + 3
+    assert {"library_scanner", "active", "pending", "scan_library_99_999"} <= states.keys()
+    assert "scan_library_99_0" not in states

@@ -209,54 +209,57 @@ function probeCodecSupport(): CodecSupport {
 /**
  * Detect HDR and high bit-depth support
  */
-function probeHDRSupport(): HDRSupport {
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-
-    const hdrSupport: HDRSupport = {
-        hdr10: false,
+export async function probeHDRSupport(main10: boolean): Promise<HDRSupport> {
+    const hdrDisplay = window.matchMedia("(dynamic-range: high)").matches;
+    const wideColorGamut =
+        window.matchMedia("(color-gamut: p3)").matches || window.matchMedia("(color-gamut: rec2020)").matches;
+    const [hdr10, hlg] =
+        main10 && hdrDisplay
+            ? await Promise.all([
+                  probeVideoDecoder('video/mp4; codecs="hvc1.2.4.L150.B0"', "pq"),
+                  probeVideoDecoder('video/mp4; codecs="hvc1.2.4.L150.B0"', "hlg"),
+              ])
+            : [false, false];
+    return {
+        hdr10,
+        hlg,
         dolbyVision: false,
-        hlg: false,
-        bitDepth10: false,
+        bitDepth10: main10,
         bitDepth12: false,
-        wideColorGamut: false,
+        wideColorGamut,
+        mediaCapabilitiesApi: !!navigator.mediaCapabilities?.decodingInfo,
     };
+}
 
-    // Check for MediaCapabilities API (modern browsers)
-    if ("mediaCapabilities" in navigator) {
-        hdrSupport.mediaCapabilitiesApi = true;
+async function probeVideoDecoder(contentType: string, transferFunction?: "pq" | "hlg"): Promise<boolean> {
+    const video = document.createElement("video");
+    const mse = typeof MediaSource !== "undefined" && MediaSource.isTypeSupported(contentType);
+    if (!mse && !(video.canPlayType("application/vnd.apple.mpegurl") && video.canPlayType(contentType))) return false;
+    if (!navigator.mediaCapabilities?.decodingInfo) return false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        const answer = await Promise.race([
+            navigator.mediaCapabilities.decodingInfo({
+                type: mse ? "media-source" : "file",
+                video: {
+                    contentType,
+                    width: 3840,
+                    height: 2160,
+                    bitrate: 20000000,
+                    framerate: 24,
+                    ...(transferFunction ? { transferFunction, colorGamut: "rec2020" } : {}),
+                },
+            }),
+            new Promise<null>((resolve) => {
+                timer = setTimeout(() => resolve(null), 1500);
+            }),
+        ]);
+        return !!answer?.supported && answer.smooth !== false;
+    } catch {
+        return false;
+    } finally {
+        clearTimeout(timer);
     }
-
-    // Check WebGL extensions for high bit depth support
-    if (gl) {
-        const extensions = gl.getSupportedExtensions() || [];
-
-        // Most modern browsers support 10-bit decoding even if WebGL extensions don't indicate it
-        // Check for texture formats that indicate 10-bit support or assume support for modern browsers
-        hdrSupport.bitDepth10 =
-            extensions.some(
-                (ext) =>
-                    ext.includes("texture_norm16") ||
-                    ext.includes("texture_float") ||
-                    ext.includes("EXT_color_buffer_half_float"),
-            ) || true; // Default to true for modern browsers - most support 10-bit decoding
-
-        // 12-bit is less common, be more conservative
-        hdrSupport.bitDepth12 = extensions.some(
-            (ext) => ext.includes("texture_norm16") || ext.includes("texture_float"),
-        );
-    } else {
-        // If no WebGL, assume 10-bit support for modern browsers
-        hdrSupport.bitDepth10 = true;
-        hdrSupport.bitDepth12 = false;
-    }
-
-    // Check CSS color-gamut support for wide color
-    if (window.CSS && CSS.supports) {
-        hdrSupport.wideColorGamut = CSS.supports("color", "color(display-p3 1 0 0)");
-    }
-
-    return hdrSupport;
 }
 
 /**
@@ -398,26 +401,26 @@ function buildCodecProfiles(hdrSupport: HDRSupport, displayCaps: DisplayCapabili
         Conditions: hevcConditions,
     });
 
-    // Remove aggressive HDR constraints - let the browser handle HDR gracefully
-    // Most browsers will fallback to SDR automatically if HDR isn't supported
-
-    // Only add 10-bit constraints if 10-bit really isn't supported (which is rare)
-    if (!hdrSupport.bitDepth10) {
-        ["h264", "hevc", "vp9", "av1"].forEach((codec) => {
-            profiles.push({
-                Type: "Video",
-                Codec: codec,
-                Conditions: [
-                    {
-                        Condition: "LessThanEqual",
-                        Property: "VideoBitDepth",
-                        Value: "8",
-                        IsRequired: false, // Make this advisory, not blocking
-                    },
-                ],
-            });
+    const videoRanges = ["SDR", ...(hdrSupport.hdr10 ? ["HDR10"] : []), ...(hdrSupport.hlg ? ["HLG"] : [])];
+    for (const codec of ["h264", "hevc", "vp9", "av1"]) {
+        profiles.push({
+            Type: "Video",
+            Codec: codec,
+            Conditions: [
+                {
+                    Condition: "EqualsAny",
+                    Property: "VideoRangeType",
+                    Value: codec === "hevc" ? videoRanges.join("|") : "SDR",
+                    IsRequired: true,
+                },
+            ],
         });
     }
+    profiles.push({
+        Type: "Video",
+        Codec: "h264",
+        Conditions: [{ Condition: "LessThanEqual", Property: "VideoBitDepth", Value: "8", IsRequired: true }],
+    });
 
     return profiles;
 }
@@ -467,7 +470,11 @@ export async function buildDeviceProfile(): Promise<DeviceProfile> {
     // canPlayType() on a file. Never infer MKV support from MP4 support.
     codecSupport.video.mp4 = (codecSupport.video.mp4 || []).filter((codec) => codec !== "hevc");
     if (hevc.main || hevc.main10) codecSupport.video.mp4.push("hevc");
-    const hdrSupport = probeHDRSupport();
+    const [hdrSupport, vp9Main10, av1Main10] = await Promise.all([
+        probeHDRSupport(hevc.main10),
+        probeVideoDecoder('video/mp4; codecs="vp09.02.10.10"'),
+        probeVideoDecoder('video/mp4; codecs="av01.0.12M.10"'),
+    ]);
     const displayCaps = probeDisplayCapabilities();
 
     const profile: DeviceProfile = {
@@ -510,11 +517,22 @@ export async function buildDeviceProfile(): Promise<DeviceProfile> {
         },
     };
 
-    if (!hevc.main10) {
+    for (const [codec, supports10Bit] of [
+        ["hevc", hevc.main10],
+        ["vp9", vp9Main10],
+        ["av1", av1Main10],
+    ] as const) {
         profile.CodecProfiles.push({
             Type: "Video",
-            Codec: "hevc",
-            Conditions: [{ Condition: "LessThanEqual", Property: "VideoBitDepth", Value: "8", IsRequired: true }],
+            Codec: codec,
+            Conditions: [
+                {
+                    Condition: "LessThanEqual",
+                    Property: "VideoBitDepth",
+                    Value: supports10Bit ? "10" : "8",
+                    IsRequired: true,
+                },
+            ],
         });
     }
     return profile;

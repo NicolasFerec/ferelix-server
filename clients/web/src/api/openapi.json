@@ -717,7 +717,7 @@
           "media"
         ],
         "summary": "Get Library Items",
-        "description": "Get items (media files) from a specific library.\n\nArgs:\n    library_id: Library path ID\n    user: Authenticated user\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files from the library\n\nRaises:\n    HTTPException: If library not found",
+        "description": "Get a stable, bounded page of library cards and current-user progress.",
         "operationId": "get_library_items_api_v1_libraries__library_id__items_get",
         "security": [
           {
@@ -740,6 +740,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "default": 0,
               "title": "Skip"
             }
@@ -750,8 +751,27 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
               "default": 100,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After Id"
             }
           },
           {
@@ -779,7 +799,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/MediaFileSchema"
+                    "$ref": "#/components/schemas/MediaCardSchema"
                   },
                   "title": "Response Get Library Items Api V1 Libraries  Library Id  Items Get"
                 }
@@ -805,7 +825,7 @@
           "media"
         ],
         "summary": "Get Media Files",
-        "description": "Get all discovered media files.\n\nArgs:\n    user: Authenticated user\n    session: Database session\n    skip: Number of records to skip\n    limit: Maximum number of records to return\n\nReturns:\n    List of media files",
+        "description": "Get a stable page; after_id supports traversal despite earlier deletions.",
         "operationId": "get_media_files_api_v1_media_files_get",
         "security": [
           {
@@ -819,6 +839,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "default": 0,
               "title": "Skip"
             }
@@ -829,8 +850,27 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
               "default": 100,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After Id"
             }
           },
           {
@@ -858,7 +898,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/MediaFileSchema"
+                    "$ref": "#/components/schemas/MediaCardSchema"
                   },
                   "title": "Response Get Media Files Api V1 Media Files Get"
                 }
@@ -884,7 +924,7 @@
           "media"
         ],
         "summary": "Get Continue Watching Media Files",
-        "description": "Get media files started by the current user but not completed.",
+        "description": "Get in-progress cards, filtering completed items before applying the limit.",
         "operationId": "get_continue_watching_media_files_api_v1_media_files_continue_watching_get",
         "security": [
           {
@@ -898,6 +938,8 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
               "default": 24,
               "title": "Limit"
             }
@@ -927,7 +969,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/MediaFileSchema"
+                    "$ref": "#/components/schemas/MediaCardSchema"
                   },
                   "title": "Response Get Continue Watching Media Files Api V1 Media Files Continue Watching Get"
                 }
@@ -1636,21 +1678,14 @@
           {
             "name": "session_id",
             "in": "query",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
               "title": "Session Id"
             }
           },
           {
-            "name": "api_key",
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -1662,7 +1697,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           },
           {
@@ -1728,6 +1763,44 @@
             }
           },
           {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "playback_generation",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Playback Generation"
+            }
+          },
+          {
+            "name": "video_stream_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Video stream index to include",
+              "title": "Video Stream Index"
+            },
+            "description": "Video stream index to include"
+          },
+          {
             "name": "audio_stream_index",
             "in": "query",
             "required": false,
@@ -1752,7 +1825,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "type": "number",
+                  "minimum": 0
                 },
                 {
                   "type": "null"
@@ -1762,22 +1836,6 @@
               "title": "Start Time"
             },
             "description": "Start time in seconds for seeking"
-          },
-          {
-            "name": "session_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session Id"
-            }
           },
           {
             "name": "api_key",
@@ -1842,6 +1900,44 @@
               "type": "integer",
               "title": "Media Id"
             }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "playback_generation",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Playback Generation"
+            }
+          },
+          {
+            "name": "video_stream_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Video stream index to include",
+              "title": "Video Stream Index"
+            },
+            "description": "Video stream index to include"
           },
           {
             "name": "video_codec",
@@ -1910,7 +2006,9 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "integer",
+                  "maximum": 8192,
+                  "minimum": 2
                 },
                 {
                   "type": "null"
@@ -1928,7 +2026,9 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "integer",
+                  "maximum": 8192,
+                  "minimum": 2
                 },
                 {
                   "type": "null"
@@ -1938,6 +2038,24 @@
               "title": "Max Height"
             },
             "description": "Maximum video height"
+          },
+          {
+            "name": "max_frame_rate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 240,
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Frame Rate"
+            }
           },
           {
             "name": "audio_stream_index",
@@ -1982,7 +2100,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "type": "number",
+                  "minimum": 0
                 },
                 {
                   "type": "null"
@@ -1992,22 +2111,6 @@
               "title": "Start Time"
             },
             "description": "Start time in seconds for seeking"
-          },
-          {
-            "name": "session_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session Id"
-            }
           },
           {
             "name": "api_key",
@@ -2074,6 +2177,44 @@
             }
           },
           {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "playback_generation",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "title": "Playback Generation"
+            }
+          },
+          {
+            "name": "video_stream_index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Video stream index to include",
+              "title": "Video Stream Index"
+            },
+            "description": "Video stream index to include"
+          },
+          {
             "name": "audio_codec",
             "in": "query",
             "required": false,
@@ -2129,7 +2270,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "type": "number",
+                  "minimum": 0
                 },
                 {
                   "type": "null"
@@ -2139,22 +2281,6 @@
               "title": "Start Time"
             },
             "description": "Start time in seconds for seeking"
-          },
-          {
-            "name": "session_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session Id"
-            }
           },
           {
             "name": "api_key",
@@ -2221,7 +2347,16 @@
             }
           },
           {
-            "name": "api_key",
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -2233,7 +2368,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           }
         ],
@@ -2281,7 +2416,16 @@
             }
           },
           {
-            "name": "api_key",
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -2293,7 +2437,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           }
         ],
@@ -2352,7 +2496,16 @@
             }
           },
           {
-            "name": "api_key",
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -2364,7 +2517,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           }
         ],
@@ -2414,7 +2567,16 @@
             }
           },
           {
-            "name": "api_key",
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -2426,7 +2588,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           }
         ],
@@ -2485,7 +2647,16 @@
             }
           },
           {
-            "name": "api_key",
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -2497,7 +2668,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           }
         ],
@@ -2688,7 +2859,16 @@
             }
           },
           {
-            "name": "api_key",
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "media_token",
             "in": "query",
             "required": false,
             "schema": {
@@ -2700,7 +2880,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Api Key"
+              "title": "Media Token"
             }
           }
         ],
@@ -5379,10 +5559,14 @@
         "properties": {
           "username": {
             "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Username"
           },
           "password": {
             "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
             "title": "Password"
           },
           "language": {
@@ -5891,7 +6075,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/MediaFileSchema"
+              "$ref": "#/components/schemas/MediaCardSchema"
             },
             "type": "array",
             "title": "Items"
@@ -6397,6 +6581,112 @@
         "title": "LogsResponse",
         "description": "Server logs response."
       },
+      "MediaCardSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "file_extension": {
+            "type": "string",
+            "title": "File Extension"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec"
+          },
+          "bitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bitrate"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "user_view": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MediaViewSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "file_name",
+          "file_extension",
+          "created_at"
+        ],
+        "title": "MediaCardSchema",
+        "description": "Catalogue projection; tracks and server diagnostics belong to media details."
+      },
       "MediaFileSchema": {
         "properties": {
           "id": {
@@ -6506,6 +6796,29 @@
             "type": "string",
             "format": "date-time",
             "title": "Scanned At"
+          },
+          "last_scan_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Attempt At"
+          },
+          "scan_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Error"
           },
           "deleted_at": {
             "anyOf": [
@@ -6652,13 +6965,15 @@
         "properties": {
           "position_seconds": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Position Seconds",
             "default": 0.0
           },
           "duration_seconds": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -6685,6 +7000,7 @@
       "PlayMethod": {
         "type": "string",
         "enum": [
+          "None",
           "DirectPlay",
           "DirectStream",
           "Transcode"
@@ -6727,6 +7043,22 @@
             "title": "Isplayback",
             "default": true
           },
+          "PlaybackSessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playbacksessionid"
+          },
+          "PlaybackGeneration": {
+            "type": "integer",
+            "title": "Playbackgeneration",
+            "default": 1
+          },
           "RequestedResolution": {
             "anyOf": [
               {
@@ -6749,6 +7081,17 @@
               }
             ],
             "title": "Audiostreamindex"
+          },
+          "VideoStreamIndex": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videostreamindex"
           }
         },
         "type": "object",
@@ -6806,13 +7149,25 @@
           "duration_seconds": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0.0
               },
               {
                 "type": "null"
               }
             ],
             "title": "Duration Seconds"
+          },
+          "video_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Stream Index"
           },
           "audio_stream_index": {
             "anyOf": [
@@ -6846,15 +7201,23 @@
       },
       "PlaybackSessionHeartbeat": {
         "properties": {
+          "playback_generation": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Playback Generation",
+            "default": 0
+          },
           "position_seconds": {
             "type": "number",
+            "minimum": 0.0,
             "title": "Position Seconds",
             "default": 0.0
           },
           "duration_seconds": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -6899,6 +7262,17 @@
               }
             ],
             "title": "Transcoding Job Id"
+          },
+          "video_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Stream Index"
           },
           "audio_stream_index": {
             "anyOf": [
@@ -6962,6 +7336,22 @@
             "type": "string",
             "title": "Id"
           },
+          "media_access_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Access Token"
+          },
+          "playback_generation": {
+            "type": "integer",
+            "title": "Playback Generation",
+            "default": 0
+          },
           "user_id": {
             "type": "integer",
             "title": "User Id"
@@ -7017,7 +7407,8 @@
           "duration_seconds": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -7028,6 +7419,17 @@
           "is_paused": {
             "type": "boolean",
             "title": "Is Paused"
+          },
+          "video_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Stream Index"
           },
           "audio_stream_index": {
             "anyOf": [
@@ -7588,6 +7990,17 @@
             ],
             "title": "Audiostreamindex"
           },
+          "VideoStreamIndex": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videostreamindex"
+          },
           "TranscodingContainer": {
             "anyOf": [
               {
@@ -7633,7 +8046,14 @@
             "title": "Transcodingtype"
           },
           "TranscodeSettings": {
-            "title": "Transcodesettings"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscodeSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "RunTimeTicks": {
             "anyOf": [
@@ -7848,6 +8268,95 @@
         "title": "TranscodeReason",
         "description": "Reasons why transcoding may be required."
       },
+      "TranscodeSettings": {
+        "properties": {
+          "VideoCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videocodec"
+          },
+          "AudioCodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audiocodec"
+          },
+          "VideoBitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Videobitrate"
+          },
+          "AudioBitrate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audiobitrate"
+          },
+          "MaxWidth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxwidth"
+          },
+          "MaxHeight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxheight"
+          },
+          "MaxFrameRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxframerate"
+          },
+          "IsRemuxOnly": {
+            "type": "boolean",
+            "title": "Isremuxonly",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "TranscodeSettings",
+        "description": "Settings for transcoding operations."
+      },
       "TranscodingJobSchema": {
         "properties": {
           "id": {
@@ -7984,6 +8493,38 @@
               }
             ],
             "title": "Start Time"
+          },
+          "playback_generation": {
+            "type": "integer",
+            "title": "Playback Generation",
+            "default": 0
+          },
+          "video_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Stream Index"
+          },
+          "is_throttled": {
+            "type": "boolean",
+            "title": "Is Throttled",
+            "default": false
+          },
+          "encoded_ahead_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encoded Ahead Seconds"
           },
           "error_message": {
             "anyOf": [
@@ -8157,6 +8698,8 @@
         "properties": {
           "username": {
             "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Username"
           },
           "email": {
@@ -8172,6 +8715,8 @@
           },
           "password": {
             "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
             "title": "Password"
           },
           "role": {
@@ -8285,7 +8830,9 @@
           "username": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
               },
               {
                 "type": "null"
@@ -8307,13 +8854,26 @@
           "password": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1
               },
               {
                 "type": "null"
               }
             ],
             "title": "Password"
+          },
+          "current_password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
           },
           "role": {
             "anyOf": [
@@ -8512,6 +9072,17 @@
               }
             ],
             "title": "Level"
+          },
+          "codec_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec Tag"
           },
           "pixel_format": {
             "anyOf": [

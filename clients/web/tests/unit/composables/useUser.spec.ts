@@ -194,3 +194,23 @@ describe("useUser", () => {
         });
     });
 });
+
+it("shares concurrent user loads and ignores a response arriving after logout", async () => {
+    const user = useUser();
+    user.clearUser();
+    vi.mocked(apiClient.isAuthenticated).mockReturnValue(true);
+    let resolve!: (value: apiClient.User) => void;
+    vi.mocked(apiClient.auth.getCurrentUser).mockReturnValue(
+        new Promise((done) => {
+            resolve = done;
+        }),
+    );
+    vi.mocked(apiClient.auth.getCurrentUser).mockClear();
+    const first = user.loadUser();
+    const second = user.loadUser();
+    expect(apiClient.auth.getCurrentUser).toHaveBeenCalledTimes(1);
+    user.clearUser();
+    resolve({ id: 1, username: "old session" } as apiClient.User);
+    await Promise.all([first, second]);
+    expect(user.user.value).toBeNull();
+});

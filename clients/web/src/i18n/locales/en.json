@@ -28,7 +28,9 @@
         "user": "User",
         "unknown": "Unknown",
         "previous": "Previous",
-        "next": "Next"
+        "next": "Next",
+        "skipToContent": "Skip to content",
+        "library": "Library"
     },
     "imageUpload": {
         "chooseImage": "Choose image",
@@ -88,7 +90,8 @@
             "scheduleHint": "Time of day when the cleanup job runs (24-hour format)",
             "gracePeriod": "Grace Period",
             "days": "days",
-            "gracePeriodHint": "Number of days to keep deleted files before permanent deletion"
+            "gracePeriodHint": "Number of days to keep deleted files before permanent deletion",
+            "minute": "Minute"
         },
         "hardwareTranscoding": {
             "title": "Hardware Acceleration",
@@ -99,7 +102,8 @@
             "loadError": "Failed to load hardware acceleration status",
             "decode": "decode",
             "encode": "encode"
-        }
+        },
+        "profile": "Profile"
     },
     "dashboard": {
         "title": "Dashboard",
@@ -243,7 +247,9 @@
         "loadingMediaFiles": "Loading media files...",
         "loadFailed": "Failed to load media files. Please try again.",
         "noRows": "No rows available. Configure playlists to display content.",
-        "continueWatching": "Continue watching"
+        "continueWatching": "Continue watching",
+        "inYourLibrary": "In your library",
+        "details": "View details"
     },
     "recommendationRows": {
         "title": "Recommendation Rows",
@@ -286,7 +292,10 @@
         "allItems": "All Items",
         "invalidId": "Invalid library ID",
         "notFound": "Library not found",
-        "loadFailed": "Failed to load library"
+        "loadFailed": "Failed to load library",
+        "title": "Library",
+        "pageInfo": "Page {page} · {count} titles",
+        "pagination": "Library pages"
     },
     "mediaDetail": {
         "loading": "Loading media...",
@@ -494,6 +503,25 @@
         "switchingResolution": "Switching resolution…",
         "transcodingProgress": "Preparing playback… {progress}%",
         "transcodingFallback": "Format not supported, transcoding…",
-        "buffering": "Buffering…"
+        "buffering": "Buffering…",
+        "sessionUnknown": "The server did not confirm the playback request. Close the player and try again.",
+        "noCompatibleMethod": "No compatible playback method is available for this browser.",
+        "seek": "Playback position"
+    },
+    "auth": {
+        "yourLibrary": "Your library. Your screen.",
+        "tagline": "A home for every film.",
+        "description": "Your media, brought together. Pick up where you left off and enjoy your collection on your own server.",
+        "accountHelp": "Sign in with the account provided by your server administrator.",
+        "showPassword": "Show",
+        "hidePassword": "Hide",
+        "sessionExpired": "Your session has expired. Sign in to continue where you left off.",
+        "passwordChanged": "Password updated. Sign in again with your new password.",
+        "currentPassword": "Current password",
+        "changePassword": "Change password",
+        "security": "Security",
+        "securityDescription": "Changing your password signs you out on all devices.",
+        "passwordChangeFailed": "Could not update your password. Check your current password and try again.",
+        "unavailable": "The server could not be reached. Check your connection and try again."
     }
 }

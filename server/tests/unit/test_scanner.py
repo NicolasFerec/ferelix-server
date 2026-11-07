@@ -2,15 +2,17 @@
 
 import asyncio
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Library, MediaFile
-from app.services.scanner import extract_video_metadata, scan_library_path
+from app.models import AudioTrack, Library, MediaFile, VideoTrack
+from app.services.scanner import MetadataExtractionError, extract_video_metadata, scan_library_path
 
 
 def test_ffprobe_color_transfer_is_preserved_for_hdr(tmp_path: Path) -> None:
@@ -85,7 +87,7 @@ async def test_scan_skips_metadata_and_thumbnail_for_unchanged_existing_file(
 
     await db_session.refresh(media_file)
 
-    assert stats == {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": False}
+    assert stats == {"new": 0, "updated": 0, "deleted": 0, "restored": 0, "cancelled": False, "failed": 0}
     extract_metadata.assert_not_called()
     generate_thumbnail.assert_not_called()
     assert media_file.file_modified_at is not None
@@ -175,3 +177,92 @@ async def test_scan_processes_existing_file_without_metadata(db_session: AsyncSe
     extract_metadata.assert_called_once_with(media_path)
     generate_thumbnail.assert_called_once_with(media_path, 90.0, force=False)
     assert media_file.duration == pytest.approx(90.0)
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "error"),
+    [(1, "", "exited"), (0, "invalid json", "invalid JSON"), (0, '{"streams": []}', "no video")],
+)
+def test_probe_failure_is_explicit(tmp_path: Path, returncode: int, stdout: str, error: str) -> None:
+    with patch("app.services.scanner.subprocess.run") as probe:
+        probe.return_value.returncode = returncode
+        probe.return_value.stdout = stdout
+        with pytest.raises(MetadataExtractionError, match=error):
+            extract_video_metadata(tmp_path / "movie.mkv")
+
+
+def test_probe_timeout_is_explicit(tmp_path: Path) -> None:
+    with (
+        patch("app.services.scanner.subprocess.run", side_effect=subprocess.TimeoutExpired("ffprobe", 30)),
+        pytest.raises(MetadataExtractionError, match="timed out"),
+    ):
+        extract_video_metadata(tmp_path / "movie.mkv")
+
+
+@pytest.mark.asyncio
+async def test_failed_rescan_keeps_tracks_and_retries(db_session: AsyncSession, tmp_path: Path) -> None:
+    media_path = tmp_path / "movie.mkv"
+    _write_media_file(media_path)
+    library = await _create_library(db_session, tmp_path)
+    media_file = await _create_media_file(db_session, media_path, file_size=1, thumbnail_path="known-good.jpg")
+    video = VideoTrack(media_file_id=media_file.id, stream_index=0, codec="h264")
+    audio = AudioTrack(media_file_id=media_file.id, stream_index=1, codec="aac")
+    db_session.add_all([video, audio])
+    await db_session.commit()
+    await db_session.refresh(media_file)
+    scanned_at = media_file.scanned_at
+    with (
+        patch("app.services.scanner.extract_video_metadata", side_effect=MetadataExtractionError("temporary failure")),
+        patch("app.services.scanner.generate_video_thumbnail") as thumbnail,
+    ):
+        stats = await scan_library_path(db_session, library)
+    await db_session.refresh(media_file)
+    assert stats["failed"] == 1
+    assert stats["updated"] == 0
+    assert media_file.duration == pytest.approx(120.0)
+    assert media_file.file_size == 1
+    assert media_file.thumbnail_path == "known-good.jpg"
+    assert media_file.scanned_at == scanned_at
+    assert media_file.scan_error == "temporary failure"
+    assert media_file.last_scan_attempt_at is not None
+    assert await db_session.scalar(select(VideoTrack.id).where(VideoTrack.media_file_id == media_file.id)) == video.id
+    assert await db_session.scalar(select(AudioTrack.id).where(AudioTrack.media_file_id == media_file.id)) == audio.id
+    thumbnail.assert_not_called()
+    metadata = {"duration": 240, "video_tracks": [{"stream_index": 0, "codec": "hevc"}]}
+    with (
+        patch("app.services.scanner.extract_video_metadata", return_value=metadata),
+        patch("app.services.scanner.generate_video_thumbnail", return_value=None),
+    ):
+        retried = await scan_library_path(db_session, library)
+    await db_session.refresh(media_file)
+    assert retried["updated"] == 1
+    assert retried["failed"] == 0
+    assert media_file.duration == 240
+    assert media_file.scan_error is None
+
+
+@pytest.mark.asyncio
+async def test_failed_new_file_is_diagnosable_and_other_files_continue(
+    db_session: AsyncSession, tmp_path: Path
+) -> None:
+    _write_media_file(tmp_path / "bad.mkv")
+    _write_media_file(tmp_path / "good.mkv")
+    library = await _create_library(db_session, tmp_path)
+
+    def probe(path: Path) -> dict:
+        if path.name == "bad.mkv":
+            raise MetadataExtractionError("unreadable")
+        return {"duration": 120, "video_tracks": [{"stream_index": 0, "codec": "h264"}]}
+
+    with (
+        patch("app.services.scanner.extract_video_metadata", side_effect=probe),
+        patch("app.services.scanner.generate_video_thumbnail", return_value=None),
+    ):
+        stats = await scan_library_path(db_session, library)
+    assert stats["failed"] == 1
+    assert stats["new"] == 1
+    failed = await db_session.scalar(select(MediaFile).where(MediaFile.file_name == "bad.mkv"))
+    assert failed is not None
+    assert failed.scan_error == "unreadable"
+    assert failed.last_scan_attempt_at is not None
+    assert failed.duration is None

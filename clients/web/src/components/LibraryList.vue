@@ -72,8 +72,8 @@ onMounted(() => {
 <template>
   <div class="library-list">
     <div class="flex justify-between items-center mb-6">
-      <h2 class="text-2xl font-semibold text-white">{{ $t('libraries.title') }}</h2>
-      <button
+      <h2 class="page-heading">{{ $t('libraries.title') }}</h2>
+      <button type="button"
         @click="
           showForm = true;
           editingLibrary = null;
@@ -103,7 +103,7 @@ onMounted(() => {
     <!-- Error state -->
     <div v-else-if="error" class="text-center text-red-400 py-12">
       <p>{{ error }}</p>
-      <button
+      <button type="button"
         @click="loadLibraries"
         class="mt-4 px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
       >
@@ -118,7 +118,7 @@ onMounted(() => {
 
     <!-- Libraries table -->
     <DashboardTable v-else>
-        <thead class="bg-gray-700">
+        <thead class="bg-surface-raised">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
               {{ $t('libraries.name') }}
@@ -143,7 +143,7 @@ onMounted(() => {
             </th>
           </tr>
         </thead>
-        <tbody class="bg-gray-800 divide-y divide-gray-700">
+        <tbody class="bg-surface divide-y divide-outline">
           <LibraryItem
             v-for="library in libraries"
             :key="library.id"

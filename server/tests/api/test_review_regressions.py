@@ -54,10 +54,15 @@ async def test_library_scan_does_not_delete_sibling_media(db_session: AsyncSessi
         assert item.deleted_at is None
 
 
-async def test_hls_start_keeps_not_found_status(client, auth_headers, monkeypatch):
-
+async def test_hls_start_requires_an_owned_playback_session(client, auth_headers, monkeypatch):
     monkeypatch.setattr("app.services.playback_session.get_transcoder", object)
     response = await client.post("/api/v1/hls/999999/remux", headers=auth_headers)
+    assert response.status_code == 422
+    response = await client.post(
+        "/api/v1/hls/999999/remux",
+        headers=auth_headers,
+        params={"session_id": "unknown-session", "playback_generation": 1},
+    )
     assert response.status_code == 404
 
 

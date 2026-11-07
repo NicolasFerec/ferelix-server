@@ -65,7 +65,7 @@ class TestRegister:
         )
 
         assert response.status_code == 400
-        assert "already registered" in response.json()["detail"].lower()
+        assert "already in use" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_register_duplicate_email(
@@ -86,7 +86,7 @@ class TestRegister:
         )
 
         assert response.status_code == 400
-        assert "already registered" in response.json()["detail"].lower()
+        assert "already in use" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_register_cannot_create_admin(

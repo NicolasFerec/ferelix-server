@@ -1,0 +1,130 @@
+{
+  "review_date": "2026-11-07",
+  "baseline": {
+    "javascript_kb": 979.2,
+    "gzip_kb": 301.6,
+    "description": "Previous production build: one eagerly loaded JavaScript application bundle."
+  },
+  "method": {
+    "command": "cd clients/web && pnpm build",
+    "build_tool": "Vite 8.3.5",
+    "units": "Decimal kB (1000 bytes); production minified JavaScript and gzip sizes reported by Vite, rounded to 0.01 kB per chunk.",
+    "route_calculation": "For each route entry, traverse static import/export-from dependencies in emitted JavaScript recursively, deduplicate chunks, then sum the Vite-reported sizes. Dynamic imports of other routes are excluded.",
+    "entry_calculation": "JavaScript entry referenced by dist/index.html and its static dependencies.",
+    "total_calculation": "Sum all emitted JavaScript chunks once, including deferred routes.",
+    "excluded": "CSS, HTML, images, HTTP headers, network latency and parse/execute time are not included. This measures transferred-code size, not runtime CPU.",
+    "interpretation": "Most savings come from deferring player/HLS and administration code. Total JavaScript increases; it is not an equivalent reduction in total application code."
+  },
+  "routes": {
+    "entry": {
+      "javascript_kb": 224.11,
+      "gzip_kb": 77.78,
+      "reduction_vs_baseline_percent": {
+        "javascript": 77.11,
+        "gzip": 74.21
+      },
+      "chunks": [
+        "index-BZBk6eP3.js"
+      ]
+    },
+    "login": {
+      "javascript_kb": 229.37,
+      "gzip_kb": 80.61,
+      "reduction_vs_baseline_percent": {
+        "javascript": 76.58,
+        "gzip": 73.27
+      },
+      "chunks": [
+        "AuthLayout-yRIkvnaP.js",
+        "LoginView-Q25bkXNH.js",
+        "PasswordField-CqM9nung.js",
+        "index-BZBk6eP3.js"
+      ]
+    },
+    "home": {
+      "javascript_kb": 238.43,
+      "gzip_kb": 84.21,
+      "reduction_vs_baseline_percent": {
+        "javascript": 75.65,
+        "gzip": 72.08
+      },
+      "chunks": [
+        "HomeView-CW4jZH9V.js",
+        "MediaRow-Em3T4XPu.js",
+        "MenuBar-C9dbhYgT.js",
+        "index-BZBk6eP3.js",
+        "mediaDisplay-Dm2C6Dod.js"
+      ]
+    },
+    "player": {
+      "javascript_kb": 857.42,
+      "gzip_kb": 274.39,
+      "reduction_vs_baseline_percent": {
+        "javascript": 12.44,
+        "gzip": 9.02
+      },
+      "chunks": [
+        "PlayerView-Bf4gEiM5.js",
+        "_plugin-vue_export-helper-BDNMzG2s.js",
+        "index-BZBk6eP3.js",
+        "playerUi-BUsf3j1_.js"
+      ]
+    },
+    "dashboard": {
+      "javascript_kb": 323.32,
+      "gzip_kb": 104.62,
+      "reduction_vs_baseline_percent": {
+        "javascript": 66.98,
+        "gzip": 65.31
+      },
+      "chunks": [
+        "DashboardView-_3Q26s77.js",
+        "ImageUploadEditor-CPTOFbUa.js",
+        "MenuBar-C9dbhYgT.js",
+        "PasswordField-CqM9nung.js",
+        "_plugin-vue_export-helper-BDNMzG2s.js",
+        "index-BZBk6eP3.js",
+        "useFloatingDropdown-wcbudATT.js"
+      ]
+    }
+  },
+  "total": {
+    "javascript_kb": 992.96,
+    "gzip_kb": 316.8,
+    "reduction_vs_baseline_percent": {
+      "javascript": -1.41,
+      "gzip": -5.04
+    },
+    "chunks": [
+      "AuthLayout-yRIkvnaP.js",
+      "DashboardView-_3Q26s77.js",
+      "HomeView-CW4jZH9V.js",
+      "ImageUploadEditor-CPTOFbUa.js",
+      "LibraryView-DFi2FmYg.js",
+      "LoginView-Q25bkXNH.js",
+      "MediaDetailView-DREoGWnc.js",
+      "MediaRow-Em3T4XPu.js",
+      "MenuBar-C9dbhYgT.js",
+      "PasswordField-CqM9nung.js",
+      "PlayerView-Bf4gEiM5.js",
+      "SetupView-DlqL9ZyF.js",
+      "UserSettingsView-DJ2prlXk.js",
+      "_plugin-vue_export-helper-BDNMzG2s.js",
+      "index-BZBk6eP3.js",
+      "mediaDisplay-Dm2C6Dod.js",
+      "playerUi-BUsf3j1_.js",
+      "useFloatingDropdown-wcbudATT.js"
+    ]
+  },
+  "deferred_player_chunk": {
+    "javascript_kb": 631.13,
+    "gzip_kb": 195.66,
+    "reduction_vs_baseline_percent": {
+      "javascript": 35.55,
+      "gzip": 35.13
+    },
+    "chunks": [
+      "PlayerView-Bf4gEiM5.js"
+    ]
+  }
+}

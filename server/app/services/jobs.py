@@ -139,6 +139,22 @@ _JOB_STATES: dict[str, JobState] = {
 
 # In-memory job execution history (last 100 executions)
 _JOB_EXECUTION_HISTORY: deque[JobExecutionRecord] = deque(maxlen=100)
+MAX_COMPLETED_JOB_STATES = 100
+
+
+def _prune_completed_job_states(scheduler: AsyncIOScheduler | None = None) -> None:
+    """Bound one-off state retention without evicting pending or running work."""
+    completed = [
+        state
+        for state in _JOB_STATES.values()
+        if state.id not in JOB_REGISTRY
+        and state.id not in _RUNNING_JOB_TASKS
+        and state.status in {"success", "failed", "cancelled"}
+        and (scheduler is None or scheduler.get_job(state.id) is None)
+    ]
+    completed.sort(key=lambda state: _as_aware(state.last_run_time) or datetime.min.replace(tzinfo=UTC))
+    for state in completed[: max(0, len(completed) - MAX_COMPLETED_JOB_STATES)]:
+        _JOB_STATES.pop(state.id, None)
 
 
 def _ensure_state(job_id: str, scheduler: AsyncIOScheduler | None = None) -> JobState:
@@ -265,6 +281,11 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
         state.status = "running"
         state.running_since = now
         state.error = None
+        state.cancellation_requested = False
+        state.cancelled_at = None
+        state.files_total = None
+        state.files_processed = None
+        state.current_file = None
 
         # For scan_library jobs, ensure we have the library name from job kwargs
         job_name_for_record = state.fallback_name
@@ -300,7 +321,10 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
         _JOB_EXECUTION_HISTORY.append(record)
 
     elif event.code == EVENT_JOB_EXECUTED:
-        state.status = "success"
+        # A cooperative cancellation returns normally to APScheduler. Its
+        # EXECUTED notification must not turn that cancellation into success.
+        if state.status != "cancelled":
+            state.status = "success"
         state.last_run_time = _as_aware(event.scheduled_run_time if isinstance(event, JobExecutionEvent) else now)
         state.running_since = None
         state.error = None
@@ -308,7 +332,7 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
         _RUNNING_JOB_TASKS.pop(event.job_id, None)
 
         # Update execution history
-        _update_execution_record(event.job_id, "completed", None)
+        _update_execution_record(event.job_id, "cancelled" if state.status == "cancelled" else "completed", None)
 
     elif event.code in (EVENT_JOB_ERROR, EVENT_JOB_MISSED):
         state.status = "failed"
@@ -328,6 +352,7 @@ def _handle_job_event(event: JobEvent, scheduler: AsyncIOScheduler) -> None:
         logger.debug("Unhandled job event: %s", event)
 
     state.next_run_time = _next_run_for_job(scheduler, event.job_id)
+    _prune_completed_job_states(scheduler)
 
 
 def track_job_task(job_id: str, task: asyncio.Task[Any]) -> None:
@@ -371,6 +396,7 @@ def mark_manual_run(job_id: str, status: JobStatus) -> JobState:
     state.last_run_time = now
     state.running_since = None
     state.next_run_time = state.next_run_time or now
+    _prune_completed_job_states()
     return state
 
 

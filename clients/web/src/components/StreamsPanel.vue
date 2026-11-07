@@ -152,13 +152,13 @@ onBeforeUnmount(() => {
   <div class="streams-panel">
     <div class="mb-8 flex items-center justify-between border-b border-gray-800 pb-6">
       <div>
-        <h2 class="text-2xl font-semibold text-white">{{ $t("streams.title") }}</h2>
+        <h2 class="page-heading">{{ $t("streams.title") }}</h2>
         <p class="mt-1 text-sm text-gray-400">{{ $t("streams.subtitle") }}</p>
       </div>
-      <button
+      <button type="button"
         @click="loadStreams()"
         :disabled="loading"
-        class="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-900"
+        class="rounded-md bg-surface px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-surface-raised disabled:cursor-not-allowed disabled:bg-background"
       >
         {{ loading ? $t("common.loading") : $t("streams.refresh") }}
       </button>
@@ -180,14 +180,14 @@ onBeforeUnmount(() => {
       <article
         v-for="stream in streams"
         :key="stream.id"
-        class="overflow-hidden rounded-md bg-gray-950 shadow-2xl ring-1 ring-white/5"
+        class="overflow-hidden rounded-md bg-background shadow-2xl ring-1 ring-white/5"
       >
-        <div class="bg-gray-900 p-4">
+        <div class="bg-background p-4">
           <div class="flex gap-4">
             <img
               :src="posterUrl(stream)"
               :alt="stream.media_file_name || ''"
-              class="h-28 w-20 flex-none rounded-sm object-cover bg-gray-800"
+              class="h-28 w-20 flex-none rounded-sm object-cover bg-surface"
             />
             <div class="min-w-0 flex-1">
               <div class="flex items-start justify-between gap-3">
@@ -195,15 +195,15 @@ onBeforeUnmount(() => {
                   <h3 class="truncate text-base font-medium text-white">{{ stream.media_file_name || stream.id }}</h3>
                   <p class="mt-1 text-sm text-gray-400">{{ streamState(stream) }} · {{ formatDuration(stream.duration) }}</p>
                 </div>
-                <button
+                <button type="button"
                   @click="stopStream(stream.id)"
                   :disabled="stoppingStreams.has(stream.id)"
-                  class="rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-gray-700"
+                  class="rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-surface-raised"
                 >
                   {{ stoppingStreams.has(stream.id) ? $t("streams.stopping") : $t("streams.stop") }}
                 </button>
               </div>
-              <div class="mt-5 h-1 rounded-full bg-gray-800">
+              <div class="mt-5 h-1 rounded-full bg-surface">
                 <div class="h-1 rounded-full bg-primary-500" :style="{ width: progressWidth(stream) }"></div>
               </div>
               <div class="mt-2 flex justify-between text-xs text-gray-500">
@@ -214,9 +214,9 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="bg-gray-900 px-4 py-3">
+        <div class="bg-background px-4 py-3">
           <div class="flex gap-3">
-            <div class="flex h-12 w-12 flex-none items-center justify-center rounded bg-gray-950 text-sm font-semibold text-white">
+            <div class="flex h-12 w-12 flex-none items-center justify-center rounded bg-background text-sm font-semibold text-white">
               {{ playbackLabel(stream).slice(0, 2).toUpperCase() }}
             </div>
             <div class="min-w-0 text-sm">
@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="divide-y divide-white/5 bg-gray-950">
+        <div class="divide-y divide-white/5 bg-background">
           <div v-if="stream.video" class="grid grid-cols-[4.5rem_1fr] gap-3 px-4 py-3 text-sm">
             <div class="text-gray-500">{{ $t("streams.video") }}</div>
             <div class="text-gray-200">{{ trackSummary(stream.video) }}</div>
@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="flex items-center gap-3 bg-gray-950 p-4">
+        <div class="flex items-center gap-3 bg-background p-4">
           <div class="flex h-10 w-10 items-center justify-center rounded-full bg-stone-400 text-lg font-medium text-white">
             {{ initials(stream.username) }}
           </div>
@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <details v-if="stream.acceleration" class="border-t border-white/5 bg-gray-950 px-4 py-3 text-xs text-gray-400">
+        <details v-if="stream.acceleration" class="border-t border-white/5 bg-background px-4 py-3 text-xs text-gray-400">
           <summary class="cursor-pointer text-gray-300">{{ $t("streams.technicalDetails") }}</summary>
           <div class="mt-3 space-y-1">
             <div>{{ $t("streams.acceleration") }}: {{ stream.acceleration.summary }}</div>

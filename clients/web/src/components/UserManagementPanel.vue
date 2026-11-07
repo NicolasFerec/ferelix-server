@@ -4,8 +4,10 @@ import { useI18n } from "vue-i18n";
 import { dashboardUsers, getAccessToken, type User, type UserCreate, type UserUpdate } from "@/api/client";
 import { useToast } from "@/composables/useToast";
 import { useUser } from "@/composables/useUser";
+import PasswordField from "./auth/PasswordField.vue";
 import DashboardTable from "./DashboardTable.vue";
 import ImageUploadEditor from "./ImageUploadEditor.vue";
+import ModalDialog from "./ModalDialog.vue";
 
 type UserRole = "reader" | "admin";
 
@@ -172,7 +174,7 @@ function buildUpdatePayload(): UserUpdate {
   return {
     username: form.username.trim(),
     email: normalizedEmail(form.email),
-    password: form.password || undefined,
+    password: !isEditingCurrentUser.value ? form.password || undefined : undefined,
     role: form.role,
     is_admin: form.role === "admin",
     is_active: form.is_active,
@@ -265,7 +267,7 @@ onMounted(async () => {
   <section class="space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-white">{{ t("users.title") }}</h1>
+        <h1 class="page-heading">{{ t("users.title") }}</h1>
         <p class="mt-1 text-sm text-gray-400">{{ t("users.subtitle") }}</p>
       </div>
       <button
@@ -280,11 +282,11 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div v-if="error && !isModalOpen" class="rounded-md border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-200">
+    <div v-if="error && !isModalOpen" role="alert" class="rounded-md border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-200">
       {{ error }}
     </div>
     <DashboardTable scrollable>
-      <thead class="bg-gray-900/70">
+      <thead class="bg-background/70">
         <tr>
           <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
             {{ t("users.profileImage") }}
@@ -306,16 +308,16 @@ onMounted(async () => {
           </th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-700">
+      <tbody class="divide-y divide-outline">
         <tr v-if="loading">
           <td colspan="6" class="px-4 py-8 text-center text-gray-400">{{ t("common.loading") }}</td>
         </tr>
         <tr v-else-if="sortedUsers.length === 0">
           <td colspan="6" class="px-4 py-8 text-center text-gray-400">{{ t("users.empty") }}</td>
         </tr>
-        <tr v-for="user in sortedUsers" v-else :key="user.id" class="bg-gray-800">
+        <template v-else><tr v-for="user in sortedUsers" :key="user.id" class="bg-surface">
           <td class="px-4 py-4">
-            <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gray-700 text-sm font-semibold text-gray-200">
+            <div class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-surface-raised text-sm font-semibold text-gray-200">
               <img
                 v-if="authenticatedProfileImageUrl(user)"
                 :src="authenticatedProfileImageUrl(user) || undefined"
@@ -335,7 +337,7 @@ onMounted(async () => {
           <td class="px-4 py-4">
             <span
               class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
-              :class="user.is_admin ? 'bg-primary-500/20 text-primary-200' : 'bg-gray-700 text-gray-200'"
+              :class="user.is_admin ? 'bg-primary-500/20 text-primary-200' : 'bg-surface-raised text-gray-200'"
             >
               {{ roleLabel(user.role ?? (user.is_admin ? "admin" : "reader")) }}
             </span>
@@ -352,7 +354,7 @@ onMounted(async () => {
             <div class="flex justify-end gap-2">
               <button
                 type="button"
-                class="inline-flex h-9 w-9 items-center justify-center rounded-md bg-gray-700 text-gray-200 transition-colors hover:bg-gray-600 hover:text-white"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-md bg-surface-raised text-gray-200 transition-colors hover:bg-gray-600 hover:text-white"
                 :aria-label="t('common.edit')"
                 :title="t('common.edit')"
                 @click="openEditModal(user)"
@@ -385,24 +387,18 @@ onMounted(async () => {
               </button>
             </div>
           </td>
-        </tr>
+        </tr></template>
       </tbody>
     </DashboardTable>
 
     <teleport to="body">
-      <div
-        v-if="isModalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-        role="dialog"
-        aria-modal="true"
-        @click.self="closeModal"
-      >
-        <form class="w-full max-w-xl rounded-lg bg-gray-800 p-6 shadow-2xl" @submit.prevent="submitForm">
+      <ModalDialog v-if="isModalOpen" :label="modalTitle" @close="closeModal">
+        <form class="w-full max-w-xl surface-panel p-5 sm:p-6 shadow-2xl" @submit.prevent="submitForm">
           <div class="flex items-start justify-between gap-4">
             <h2 class="text-xl font-semibold text-white">{{ modalTitle }}</h2>
             <button
               type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-300 transition-colors hover:bg-gray-700 hover:text-white"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-md text-gray-300 transition-colors hover:bg-surface-raised hover:text-white"
               :aria-label="t('common.cancel')"
               @click="closeModal"
             >
@@ -412,7 +408,7 @@ onMounted(async () => {
             </button>
           </div>
 
-          <div v-if="error" class="mt-4 rounded-md border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-200">
+          <div v-if="error" role="alert" class="mt-4 rounded-md border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-200">
             {{ error }}
           </div>
 
@@ -433,42 +429,34 @@ onMounted(async () => {
               <span class="text-sm text-gray-300">{{ t("users.username") }}</span>
               <input
                 v-model="form.username"
-                class="mt-1 w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                class="field-input mt-1"
                 type="text"
-                autocomplete="off"
+                autocomplete="username"
               />
             </label>
             <label class="block">
               <span class="text-sm text-gray-300">{{ t("users.email") }}</span>
               <input
                 v-model="form.email"
-                class="mt-1 w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                class="field-input mt-1"
                 type="email"
-                autocomplete="off"
+                autocomplete="email"
               />
             </label>
-            <label class="block">
-              <span class="text-sm text-gray-300">{{ t("users.password") }}</span>
-              <input
-                v-model="form.password"
-                class="mt-1 w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
-                type="password"
-                autocomplete="new-password"
-                :placeholder="editingUser ? t('users.passwordPlaceholder') : undefined"
-              />
-            </label>
+            <RouterLink v-if="isEditingCurrentUser" to="/settings" class="self-center text-sm text-primary-300 underline underline-offset-4">{{ t("auth.changePassword") }}</RouterLink>
+            <PasswordField v-else id="managed-user-password" v-model="form.password" :label="t('users.password')" autocomplete="new-password" :required="!editingUser" :help="editingUser ? t('users.passwordPlaceholder') : undefined" />
             <label class="block">
               <span class="text-sm text-gray-300">{{ t("users.role") }}</span>
               <div
                 v-if="isEditingCurrentUser"
-                class="mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-gray-300"
+                class="mt-1 w-full rounded-md border border-outline bg-background px-3 py-2 text-gray-300"
               >
                 {{ roleLabel(form.role) }}
               </div>
               <select
                 v-else
                 v-model="form.role"
-                class="mt-1 w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                class="field-input mt-1"
               >
                 <option value="reader">{{ roleLabel("reader") }}</option>
                 <option value="admin">{{ roleLabel("admin") }}</option>
@@ -478,7 +466,7 @@ onMounted(async () => {
               <span class="text-sm text-gray-300">{{ t("users.language") }}</span>
               <select
                 v-model="form.language"
-                class="mt-1 w-full rounded-md border border-gray-600 bg-gray-900 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                class="field-input mt-1"
               >
                 <option value="en">English</option>
                 <option value="fr">Français</option>
@@ -488,7 +476,7 @@ onMounted(async () => {
               <input
                 v-model="form.is_active"
                 type="checkbox"
-                class="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                class="h-4 w-4 rounded border-gray-600 bg-background text-primary-600 focus:ring-primary-500"
               />
               {{ form.is_active ? t("users.active") : t("users.inactive") }}
             </label>
@@ -497,7 +485,7 @@ onMounted(async () => {
           <div class="mt-6 flex justify-end gap-3">
             <button
               type="button"
-              class="rounded-md bg-gray-700 px-4 py-2 font-medium text-gray-100 transition-colors hover:bg-gray-600"
+              class="rounded-md bg-surface-raised px-4 py-2 font-medium text-gray-100 transition-colors hover:bg-gray-600"
               @click="closeModal"
             >
               {{ t("common.cancel") }}
@@ -511,7 +499,7 @@ onMounted(async () => {
             </button>
           </div>
         </form>
-      </div>
+      </ModalDialog>
     </teleport>
   </section>
 </template>

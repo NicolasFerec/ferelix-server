@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { libraries as libraryApi, recommendationRows as rowApi } from "@/api/client";
+import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps({
   row: {
@@ -165,11 +166,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto py-8"
-    @click.self="$emit('close')"
-  >
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-2xl my-auto" @click.stop>
+  <ModalDialog :label="row ? $t('recommendationRows.edit') : $t('recommendationRows.add')" @close="$emit('close')">
+    <div class="surface-panel p-5 sm:p-6 w-full max-w-2xl my-auto">
       <h3 class="text-xl font-semibold text-white mb-4">
         {{ row ? $t('recommendationRows.edit') : $t('recommendationRows.add') }}
       </h3>
@@ -178,14 +176,14 @@ onMounted(async () => {
         <div class="space-y-4">
           <!-- Library -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="row-library" class="field-label mb-2">
               {{ $t('recommendationRows.library') }} <span class="text-red-400">*</span>
             </label>
             <select
-              v-model="form.library_id"
+              id="row-library" v-model="form.library_id"
               required
               :disabled="!!row || !!libraryId"
-              class="w-full px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">{{ $t('common.select') }}</option>
               <option v-for="lib in libraries" :key="lib.id" :value="lib.id">
@@ -196,20 +194,20 @@ onMounted(async () => {
 
           <!-- Name -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="row-name" class="field-label mb-2">
               {{ $t('recommendationRows.name') }} <span class="text-red-400">*</span>
             </label>
             <input
-              v-model="form.name"
+              id="row-name" v-model="form.name"
               type="text"
               required
-              class="w-full px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
               :placeholder="$t('recommendationRows.namePlaceholder')"
             />
           </div>
 
           <!-- Display Name Preview -->
-          <div v-if="form.name" class="bg-gray-700/50 rounded-md p-3 border border-gray-600">
+          <div v-if="form.name" class="bg-surface-raised/50 rounded-md p-3 border border-gray-600">
             <p class="text-xs text-gray-400 mb-1">{{ $t('recommendationRows.previewLabel') }}</p>
             <p class="text-sm text-white font-medium">
               {{ previewDisplayName }}
@@ -218,14 +216,14 @@ onMounted(async () => {
 
           <!-- Filter Criteria -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="row-filterCriteria" class="field-label mb-2">
               {{ $t('recommendationRows.filterCriteria') }} <span class="text-red-400">*</span>
             </label>
             <textarea
-              v-model="filterCriteriaJson"
+              id="row-filterCriteria" v-model="filterCriteriaJson"
               :disabled="row?.is_special"
               rows="6"
-              class="w-full px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-3 py-2 bg-surface-raised text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500 font-mono text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               :placeholder="$t('recommendationRows.filterCriteriaPlaceholder')"
             ></textarea>
             <p v-if="row?.is_special" class="mt-1 text-xs text-yellow-400">
@@ -246,7 +244,7 @@ onMounted(async () => {
                 v-model="form.visible_on_homepage"
                 type="checkbox"
                 id="visible_on_homepage"
-                class="w-4 h-4 text-primary-600 bg-gray-700 border-gray-600 rounded-sm focus:ring-primary-500"
+                class="w-4 h-4 text-primary-600 bg-surface-raised border-gray-600 rounded-sm focus:ring-primary-500"
               />
               <label for="visible_on_homepage" class="ml-2 text-sm font-medium text-gray-300">
                 {{ $t('recommendationRows.visibleOnHomepage') }}
@@ -257,7 +255,7 @@ onMounted(async () => {
                 v-model="form.visible_on_recommend"
                 type="checkbox"
                 id="visible_on_recommend"
-                class="w-4 h-4 text-primary-600 bg-gray-700 border-gray-600 rounded-sm focus:ring-primary-500"
+                class="w-4 h-4 text-primary-600 bg-surface-raised border-gray-600 rounded-sm focus:ring-primary-500"
               />
               <label for="visible_on_recommend" class="ml-2 text-sm font-medium text-gray-300">
                 {{ $t('recommendationRows.visibleOnRecommend') }}
@@ -286,7 +284,7 @@ onMounted(async () => {
           <button
             type="button"
             @click="$emit('close')"
-            class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+            class="px-4 py-2 text-sm font-medium text-gray-300 bg-surface-raised hover:bg-gray-600 rounded-md transition-colors"
           >
             {{ $t('common.cancel') }}
           </button>
@@ -300,5 +298,5 @@ onMounted(async () => {
         </div>
       </form>
     </div>
-  </div>
+  </ModalDialog>
 </template>

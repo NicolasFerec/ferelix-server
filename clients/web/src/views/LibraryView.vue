@@ -1,221 +1,94 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
-import { libraries as libraryApi } from "@/api/client";
-import MediaCard from "../components/MediaCard.vue";
-import MediaRow from "../components/MediaRow.vue";
-import MenuBar from "../components/MenuBar.vue";
+import { type HomepageRow, type Library, libraries, type MediaCardInfo } from "@/api/client";
+import MediaCard from "@/components/MediaCard.vue";
+import MediaRow from "@/components/MediaRow.vue";
+import MenuBar from "@/components/MenuBar.vue";
 
 const { t } = useI18n();
 const route = useRoute();
-
-const library = ref(null);
-const rows = ref([]);
-const items = ref([]);
-const loading = ref(false);
-const loadingItems = ref(false);
+const pageSize = 48;
+const library = ref<Library | null>(null);
+const rows = ref<HomepageRow[]>([]);
+const items = ref<MediaCardInfo[]>([]);
+const loading = ref(true);
 const error = ref("");
-const activeTab = ref("recommended");
-const currentLibraryId = computed(() => {
-  const routeId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id;
-  const libraryId = parseInt(routeId, 10);
-  return Number.isNaN(libraryId) ? null : libraryId;
-});
-
-function getDisplayName(row) {
-  // Use display_name from API (already processed - replaces {library_name} if present)
-  // Handle special recommendation rows with internationalization
-  // Check if it's a "Recently Added" row (name starts with "Recently Added")
-  if (row.name.startsWith("Recently Added")) {
-    // For special "Recently Added" rows, use i18n
-    if (row.display_name.includes(row.library_name)) {
-      return t("recommendationRows.recentlyAddedIn", { library_name: row.library_name });
-    }
-    return t("recommendationRows.recentlyAdded");
-  }
-
-  return row.display_name;
+const hasNext = ref(false);
+const revision = ref(0);
+const libraryId = computed(() => Number(route.params.id));
+const activeTab = computed(() => route.query.tab === "library" ? "library" : "recommended");
+const page = computed(() => Math.max(1, Math.min(1000000, Math.floor(Number(route.query.page) || 1))));
+function destination(tab: string, targetPage = 1) {
+  return { query: { ...route.query, tab, page: tab === "library" ? String(targetPage) : undefined } };
+}
+function displayName(row: HomepageRow) {
+  return row.name.startsWith("Recently Added") ? t("recommendationRows.recentlyAdded") : row.display_name;
 }
 
-async function loadLibrary() {
-  const libraryId = currentLibraryId.value;
-  if (!libraryId) {
-    error.value = t("library.invalidId");
-    return;
-  }
-
-  try {
-    const libraries = await libraryApi.getLibraries();
-    library.value = libraries.find((lib) => lib.id === libraryId);
-    if (!library.value) {
-      error.value = t("library.notFound");
-    }
-  } catch (err) {
-    console.error("Failed to load library:", err);
-    error.value = t("library.loadFailed");
-  }
-}
-
-async function loadRows() {
-  const libraryId = currentLibraryId.value;
-  if (!libraryId) return;
-
-  try {
-    rows.value = await libraryApi.getLibraryRows(libraryId);
-  } catch (err) {
-    console.error("Failed to load library rows:", err);
-    // Don't set error for rows, just show empty state
-  }
-}
-
-async function loadItems() {
-  const libraryId = currentLibraryId.value;
-  if (!libraryId) return;
-
-  loadingItems.value = true;
-  try {
-    items.value = await libraryApi.getAllLibraryItems(libraryId);
-  } catch (err) {
-    console.error("Failed to load library items:", err);
-    items.value = [];
-  } finally {
-    loadingItems.value = false;
-  }
-}
-
-async function loadData() {
+watch(() => [libraryId.value, activeTab.value, page.value, revision.value], async (_, _previous, onCleanup) => {
+  const controller = new AbortController();
+  onCleanup(() => controller.abort());
   loading.value = true;
   error.value = "";
-
   try {
-    await loadLibrary();
-    if (library.value) {
-      await Promise.all([loadRows(), loadItems()]);
+    if (!Number.isSafeInteger(libraryId.value) || libraryId.value <= 0) throw new Error(t("library.invalidId"));
+    if (library.value?.id !== libraryId.value) {
+      const id = libraryId.value;
+      const availableLibraries = await libraries.getLibraries();
+      controller.signal.throwIfAborted();
+      library.value = availableLibraries.find(item => item.id === id) || null;
     }
-  } catch (err) {
-    console.error("Failed to load data:", err);
-    error.value = t("library.loadFailed");
+    if (!library.value) throw new Error(t("library.notFound"));
+    if (activeTab.value === "recommended") {
+      const response = await libraries.getLibraryRows(libraryId.value, controller.signal);
+      controller.signal.throwIfAborted();
+      rows.value = response;
+    } else {
+      // One look-ahead card tells us whether another page exists; no full-library crawl.
+      const response = await libraries.getLibraryItems(libraryId.value, (page.value - 1) * pageSize, pageSize + 1, controller.signal);
+      controller.signal.throwIfAborted();
+      hasNext.value = response.length > pageSize;
+      items.value = response.slice(0, pageSize);
+    }
+  } catch (cause) {
+    if (!controller.signal.aborted) error.value = cause instanceof Error ? cause.message : t("library.loadFailed");
   } finally {
-    loading.value = false;
+    if (!controller.signal.aborted) loading.value = false;
   }
-}
-
-// Watch for tab changes to load items if needed
-watch(activeTab, (newTab) => {
-  if (newTab === "library" && items.value.length === 0 && !loadingItems.value) {
-    loadItems();
-  }
-});
-
-onMounted(async () => {
-  await loadData();
-});
+}, { immediate: true });
 </script>
 
 <template>
-  <div class="library-view min-h-screen bg-gray-900">
+  <div class="min-h-screen bg-background">
     <MenuBar />
-
-    <main class="container mx-auto px-6 pt-4 pb-8">
-      <div v-if="loading" class="text-center text-gray-400 py-12">
-        {{ $t('common.loading') }}
+    <main id="main-content" class="page-shell">
+      <div class="mb-8">
+        <p class="mb-2 text-xs font-semibold uppercase tracking-[.2em] text-primary-300">{{ $t('common.library') }}</p>
+        <h1 class="page-heading">{{ library?.name || $t('library.title') }}</h1>
       </div>
-
-      <div v-else-if="error" class="text-center py-12">
-        <p class="text-red-400 mb-4">{{ error }}</p>
-        <button
-          @click="loadData"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
-        >
-          {{ $t('common.retry') }}
-        </button>
-      </div>
-
-      <div v-else>
-        <!-- Tabs -->
-        <div class="border-b border-gray-700 mb-6">
-          <nav class="-mb-px flex space-x-8">
-            <button
-              @click="activeTab = 'recommended'"
-              :class="[
-                'group px-1 font-medium text-sm transition-colors',
-                activeTab === 'recommended'
-                  ? 'text-primary-400'
-                  : 'text-gray-400 hover:text-gray-300',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block border-b-2 py-4 transition-colors',
-                  activeTab === 'recommended'
-                    ? 'border-primary-500'
-                    : 'border-transparent group-hover:border-gray-300',
-                ]"
-              >
-                {{ $t('library.recommended') }}
-              </span>
-            </button>
-            <button
-              @click="activeTab = 'library'"
-              :class="[
-                'group px-1 font-medium text-sm transition-colors',
-                activeTab === 'library'
-                  ? 'text-primary-400'
-                  : 'text-gray-400 hover:text-gray-300',
-              ]"
-            >
-              <span
-                :class="[
-                  'inline-block border-b-2 py-4 transition-colors',
-                  activeTab === 'library'
-                    ? 'border-primary-500'
-                    : 'border-transparent group-hover:border-gray-300',
-                ]"
-              >
-                {{ $t('library.allItems') }}
-              </span>
-            </button>
-          </nav>
+      <nav class="mb-8 flex gap-2 border-b border-outline pb-4" :aria-label="$t('library.title')">
+        <RouterLink :to="destination('recommended')" class="rounded-xl px-4 py-2.5 text-sm font-medium" :class="activeTab === 'recommended' ? 'bg-white/10 text-white' : 'text-muted hover:text-white'" :aria-current="activeTab === 'recommended' ? 'page' : undefined">{{ $t('library.recommended') }}</RouterLink>
+        <RouterLink :to="destination('library')" class="rounded-xl px-4 py-2.5 text-sm font-medium" :class="activeTab === 'library' ? 'bg-white/10 text-white' : 'text-muted hover:text-white'" :aria-current="activeTab === 'library' ? 'page' : undefined">{{ $t('library.allItems') }}</RouterLink>
+      </nav>
+      <p v-if="loading" role="status" class="empty-state">{{ $t('common.loading') }}</p>
+      <div v-else-if="error" role="alert" class="empty-state"><p class="mb-5 text-red-200">{{ error }}</p><button type="button" class="button-secondary" @click="revision++">{{ $t('common.retry') }}</button></div>
+      <template v-else-if="activeTab === 'recommended'">
+        <p v-if="!rows.length" class="empty-state">{{ $t('home.noRows') }}</p>
+        <MediaRow v-for="row in rows" :key="`${row.playlist_id}-${row.library_id}`" :display-name="displayName(row)" :items="row.items" :source-library-id="libraryId" />
+      </template>
+      <template v-else>
+        <p class="mb-5 text-sm text-muted" role="status">{{ $t('library.pageInfo', { page, count: items.length }) }}</p>
+        <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <MediaCard v-for="item in items" :key="item.id" :media-file="item" :source-library-id="libraryId" />
         </div>
-
-        <!-- Recommended Tab -->
-        <div v-if="activeTab === 'recommended'">
-          <div v-if="rows.length === 0" class="text-center text-gray-400 py-12">
-            <p>{{ $t('home.noRows') }}</p>
-          </div>
-          <div v-else class="-mx-6">
-            <MediaRow
-              v-for="row in rows"
-              :key="`${row.playlist_id}-${row.library_id}`"
-              :displayName="getDisplayName(row)"
-              :items="row.items"
-              :sourceLibraryId="row.library_id"
-            />
-          </div>
-        </div>
-
-        <!-- Library Tab -->
-        <div v-if="activeTab === 'library'">
-          <div v-if="loadingItems" class="text-center text-gray-400 py-12">
-            {{ $t('common.loading') }}
-          </div>
-          <div v-else-if="items.length === 0" class="text-center text-gray-400 py-12">
-            <p>{{ $t('home.noItems') }}</p>
-          </div>
-          <div
-            v-else
-            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
-          >
-            <MediaCard
-              v-for="item in items"
-              :key="item.id"
-              :mediaFile="item"
-              :sourceLibraryId="currentLibraryId"
-            />
-          </div>
-        </div>
-      </div>
+        <p v-else class="empty-state">{{ $t('home.noItems') }}</p>
+        <nav v-if="page > 1 || hasNext" class="mt-10 flex items-center justify-between gap-4" :aria-label="$t('library.pagination')">
+          <RouterLink v-if="page > 1" :to="destination('library', page - 1)" class="button-secondary">← {{ $t('common.previous') }}</RouterLink><span v-else></span>
+          <RouterLink v-if="hasNext" :to="destination('library', page + 1)" class="button-secondary">{{ $t('common.next') }} →</RouterLink>
+        </nav>
+      </template>
     </main>
   </div>
 </template>

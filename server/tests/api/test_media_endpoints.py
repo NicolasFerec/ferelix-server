@@ -391,6 +391,10 @@ class TestPlaybackInfo:
     ) -> None:
         db_session.add(AudioTrack(media_file_id=test_media_file.id, stream_index=3, codec="dts", is_default=False))
         await db_session.commit()
+        session_response = await client.post(
+            "/api/v1/playback-sessions", headers=auth_headers, json={"media_file_id": test_media_file.id}
+        )
+        playback_session_id = session_response.json()["id"]
         with patch(
             "app.routers.v1.media.PlaybackSessionService.start_from_stream_info",
             new_callable=AsyncMock,
@@ -399,7 +403,7 @@ class TestPlaybackInfo:
             response = await client.post(
                 f"/api/v1/{endpoint}/{test_media_file.id}",
                 headers=auth_headers,
-                json={"DeviceProfile": device_profile, "AudioStreamIndex": 3},
+                json={"DeviceProfile": device_profile, "AudioStreamIndex": 3, "PlaybackSessionId": playback_session_id},
             )
             assert response.status_code == 200
             source = (

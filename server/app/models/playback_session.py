@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,9 @@ class PlaybackSession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
     media_file_id: Mapped[int] = mapped_column(ForeignKey("mediafile.id", ondelete="CASCADE"), index=True)
     transcoding_job_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    playback_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    media_token_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    credentials_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     play_method: Mapped[str] = mapped_column(String, default="unknown")
     transcoding_type: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -37,6 +40,7 @@ class PlaybackSession(Base):
     position_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    video_stream_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     audio_stream_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     subtitle_stream_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -52,7 +56,8 @@ class PlaybackSessionCreate(BaseModel):
     """Payload used by the player to create a playback session."""
 
     media_file_id: int
-    duration_seconds: float | None = None
+    duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    video_stream_index: int | None = None
     audio_stream_index: int | None = None
     subtitle_stream_index: int | None = None
 
@@ -60,12 +65,15 @@ class PlaybackSessionCreate(BaseModel):
 class PlaybackSessionHeartbeat(BaseModel):
     """Periodic playback session update sent by the player."""
 
-    position_seconds: float = 0.0
-    duration_seconds: float | None = None
+    playback_generation: int = Field(default=0, ge=0)
+
+    position_seconds: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     is_paused: bool = False
     play_method: str | None = None
     transcoding_type: str | None = None
     transcoding_job_id: str | None = None
+    video_stream_index: int | None = None
     audio_stream_index: int | None = None
     subtitle_stream_index: int | None = None
 
@@ -76,6 +84,8 @@ class PlaybackSessionSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    media_access_token: str | None = None
+    playback_generation: int = 0
     user_id: int
     media_file_id: int
     transcoding_job_id: str | None = None
@@ -84,8 +94,9 @@ class PlaybackSessionSchema(BaseModel):
     status: PlaybackSessionStatus
     stopped_reason: str | None = None
     position_seconds: float
-    duration_seconds: float | None = None
+    duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     is_paused: bool
+    video_stream_index: int | None = None
     audio_stream_index: int | None = None
     subtitle_stream_index: int | None = None
     client_ip: str | None = None

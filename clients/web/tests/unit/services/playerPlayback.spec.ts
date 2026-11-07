@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { media } from "@/api/client";
-import { startPlaybackJob, waitForHlsReady } from "@/services/playerPlayback";
+import { playbackMutation, startPlaybackJob, waitForHlsReady } from "@/services/playerPlayback";
 
 vi.mock("@/api/client", () => ({
     media: {
@@ -27,6 +27,8 @@ it("stops a job that finishes starting after the player has closed", async () =>
     const controller = new AbortController();
     const pending = startPlaybackJob({
         mediaId: 1,
+        sessionId: "session",
+        playbackGeneration: 1,
         source: { IsRemuxOnly: true },
         signal: controller.signal,
     });
@@ -106,4 +108,56 @@ it("cancels immediately during the 500ms polling delay", async () => {
     await pending;
     expect(media.getHlsStatus).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
+});
+
+it("revokes the session when compensation of an obsolete start fails", async () => {
+    let resolveJob: (job: { id: string }) => void = () => {};
+    vi.mocked(media.startRemux).mockReturnValue(
+        new Promise((resolve) => {
+            resolveJob = resolve;
+        }),
+    );
+    vi.mocked(media.stopHls).mockRejectedValue(new TypeError("Network unavailable"));
+    const controller = new AbortController();
+    const revoke = vi.fn();
+    const pending = startPlaybackJob({
+        mediaId: 1,
+        sessionId: "session",
+        playbackGeneration: 2,
+        source: { IsRemuxOnly: true },
+        signal: controller.signal,
+        onUnknownOutcome: revoke,
+    });
+    controller.abort();
+    resolveJob({ id: "late-job" });
+    await expect(pending).rejects.toThrow("Network unavailable");
+    expect(revoke).toHaveBeenCalledOnce();
+});
+
+it("bounds an unknown server mutation and closes its session once", async () => {
+    vi.useFakeTimers();
+    const revoke = vi.fn();
+    const pending = playbackMutation(
+        (signal) =>
+            new Promise((_resolve, reject) => {
+                signal.addEventListener("abort", () => reject(signal.reason));
+            }),
+        revoke,
+        1000,
+    );
+    const failed = expect(pending).rejects.toThrow("Playback request timed out");
+    await vi.advanceTimersByTimeAsync(1000);
+    await failed;
+    expect(revoke).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+});
+
+it("does not revoke a session for a confirmed rejected mutation", async () => {
+    const revoke = vi.fn();
+    await expect(
+        playbackMutation(async () => {
+            throw Object.assign(new Error("Invalid track"), { status: 422 });
+        }, revoke),
+    ).rejects.toThrow("Invalid track");
+    expect(revoke).not.toHaveBeenCalled();
 });

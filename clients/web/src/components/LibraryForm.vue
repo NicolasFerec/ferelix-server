@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { libraries as libraryApi } from "@/api/client";
 import DirectoryBrowser from "./DirectoryBrowser.vue";
+import ModalDialog from "./ModalDialog.vue";
 
 const props = defineProps({
   library: {
@@ -99,11 +100,8 @@ function handlePathSelect(path) {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-    @click.self="$emit('close')"
-  >
-    <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md" @click.stop>
+  <ModalDialog :label="library ? $t('libraries.edit') : $t('libraries.add')" @close="$emit('close')">
+    <div class="surface-panel p-5 sm:p-6 w-full max-w-md">
       <h3 class="text-xl font-semibold text-white mb-4">
         {{ library ? $t('libraries.edit') : $t('libraries.add') }}
       </h3>
@@ -112,35 +110,35 @@ function handlePathSelect(path) {
         <div class="space-y-4">
           <!-- Name -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="library-name" class="field-label mb-2">
               {{ $t('libraries.name') }}
             </label>
             <input
-              v-model="form.name"
+              id="library-name" v-model="form.name"
               type="text"
               required
-              class="w-full px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              class="field-input"
               :placeholder="$t('libraries.namePlaceholder')"
             />
           </div>
 
           <!-- Path -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="library-path" class="field-label mb-2">
               {{ $t('libraries.path') }}
             </label>
             <div class="flex space-x-2">
               <input
-                v-model="form.path"
+                id="library-path" v-model="form.path"
                 type="text"
                 required
-                class="flex-1 px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+                class="field-input min-w-0 flex-1"
                 :placeholder="$t('libraries.pathPlaceholder')"
               />
               <button
                 type="button"
                 @click="showBrowser = true"
-                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors text-sm font-medium"
+                class="px-4 py-2 bg-surface-raised hover:bg-gray-600 text-white rounded-md transition-colors text-sm font-medium"
                 :title="$t('libraries.browse')"
               >
                 {{ $t('libraries.browse') }}
@@ -150,12 +148,12 @@ function handlePathSelect(path) {
 
           <!-- Library Type -->
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="library-type" class="field-label mb-2">
               {{ $t('libraries.typeLabel') }}
             </label>
             <select
-              v-model="form.library_type"
-              class="w-full px-3 py-2 bg-gray-700 text-white rounded-md focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+              id="library-type" v-model="form.library_type"
+              class="field-input"
             >
               <option value="movie">{{ $t('libraries.type.movie') }}</option>
               <option value="tv_show">{{ $t('libraries.type.tv_show') }}</option>
@@ -168,7 +166,7 @@ function handlePathSelect(path) {
               v-model="form.enabled"
               type="checkbox"
               id="enabled"
-              class="w-4 h-4 text-primary-600 bg-gray-700 border-gray-600 rounded-sm focus:ring-primary-500"
+              class="w-4 h-4 text-primary-600 bg-surface-raised border-gray-600 rounded-sm focus:ring-primary-500"
             />
             <label for="enabled" class="ml-2 text-sm font-medium text-gray-300">
               {{ $t('libraries.enabled') }}
@@ -177,7 +175,7 @@ function handlePathSelect(path) {
         </div>
 
         <!-- Error message -->
-        <div v-if="error" class="mt-4 text-red-400 text-sm">
+        <div v-if="error" role="alert" class="form-error mt-4">
           {{ error }}
         </div>
 
@@ -186,7 +184,7 @@ function handlePathSelect(path) {
           <button
             type="button"
             @click="$emit('close')"
-            class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+            class="px-4 py-2 text-sm font-medium text-gray-300 bg-surface-raised hover:bg-gray-600 rounded-md transition-colors"
           >
             {{ $t('common.cancel') }}
           </button>
@@ -208,5 +206,5 @@ function handlePathSelect(path) {
       @close="showBrowser = false"
       @select="handlePathSelect"
     />
-  </div>
+  </ModalDialog>
 </template>

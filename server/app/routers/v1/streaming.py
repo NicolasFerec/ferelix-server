@@ -8,7 +8,7 @@ from typing import Annotated
 import aiofiles
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,13 +27,14 @@ from app.models import (
     TranscodingJobSchema,
     User,
 )
-from app.models.transcoding import TranscodingJobType
+from app.models.transcoding import TranscodingJobStatus, TranscodingJobType
+from app.services.media_access import get_playback_media_session, issue_media_token, require_owned_playback_session
 from app.services.playback_session import ClientContext, HlsStartOptions, PlaybackSessionService
 from app.services.streaming_io import (
     HLS_HEADERS,
     SEGMENT_HEADERS,
     VIDEO_CONTENT_TYPES,
-    append_api_key_to_playlist_segments,
+    append_media_token_to_playlist,
     parse_range_header,
     range_reader,
     touch_job,
@@ -54,13 +55,16 @@ def client_context_from_request(request: Request) -> ClientContext:
     )
 
 
-async def get_hls_job_or_404(session: AsyncSession, job_id: str) -> TranscodingJob:
+async def get_hls_job_or_404(session: AsyncSession, job_id: str, user: User) -> TranscodingJob:
     result = await session.execute(select(TranscodingJob).where(TranscodingJob.id == job_id))
     job = result.scalar_one_or_none()
 
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcoding job not found")
 
+    playback = await session.get(PlaybackSession, job.session_id) if job.session_id else None
+    if playback is None or playback.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcoding job not found")
     return job
 
 
@@ -69,6 +73,10 @@ async def get_playback_session_or_404(session: AsyncSession, session_id: str, us
     if not playback_session or playback_session.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playback session not found")
     return playback_session
+
+
+async def validate_hls_playback_session(session: AsyncSession, session_id: str, user: User, media_id: int) -> None:
+    await require_owned_playback_session(session, session_id, media_id, user)
 
 
 async def raise_if_playback_session_stopped(
@@ -118,8 +126,12 @@ async def create_playback_session(
     if not media_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
 
+    token, token_hash = issue_media_token()
     playback_session = PlaybackSession(
         user_id=user.id,
+        media_token_hash=token_hash,
+        credentials_version=user.credentials_version,
+        video_stream_index=payload.video_stream_index,
         media_file_id=payload.media_file_id,
         duration_seconds=payload.duration_seconds,
         audio_stream_index=payload.audio_stream_index,
@@ -131,7 +143,7 @@ async def create_playback_session(
     await record_media_view_started(session, user.id, payload.media_file_id, payload.duration_seconds)
     await session.commit()
     await session.refresh(playback_session)
-    return PlaybackSessionSchema.model_validate(playback_session)
+    return PlaybackSessionSchema.model_validate(playback_session).model_copy(update={"media_access_token": token})
 
 
 @router.post("/playback-sessions/{session_id}/heartbeat", response_model=PlaybackSessionHeartbeatResponse)
@@ -143,6 +155,8 @@ async def heartbeat_playback_session(
 ) -> PlaybackSessionHeartbeatResponse:
     """Update playback position and tell the player if it has been kicked."""
     playback_session = await get_playback_session_or_404(session, session_id, user)
+    if playback_session.credentials_version != user.credentials_version:
+        raise HTTPException(status_code=401, detail="Playback credentials have been revoked")
 
     if playback_session.status == PlaybackSessionStatus.STOPPED_BY_ADMIN:
         return PlaybackSessionHeartbeatResponse(
@@ -157,15 +171,58 @@ async def heartbeat_playback_session(
             kicked=False,
         )
 
-    playback_session.position_seconds = max(payload.position_seconds, 0.0)
-    playback_session.duration_seconds = payload.duration_seconds
-    playback_session.is_paused = payload.is_paused
-    playback_session.play_method = payload.play_method or playback_session.play_method
-    playback_session.transcoding_type = payload.transcoding_type
-    playback_session.transcoding_job_id = payload.transcoding_job_id
-    playback_session.audio_stream_index = payload.audio_stream_index
-    playback_session.subtitle_stream_index = payload.subtitle_stream_index
-    playback_session.last_heartbeat_at = datetime.now(UTC).replace(tzinfo=None)
+    if payload.playback_generation != playback_session.playback_generation:
+        raise HTTPException(status_code=409, detail="Heartbeat belongs to a superseded playback intent")
+    if payload.transcoding_job_id:
+        job = await session.get(TranscodingJob, payload.transcoding_job_id)
+        if job is None or job.session_id != playback_session.id:
+            raise HTTPException(status_code=404, detail="Transcoding job not found")
+        if job.playback_generation != payload.playback_generation:
+            raise HTTPException(status_code=409, detail="Heartbeat belongs to a superseded playback timeline")
+
+    updated = await session.scalar(
+        update(PlaybackSession)
+        .where(
+            PlaybackSession.id == playback_session.id,
+            PlaybackSession.status == PlaybackSessionStatus.ACTIVE,
+            PlaybackSession.playback_generation == payload.playback_generation,
+        )
+        .values(
+            position_seconds=payload.position_seconds,
+            duration_seconds=payload.duration_seconds,
+            is_paused=payload.is_paused,
+            play_method=payload.play_method or playback_session.play_method,
+            transcoding_type=payload.transcoding_type,
+            transcoding_job_id=payload.transcoding_job_id,
+            video_stream_index=payload.video_stream_index,
+            audio_stream_index=payload.audio_stream_index,
+            subtitle_stream_index=payload.subtitle_stream_index,
+            last_heartbeat_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+        .returning(PlaybackSession.id)
+    )
+    if updated is None:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Playback intent changed during heartbeat")
+    if payload.transcoding_job_id:
+        touched_id = await session.scalar(
+            update(TranscodingJob)
+            .where(
+                TranscodingJob.id == payload.transcoding_job_id,
+                TranscodingJob.session_id == playback_session.id,
+                TranscodingJob.playback_generation == payload.playback_generation,
+                TranscodingJob.status.in_([
+                    TranscodingJobStatus.PENDING,
+                    TranscodingJobStatus.RUNNING,
+                    TranscodingJobStatus.COMPLETED,
+                ]),
+            )
+            .values(last_accessed_at=datetime.now(UTC))
+            .returning(TranscodingJob.id)
+        )
+        if touched_id is None:
+            await session.rollback()
+            raise HTTPException(status_code=410, detail="Transcoding job has stopped")
     await record_media_view_progress(
         session,
         user.id,
@@ -176,6 +233,10 @@ async def heartbeat_playback_session(
 
     await session.commit()
     await session.refresh(playback_session)
+    if payload.transcoding_job_id:
+        get_transcoder().update_playback_position(
+            playback_session.id, payload.position_seconds, payload.playback_generation
+        )
     return PlaybackSessionHeartbeatResponse(session=PlaybackSessionSchema.model_validate(playback_session))
 
 
@@ -198,6 +259,25 @@ async def end_playback_session(
             playback_session.duration_seconds,
         )
         await session.commit()
+
+    # Stop every timeline belonging to this viewer, including a job whose start
+    # response was lost before the client could send its first heartbeat.
+    job_ids = await session.scalars(
+        select(TranscodingJob.id).where(
+            TranscodingJob.session_id == playback_session.id,
+            TranscodingJob.status.in_([
+                TranscodingJobStatus.PENDING,
+                TranscodingJobStatus.RUNNING,
+                TranscodingJobStatus.STOPPING,
+                TranscodingJobStatus.COMPLETED,
+                TranscodingJobStatus.FAILED,
+            ]),
+        )
+    )
+    transcoder = get_transcoder()
+    for job_id in job_ids.all():
+        if not await transcoder.stop_job(job_id):
+            raise HTTPException(status_code=503, detail="Playback ended but its encoder could not be stopped yet")
 
 
 async def record_media_view_started(
@@ -264,9 +344,8 @@ def is_media_watched(position_seconds: float, duration_seconds: float | None) ->
 async def stream_video(
     media_id: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[User, Depends(get_current_active_user)],
+    playback: Annotated[PlaybackSession, Depends(get_playback_media_session)],
     range_header: Annotated[str | None, Header(alias="Range")] = None,
-    playback_session_id: Annotated[str | None, Query(alias="session_id")] = None,
 ) -> StreamingResponse:
     """Stream video file with HTTP Range request support for seeking.
 
@@ -287,7 +366,6 @@ async def stream_video(
         HTTPException: If media file not found or range invalid
     """
     media_file = await session.get(MediaFile, media_id)
-    await raise_if_playback_session_stopped(session, playback_session_id, _user)
 
     if not media_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file not found")
@@ -307,6 +385,7 @@ async def stream_video(
         "Accept-Ranges": "bytes",
         "Content-Type": content_type,
         "Content-Length": str(end - start + 1),
+        "Cache-Control": "private, no-store",
     }
 
     # Return partial content if range was requested
@@ -332,9 +411,13 @@ async def start_hls_remux(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     _user: Annotated[User, Depends(get_current_active_user)],
+    playback_session_id: Annotated[str, Query(alias="session_id")],
+    playback_generation: Annotated[int, Query(ge=1)],
+    video_stream_index: Annotated[int | None, Query(ge=0, description="Video stream index to include")] = None,
     audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
-    start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
-    playback_session_id: Annotated[str | None, Query(alias="session_id")] = None,
+    start_time: Annotated[
+        float | None, Query(ge=0, allow_inf_nan=False, description="Start time in seconds for seeking")
+    ] = None,
 ) -> TranscodingJobSchema:
     """Start HLS remuxing (container conversion only, no re-encoding).
 
@@ -346,8 +429,7 @@ async def start_hls_remux(
         audio_stream_index: Specific audio stream to include (None = default)
         start_time: Start position in seconds for seeking
     """
-    if playback_session_id:
-        await get_playback_session_or_404(session, playback_session_id, _user)
+    await validate_hls_playback_session(session, playback_session_id, _user, media_id)
     return await start_hls_job_response(
         media_id,
         request,
@@ -356,9 +438,11 @@ async def start_hls_remux(
             job_type=TranscodingJobType.REMUX,
             video_codec="copy",
             audio_codec="copy",
+            video_stream_index=video_stream_index,
             audio_stream_index=audio_stream_index,
             start_time=start_time,
             playback_session_id=playback_session_id,
+            playback_generation=playback_generation,
         ),
         "Failed to start remuxing",
     )
@@ -370,16 +454,21 @@ async def start_hls_stream(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     _user: Annotated[User, Depends(get_current_active_user)],
+    playback_session_id: Annotated[str, Query(alias="session_id")],
+    playback_generation: Annotated[int, Query(ge=1)],
+    video_stream_index: Annotated[int | None, Query(ge=0, description="Video stream index to include")] = None,
     video_codec: Annotated[str, Query(description="Target video codec")] = "h264",
     audio_codec: Annotated[str, Query(description="Target audio codec")] = "aac",
     video_bitrate: Annotated[int | None, Query(description="Target video bitrate")] = None,
     audio_bitrate: Annotated[int | None, Query(description="Target audio bitrate")] = None,
-    max_width: Annotated[int | None, Query(description="Maximum video width")] = None,
-    max_height: Annotated[int | None, Query(description="Maximum video height")] = None,
+    max_width: Annotated[int | None, Query(ge=2, le=8192, description="Maximum video width")] = None,
+    max_height: Annotated[int | None, Query(ge=2, le=8192, description="Maximum video height")] = None,
+    max_frame_rate: Annotated[float | None, Query(gt=0, le=240, allow_inf_nan=False)] = None,
     audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
     subtitle_stream_index: Annotated[int | None, Query(description="Subtitle stream index to burn")] = None,
-    start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
-    playback_session_id: Annotated[str | None, Query(alias="session_id")] = None,
+    start_time: Annotated[
+        float | None, Query(ge=0, allow_inf_nan=False, description="Start time in seconds for seeking")
+    ] = None,
 ) -> TranscodingJobSchema:
     """Start HLS transcoding for a media file.
 
@@ -400,8 +489,7 @@ async def start_hls_stream(
     Returns:
         Transcoding job that can be used to access the HLS playlist once ready.
     """
-    if playback_session_id:
-        await get_playback_session_or_404(session, playback_session_id, _user)
+    await validate_hls_playback_session(session, playback_session_id, _user, media_id)
     return await start_hls_job_response(
         media_id,
         request,
@@ -414,10 +502,13 @@ async def start_hls_stream(
             audio_bitrate=audio_bitrate,
             max_width=max_width,
             max_height=max_height,
+            max_frame_rate=max_frame_rate,
+            video_stream_index=video_stream_index,
             audio_stream_index=audio_stream_index,
             subtitle_stream_index=subtitle_stream_index,
             start_time=start_time,
             playback_session_id=playback_session_id,
+            playback_generation=playback_generation,
         ),
         "Failed to start transcoding",
     )
@@ -429,11 +520,15 @@ async def start_hls_audio_transcode(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     _user: Annotated[User, Depends(get_current_active_user)],
+    playback_session_id: Annotated[str, Query(alias="session_id")],
+    playback_generation: Annotated[int, Query(ge=1)],
+    video_stream_index: Annotated[int | None, Query(ge=0, description="Video stream index to include")] = None,
     audio_codec: Annotated[str, Query(description="Target audio codec")] = "aac",
     audio_bitrate: Annotated[int | None, Query(description="Target audio bitrate")] = 128000,
     audio_stream_index: Annotated[int | None, Query(description="Audio stream index to include")] = None,
-    start_time: Annotated[float | None, Query(description="Start time in seconds for seeking")] = None,
-    playback_session_id: Annotated[str | None, Query(alias="session_id")] = None,
+    start_time: Annotated[
+        float | None, Query(ge=0, allow_inf_nan=False, description="Start time in seconds for seeking")
+    ] = None,
 ) -> TranscodingJobSchema:
     """Start HLS audio-transcode: copy video streams and transcode only the audio track.
 
@@ -446,8 +541,7 @@ async def start_hls_audio_transcode(
         audio_stream_index: Specific audio stream to include (None = default)
         start_time: Start position in seconds for seeking
     """
-    if playback_session_id:
-        await get_playback_session_or_404(session, playback_session_id, _user)
+    await validate_hls_playback_session(session, playback_session_id, _user, media_id)
     return await start_hls_job_response(
         media_id,
         request,
@@ -457,9 +551,11 @@ async def start_hls_audio_transcode(
             video_codec="copy",
             audio_codec=audio_codec,
             audio_bitrate=audio_bitrate,
+            video_stream_index=video_stream_index,
             audio_stream_index=audio_stream_index,
             start_time=start_time,
             playback_session_id=playback_session_id,
+            playback_generation=playback_generation,
         ),
         "Failed to start audio-transcode",
     )
@@ -471,11 +567,13 @@ async def get_hls_playlist(
     job_id: str,
     request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[User, Depends(get_current_active_user)],
+    playback: Annotated[PlaybackSession, Depends(get_playback_media_session)],
 ) -> PlainTextResponse:
     """Get HLS playlist file for a transcoding job."""
 
-    job = await get_hls_job_or_404(session, job_id)
+    job = await session.get(TranscodingJob, job_id)
+    if job is None or job.session_id != playback.id:
+        raise HTTPException(status_code=404, detail="Transcoding job not found")
     await raise_if_playback_session_stopped(session, job.session_id)
     playlist_path = await wait_for_playlist(job, session)
     await touch_job(session, job)
@@ -493,7 +591,7 @@ async def get_hls_playlist(
         async with aiofiles.open(playlist_path) as f:
             content = await f.read()
 
-        content = append_api_key_to_playlist_segments(content, request.query_params.get("api_key"))
+        content = append_media_token_to_playlist(content, playback.id, request.query_params.get("media_token"))
 
         return PlainTextResponse(
             content,
@@ -509,11 +607,13 @@ async def get_hls_segment(
     job_id: str,
     segment_num: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[User, Depends(get_current_active_user)],
+    playback: Annotated[PlaybackSession, Depends(get_playback_media_session)],
 ) -> FileResponse:
     """Get HLS segment file for a transcoding job."""
 
-    job = await get_hls_job_or_404(session, job_id)
+    job = await session.get(TranscodingJob, job_id)
+    if job is None or job.session_id != playback.id:
+        raise HTTPException(status_code=404, detail="Transcoding job not found")
     await raise_if_playback_session_stopped(session, job.session_id)
     segment_path = await wait_for_segment(job, segment_num, session)
     await touch_job(session, job)
@@ -530,10 +630,12 @@ async def get_hls_segment(
 async def get_hls_fmp4_init(
     job_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[User, Depends(get_current_active_user)],
+    playback: Annotated[PlaybackSession, Depends(get_playback_media_session)],
 ) -> FileResponse:
     """Get fMP4 HLS initialization segment."""
-    job = await get_hls_job_or_404(session, job_id)
+    job = await session.get(TranscodingJob, job_id)
+    if job is None or job.session_id != playback.id:
+        raise HTTPException(status_code=404, detail="Transcoding job not found")
     await raise_if_playback_session_stopped(session, job.session_id)
     asset_path = await wait_for_hls_asset(job, "init.mp4", session)
     await touch_job(session, job)
@@ -550,10 +652,12 @@ async def get_hls_fmp4_segment(
     job_id: str,
     segment_num: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[User, Depends(get_current_active_user)],
+    playback: Annotated[PlaybackSession, Depends(get_playback_media_session)],
 ) -> FileResponse:
     """Get fMP4 HLS media segment."""
-    job = await get_hls_job_or_404(session, job_id)
+    job = await session.get(TranscodingJob, job_id)
+    if job is None or job.session_id != playback.id:
+        raise HTTPException(status_code=404, detail="Transcoding job not found")
     await raise_if_playback_session_stopped(session, job.session_id)
     asset_path = await wait_for_hls_asset(job, f"segment_{segment_num:03d}.m4s", session)
     await touch_job(session, job)
@@ -573,9 +677,9 @@ async def get_hls_status(
 ) -> TranscodingJobSchema:
     """Get status of HLS transcoding job."""
 
-    job = await get_hls_job_or_404(session, job_id)
+    job = await get_hls_job_or_404(session, job_id, _user)
     await touch_job(session, job)
-    return TranscodingJobSchema.model_validate(job)
+    return TranscodingJobSchema.model_validate(job).model_copy(update=get_transcoder().throttle_status(job.id))
 
 
 @router.delete("/hls/{job_id}/stop")
@@ -586,14 +690,14 @@ async def stop_hls_stream(
 ) -> dict[str, str]:
     """Stop HLS transcoding job."""
 
-    await get_hls_job_or_404(session, job_id)
+    await get_hls_job_or_404(session, job_id, _user)
     transcoder = get_transcoder()
     success = await transcoder.stop_job(job_id)
 
     if success:
         return {"message": "Transcoding job stopped"}
     else:
-        return {"message": "Job was not running or could not be stopped"}
+        raise HTTPException(status_code=503, detail="Transcoding job could not be stopped")
 
 
 @router.get("/subtitle/{media_id}/{stream_index}")
@@ -601,7 +705,7 @@ async def get_subtitle(
     media_id: int,
     stream_index: int,
     session: Annotated[AsyncSession, Depends(get_session)],
-    _user: Annotated[User, Depends(get_current_active_user)],
+    playback: Annotated[PlaybackSession, Depends(get_playback_media_session)],
 ) -> PlainTextResponse:
     """Extract and serve a subtitle track as WebVTT.
 
@@ -673,7 +777,7 @@ async def get_subtitle(
             media_type="text/vtt",
             headers={
                 "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+                "Cache-Control": "private, no-store",
             },
         )
     except Exception as exc:

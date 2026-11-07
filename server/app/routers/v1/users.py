@@ -6,12 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_active_user
 from app.models import User, UserSchema, UserUpdate
+from app.services.accounts import change_password, commit_account_changes, ensure_identity_available
 from app.services.profile_images import delete_profile_image, save_profile_image
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
@@ -97,18 +97,7 @@ async def update_current_user(
         Updated user profile
     """
     if user_update.username is not None:
-        # Check if username is already taken by another user (case-insensitive)
-        existing = await session.scalar(
-            select(User).where(
-                func.lower(User.username) == func.lower(user_update.username),
-                User.id != current_user.id,
-            )
-        )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already in use",
-            )
+        await ensure_identity_available(session, username=user_update.username, exclude_user_id=current_user.id)
         current_user.username = user_update.username
 
     # Handle email update (can be None to clear email, or a string)
@@ -117,23 +106,24 @@ async def update_current_user(
         email_value = (
             user_update.email.strip() if isinstance(user_update.email, str) and user_update.email.strip() else None
         )
-        if (
-            email_value
-            and await session.scalar(select(User.id).where(User.email == email_value, User.id != current_user.id))
-            is not None
-        ):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+        await ensure_identity_available(session, email=email_value, exclude_user_id=current_user.id)
 
         # Update email (can be None to clear it)
         current_user.email = email_value
 
     if user_update.password is not None:
-        current_user.password = user_update.password
+        await change_password(
+            session,
+            current_user,
+            user_update.password,
+            current_password=user_update.current_password,
+            require_current=True,
+        )
 
     if user_update.language is not None:
         current_user.language = user_update.language
 
-    await session.commit()
+    await commit_account_changes(session)
     await session.refresh(current_user)
 
     return current_user

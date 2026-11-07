@@ -10,6 +10,7 @@ from .library import (
 from .media_file import (
     AudioTrack,
     AudioTrackSchema,
+    MediaCardSchema,
     MediaFile,
     MediaFileSchema,
     SubtitleTrack,
@@ -53,6 +54,7 @@ __all__ = [
     "LibraryCreate",
     "LibrarySchema",
     "LibraryUpdate",
+    "MediaCardSchema",
     "MediaFile",
     "MediaFileSchema",
     "MediaView",

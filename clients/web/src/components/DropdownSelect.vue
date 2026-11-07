@@ -10,6 +10,7 @@ export interface DropdownOption {
 }
 
 const props = defineProps<{
+  id?: string;
   modelValue: DropdownValue;
   options: DropdownOption[];
   disabled?: boolean;
@@ -37,7 +38,10 @@ function selectOption(value: DropdownValue): void {
 
 <template>
   <button
+    :id="id"
     ref="triggerRef"
+    :aria-expanded="isOpen"
+    aria-haspopup="listbox"
     type="button"
     class="dropdown-select__trigger"
     :disabled="!canOpen"
@@ -46,7 +50,7 @@ function selectOption(value: DropdownValue): void {
     @keydown="onTriggerKeydown"
   >
     <span class="dropdown-select__label">{{ selectedLabel }}</span>
-    <svg
+    <svg aria-hidden="true"
       v-if="canOpen"
       class="dropdown-select__chevron"
       viewBox="0 0 20 20"
@@ -66,12 +70,15 @@ function selectOption(value: DropdownValue): void {
     <div
       v-if="isOpen"
       ref="menuRef"
+      role="listbox"
       class="dropdown-select__menu"
       :style="menuStyle"
       @keydown.esc.stop.prevent="close"
     >
       <button
         v-for="option in options"
+        role="option"
+        :aria-selected="option.value === modelValue"
         :key="`${option.value}`"
         type="button"
         class="dropdown-select__option"

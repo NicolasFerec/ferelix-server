@@ -79,3 +79,108 @@
         cursor: not-allowed;
     }
 }
+
+:root {
+    color-scheme: dark;
+    --background: #0b0e14;
+    --surface: #141923;
+    --foreground: #f3f4f6;
+    --muted: #a5afbe;
+    --outline: #29313e;
+}
+
+@theme inline {
+    --color-background: var(--background);
+    --color-surface: var(--surface);
+    --color-foreground: var(--foreground);
+    --color-muted: var(--muted);
+    --color-outline: var(--outline);
+}
+
+@layer base {
+    body {
+        background: var(--background);
+        color: var(--foreground);
+    }
+    :focus-visible {
+        outline: 2px solid var(--color-primary-300);
+        outline-offset: 4px;
+    }
+    button,
+    a,
+    input,
+    select {
+        touch-action: manipulation;
+    }
+    h1,
+    h2,
+    h3 {
+        text-wrap: balance;
+    }
+    html {
+        scroll-padding-top: 6rem;
+    }
+}
+
+@layer components {
+    .page-shell {
+        @apply mx-auto w-full max-w-[1600px] px-5 py-8 sm:px-8 lg:px-12;
+    }
+    .page-heading {
+        @apply text-3xl font-semibold tracking-tight sm:text-4xl;
+    }
+    .surface-panel {
+        @apply rounded-2xl border border-outline bg-surface shadow-xl shadow-black/10;
+    }
+    .field-label {
+        @apply block text-sm font-medium text-gray-200;
+    }
+    .field-input {
+        @apply w-full rounded-xl border border-outline bg-background px-4 py-3 text-base text-white transition-colors placeholder:text-gray-500 focus:border-primary-400 focus:outline-2 focus:outline-primary-400/30;
+    }
+    .button-primary {
+        @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .button-secondary {
+        @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-outline bg-surface px-5 py-3 text-sm font-medium text-gray-200 transition-colors hover:border-gray-500 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .form-error {
+        @apply rounded-xl border border-red-400/25 bg-red-500/10 p-4 text-sm leading-6 text-red-200;
+    }
+    .empty-state {
+        @apply rounded-2xl border border-dashed border-outline px-6 py-14 text-center text-muted;
+    }
+}
+
+.auth-layout {
+    background: radial-gradient(ellipse at 15% 20%, rgb(7 97 238 / 0.13), transparent 50%), var(--background);
+}
+.skip-link {
+    position: fixed;
+    z-index: 200;
+    top: 1rem;
+    left: 1rem;
+    transform: translateY(-200%);
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: white;
+    color: #101623;
+}
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        /* biome-ignore lint/complexity/noImportantStyles: Respect the user motion preference over component styles. */
+        scroll-behavior: auto !important;
+        /* biome-ignore lint/complexity/noImportantStyles: Respect the user motion preference over component styles. */
+        animation-duration: 0.01ms !important;
+        /* biome-ignore lint/complexity/noImportantStyles: Respect the user motion preference over component styles. */
+        animation-iteration-count: 1 !important;
+        /* biome-ignore lint/complexity/noImportantStyles: Respect the user motion preference over component styles. */
+        transition-duration: 0.01ms !important;
+    }
+}

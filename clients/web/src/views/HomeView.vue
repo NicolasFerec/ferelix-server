@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { onMounted, type Ref, ref } from "vue";
+import { computed, onMounted, type Ref, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { type HomepageRow, libraries as libraryApi, type MediaFile, media } from "@/api/client";
+import { type HomepageRow, libraries as libraryApi, type MediaCardInfo, media } from "@/api/client";
+import FeaturedMedia from "@/components/FeaturedMedia.vue";
 import MediaRow from "../components/MediaRow.vue";
 import MenuBar from "../components/MenuBar.vue";
 
 const { t } = useI18n();
 
 const rows: Ref<HomepageRow[]> = ref([]);
-const continueWatchingItems: Ref<MediaFile[]> = ref([]);
+const continueWatchingItems: Ref<MediaCardInfo[]> = ref([]);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string> = ref("");
+const featured = computed(() => continueWatchingItems.value[0] || rows.value.flatMap(row => row.items)[0]);
 
 function getDisplayName(row: HomepageRow): string {
   // Use display_name from API (already processed - replaces {library_name} if present)
@@ -52,17 +54,18 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="home-view min-h-screen bg-gray-900">
+  <div class="home-view min-h-screen bg-background">
     <MenuBar />
 
-    <main class="container mx-auto py-8">
-      <div v-if="loading" class="text-center text-gray-400 py-12">
+    <main id="main-content" class="page-shell">
+      <div v-if="loading" role="status" class="text-center text-gray-400 py-12">
         {{ $t('home.loadingMediaFiles') }}
       </div>
 
-      <div v-else-if="error" class="text-center py-12">
+      <div v-else-if="error" role="alert" class="text-center py-12">
         <p class="text-red-400 mb-4">{{ error }}</p>
         <button
+          type="button"
           @click="loadRows"
           class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
         >
@@ -75,17 +78,18 @@ onMounted(async () => {
           <p>{{ $t('home.noRows') }}</p>
         </div>
         <div v-else>
+          <FeaturedMedia v-if="featured" :item="featured" />
           <MediaRow
             v-if="continueWatchingItems.length > 0"
-            :displayName="$t('home.continueWatching')"
+            :display-name="$t('home.continueWatching')"
             :items="continueWatchingItems"
           />
           <MediaRow
             v-for="row in rows"
             :key="`${row.playlist_id}-${row.library_id}`"
-            :displayName="getDisplayName(row)"
+            :display-name="getDisplayName(row)"
             :items="row.items"
-            :sourceLibraryId="row.library_id"
+            :source-library-id="row.library_id"
           />
         </div>
       </div>

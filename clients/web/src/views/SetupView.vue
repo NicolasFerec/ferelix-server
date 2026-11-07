@@ -1,140 +1,57 @@
 <script setup lang="ts">
-import { onMounted, type Ref, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { auth } from "@/api/client";
+import AuthLayout from "@/components/auth/AuthLayout.vue";
+import PasswordField from "@/components/auth/PasswordField.vue";
 import { useUser } from "@/composables/useUser";
 
 const { t } = useI18n();
-
 const router = useRouter();
 const { loadUser } = useUser();
+const username = ref("");
+const password = ref("");
+const confirmPassword = ref("");
+const loading = ref(false);
+const error = ref("");
 
-const username: Ref<string> = ref("");
-const password: Ref<string> = ref("");
-const confirmPassword: Ref<string> = ref("");
-const loading: Ref<boolean> = ref(false);
-const error: Ref<string> = ref("");
-
-// Detect browser language
-function detectBrowserLanguage(): string {
-  const browserLang =
-    navigator.language || (navigator as Navigator & { userLanguage?: string }).userLanguage || "en";
-  const langCode = browserLang.split("-")[0].toLowerCase();
-
-  // Supported languages: en, fr
-  if (langCode === "fr") {
-    return "fr";
-  }
-
-  // Default to English
-  return "en";
-}
-
-const browserLanguage: Ref<string> = ref("en");
-
-onMounted(() => {
-  browserLanguage.value = detectBrowserLanguage();
+onMounted(async () => {
+  const status = await auth.checkSetupStatus().catch(() => null);
+  if (status?.setup_complete) await router.replace("/login");
 });
 
-async function handleSetup(): Promise<void> {
+async function handleSetup() {
+  if (loading.value) return;
   error.value = "";
-
-  // Validate password match
   if (password.value !== confirmPassword.value) {
     error.value = t("setup.passwordMismatch");
+    document.getElementById("confirmPassword")?.focus();
     return;
   }
-
   loading.value = true;
-
   try {
-    await auth.createAdmin(username.value, password.value, browserLanguage.value);
-    // Load user data so the menu bar shows the dashboard button
+    const language = navigator.language.toLowerCase().startsWith("fr") ? "fr" : "en";
+    await auth.createAdmin(username.value.trim(), password.value, language);
     await loadUser();
-    router.push("/");
-  } catch (err: unknown) {
-    console.error("Setup failed:", err);
-    const apiErr = err as { data?: { detail?: string } };
-    error.value = apiErr.data?.detail || t("setup.failed");
-  } finally {
-    loading.value = false;
-  }
+    await router.replace("/");
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : t("setup.failed");
+  } finally { loading.value = false; }
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-    <div class="w-full max-w-[350px] space-y-8">
-      <div>
-        <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
-          {{ $t('setup.title') }}
-        </h2>
-        <p class="mt-2 text-center text-sm text-gray-400">
-          {{ $t('setup.subtitle') }}
-        </p>
+  <AuthLayout :title="$t('setup.title')" :subtitle="$t('setup.subtitle')">
+    <form class="space-y-5" :aria-busy="loading" @submit.prevent="handleSetup">
+      <p v-if="error" role="alert" class="form-error">{{ error }}</p>
+      <div class="space-y-2">
+        <label for="username" class="field-label">{{ $t('setup.username') }}</label>
+        <input id="username" v-model="username" name="username" autocomplete="username" autocapitalize="none" :spellcheck="false" required class="field-input" />
       </div>
-
-      <form class="mt-8 space-y-6" @submit.prevent="handleSetup">
-        <div v-if="error" class="rounded-md bg-red-900 bg-opacity-50 p-4">
-          <div class="flex">
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-red-300">
-                {{ error }}
-              </h3>
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded-md shadow-xs space-y-3">
-          <div>
-            <label for="username" class="sr-only">{{ $t('setup.username') }}</label>
-            <input
-              id="username"
-              v-model="username"
-              name="username"
-              type="text"
-              required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-800 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-              :placeholder="$t('setup.username')"
-            />
-          </div>
-          <div>
-            <label for="password" class="sr-only">{{ $t('setup.password') }}</label>
-            <input
-              id="password"
-              v-model="password"
-              name="password"
-              type="password"
-              required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-800 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-              :placeholder="$t('setup.password')"
-            />
-          </div>
-          <div>
-            <label for="confirmPassword" class="sr-only">{{ $t('setup.confirmPassword') }}</label>
-            <input
-              id="confirmPassword"
-              v-model="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              required
-              class="appearance-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-800 rounded-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-              :placeholder="$t('setup.confirmPassword')"
-            />
-          </div>
-        </div>
-
-        <div>
-          <button
-            type="submit"
-            :disabled="loading"
-            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ loading ? $t('setup.creating') : $t('setup.createAccount') }}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <PasswordField id="password" v-model="password" :label="$t('setup.password')" autocomplete="new-password" required />
+      <PasswordField id="confirmPassword" v-model="confirmPassword" :label="$t('setup.confirmPassword')" autocomplete="new-password" required />
+      <button type="submit" :disabled="loading" class="button-primary w-full">{{ loading ? $t('setup.creating') : $t('setup.createAccount') }}</button>
+    </form>
+  </AuthLayout>
 </template>

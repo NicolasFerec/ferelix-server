@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import async_session_maker
@@ -76,6 +77,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ferelix Server", version="0.1.0", lifespan=lifespan)
+
+
+@app.exception_handler(RequestValidationError)
+def request_validation_error(_request: Request, error: RequestValidationError) -> JSONResponse:
+    """Report validation failures without echoing non-JSON numbers or credentials."""
+    # Pydantic's error input can contain NaN/Infinity, which JSONResponse rejects.
+    # Preserve FastAPI's documented error fields and avoid serializing raw input.
+    detail = [{key: item[key] for key in ("loc", "msg", "type")} for item in error.errors()]
+    return JSONResponse(status_code=422, content={"detail": detail})
+
 
 app.add_middleware(
     CORSMiddleware,

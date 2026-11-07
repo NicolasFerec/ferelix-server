@@ -182,13 +182,13 @@ onBeforeUnmount(() => {
   <tr class="transition-colors hover:bg-primary-900/20">
     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
       <div class="flex items-center gap-2">
-        <button
+        <button type="button"
           @click="handleManageRecommendations"
           class="rounded-sm p-1 text-gray-400 transition-colors hover:bg-gray-600 hover:text-white"
           :title="expanded ? $t('libraries.collapse') : $t('libraries.expand')"
           :aria-expanded="expanded"
         >
-          <svg
+          <svg aria-hidden="true"
             class="w-4 h-4 transition-transform"
             :class="{ 'rotate-180': expanded }"
             fill="none"
@@ -225,14 +225,14 @@ onBeforeUnmount(() => {
     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
       <div class="flex items-center justify-end gap-2">
         <span class="group relative inline-flex">
-          <button
+          <button type="button"
             @click="handleScan"
             :disabled="scanning"
             class="rounded-md border border-gray-600 bg-gray-700 p-2 text-gray-300 transition-colors hover:border-primary-500 hover:bg-gray-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             :aria-label="$t('libraries.actions.scan')"
             :title="$t('libraries.actions.scan')"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -248,13 +248,13 @@ onBeforeUnmount(() => {
           </span>
         </span>
         <span class="group relative inline-flex">
-          <button
+          <button type="button"
             @click="handleEdit"
             class="rounded-md border border-gray-600 bg-gray-700 p-2 text-gray-300 transition-colors hover:border-primary-500 hover:bg-gray-600 hover:text-white"
             :aria-label="$t('libraries.actions.edit')"
             :title="$t('libraries.actions.edit')"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -270,13 +270,13 @@ onBeforeUnmount(() => {
           </span>
         </span>
         <span class="group relative inline-flex">
-          <button
+          <button type="button"
             @click="handleManageRecommendations"
             class="rounded-md border border-primary-800 bg-primary-900/50 p-2 text-primary-300 transition-colors hover:border-primary-500 hover:bg-primary-900/70 hover:text-primary-100"
             :aria-label="$t('libraries.manageRecommendations')"
             :title="$t('libraries.manageRecommendations')"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -292,13 +292,13 @@ onBeforeUnmount(() => {
           </span>
         </span>
         <span class="group relative inline-flex">
-          <button
+          <button type="button"
             @click="handleDelete"
             class="rounded-md border border-red-900/70 bg-red-900/30 p-2 text-red-400 transition-colors hover:border-red-700 hover:bg-red-900/50 hover:text-red-300"
             :aria-label="$t('libraries.actions.delete')"
             :title="$t('libraries.actions.delete')"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
               {{ $t('libraries.recommendationRows') }}
             </h3>
           </div>
-          <button
+          <button type="button"
             @click="handleAddRow"
             class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md transition-colors"
           >
@@ -442,12 +442,12 @@ onBeforeUnmount(() => {
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex justify-end gap-2">
-                    <button
+                    <button type="button"
                       @click="handleEditRow(row)"
                       class="rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-700 hover:text-white"
                       :title="$t('common.edit')"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -456,13 +456,13 @@ onBeforeUnmount(() => {
                         />
                       </svg>
                     </button>
-                    <button
+                    <button type="button"
                       @click="handleDeleteRow(row)"
                       :disabled="row.is_special"
                       class="rounded-md p-2 text-gray-400 transition-colors hover:bg-red-900/30 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
                       :title="$t('common.delete')"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"

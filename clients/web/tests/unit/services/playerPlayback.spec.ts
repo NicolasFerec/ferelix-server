@@ -1,16 +1,21 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { media } from "@/api/client";
-import { startPlaybackJob, waitForHlsReady } from "@/services/playerPlayback";
+import { playbackMutation, startPlaybackJob, waitForHlsReady } from "@/services/playerPlayback";
 
 vi.mock("@/api/client", () => ({
     media: {
         startRemux: vi.fn(),
         stopHls: vi.fn(),
         getHlsStatus: vi.fn(),
+        getHlsPlaylistUrl: () => "/playlist.m3u8",
     },
 }));
 
 beforeEach(() => vi.resetAllMocks());
+afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+});
 
 it("stops a job that finishes starting after the player has closed", async () => {
     let resolveJob: (job: { id: string }) => void = () => {};
@@ -22,6 +27,8 @@ it("stops a job that finishes starting after the player has closed", async () =>
     const controller = new AbortController();
     const pending = startPlaybackJob({
         mediaId: 1,
+        sessionId: "session",
+        playbackGeneration: 1,
         source: { IsRemuxOnly: true },
         signal: controller.signal,
     });
@@ -38,4 +45,119 @@ it("does not keep polling once the player is closed", async () => {
         name: "AbortError",
     });
     expect(media.getHlsStatus).not.toHaveBeenCalled();
+});
+
+it("fails immediately when the server is stopping the job", async () => {
+    vi.mocked(media.getHlsStatus).mockResolvedValue({ status: "stopping" } as never);
+    await expect(waitForHlsReady("job")).rejects.toThrow("Transcoding was cancelled");
+    expect(media.getHlsStatus).toHaveBeenCalledTimes(1);
+});
+
+it("enforces the readiness deadline even while the status HTTP request is blocked", async () => {
+    vi.useFakeTimers();
+    vi.mocked(media.getHlsStatus).mockImplementation(
+        (_id, signal) =>
+            new Promise((_resolve, reject) => {
+                signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+            }),
+    );
+    let failure: Error | undefined;
+    const pending = waitForHlsReady("job", undefined, 1000).catch((error) => {
+        failure = error;
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(failure?.message).toBe("Timeout waiting for transcode");
+    await pending;
+    expect(vi.getTimerCount()).toBe(0);
+});
+
+it("enforces the readiness deadline while the playlist HEAD request is blocked", async () => {
+    vi.useFakeTimers();
+    vi.mocked(media.getHlsStatus).mockResolvedValue({ status: "running" } as never);
+    vi.stubGlobal(
+        "fetch",
+        vi.fn(
+            (_url, options) =>
+                new Promise((_resolve, reject) => {
+                    options.signal?.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+                }),
+        ),
+    );
+    let failure: Error | undefined;
+    const pending = waitForHlsReady("job", undefined, 1000).catch((error) => {
+        failure = error;
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(failure?.message).toBe("Timeout waiting for transcode");
+    await pending;
+    expect(vi.getTimerCount()).toBe(0);
+});
+
+it("cancels immediately during the 500ms polling delay", async () => {
+    vi.useFakeTimers();
+    vi.mocked(media.getHlsStatus).mockResolvedValue({ status: "pending" } as never);
+    const controller = new AbortController();
+    let failure: Error | undefined;
+    const pending = waitForHlsReady("job", undefined, 120000, controller.signal).catch((error) => {
+        failure = error;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failure?.name).toBe("AbortError");
+    await pending;
+    expect(media.getHlsStatus).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+});
+
+it("revokes the session when compensation of an obsolete start fails", async () => {
+    let resolveJob: (job: { id: string }) => void = () => {};
+    vi.mocked(media.startRemux).mockReturnValue(
+        new Promise((resolve) => {
+            resolveJob = resolve;
+        }),
+    );
+    vi.mocked(media.stopHls).mockRejectedValue(new TypeError("Network unavailable"));
+    const controller = new AbortController();
+    const revoke = vi.fn();
+    const pending = startPlaybackJob({
+        mediaId: 1,
+        sessionId: "session",
+        playbackGeneration: 2,
+        source: { IsRemuxOnly: true },
+        signal: controller.signal,
+        onUnknownOutcome: revoke,
+    });
+    controller.abort();
+    resolveJob({ id: "late-job" });
+    await expect(pending).rejects.toThrow("Network unavailable");
+    expect(revoke).toHaveBeenCalledOnce();
+});
+
+it("bounds an unknown server mutation and closes its session once", async () => {
+    vi.useFakeTimers();
+    const revoke = vi.fn();
+    const pending = playbackMutation(
+        (signal) =>
+            new Promise((_resolve, reject) => {
+                signal.addEventListener("abort", () => reject(signal.reason));
+            }),
+        revoke,
+        1000,
+    );
+    const failed = expect(pending).rejects.toThrow("Playback request timed out");
+    await vi.advanceTimersByTimeAsync(1000);
+    await failed;
+    expect(revoke).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+});
+
+it("does not revoke a session for a confirmed rejected mutation", async () => {
+    const revoke = vi.fn();
+    await expect(
+        playbackMutation(async () => {
+            throw Object.assign(new Error("Invalid track"), { status: 422 });
+        }, revoke),
+    ).rejects.toThrow("Invalid track");
+    expect(revoke).not.toHaveBeenCalled();
 });

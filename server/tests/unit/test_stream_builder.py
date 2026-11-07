@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
 from app.models.media_file import AudioTrack, MediaFile, SubtitleTrack, VideoTrack
 from app.models.playback import (
     CodecProfile,
@@ -135,6 +137,49 @@ class TestStreamBuilderDirectPlay:
 
         assert stream_info.PlayMethod == PlayMethod.DIRECT_PLAY
 
+    def test_webm_only_codecs_do_not_require_mp4_support(self) -> None:
+        profile = create_device_profile(
+            direct_play_profiles=[
+                DirectPlayProfile(Type="Video", Container="webm", VideoCodec="vp8", AudioCodec="vorbis"),
+                DirectPlayProfile(Type="Video", Container="mp4", VideoCodec="h264", AudioCodec="aac"),
+            ]
+        )
+        media_file = create_media_file(video_codec="vp8", audio_codec="vorbis", container=".webm")
+
+        stream_info = StreamBuilder(profile).build_stream_info(media_file)
+
+        assert stream_info.PlayMethod == PlayMethod.DIRECT_PLAY
+        assert stream_info.DirectStreamUrl == "/api/v1/stream/1"
+        assert stream_info.TranscodingUrl is None
+
+    def test_codec_support_in_mp4_does_not_imply_support_in_mkv(self) -> None:
+        profile = create_device_profile(
+            direct_play_profiles=[
+                DirectPlayProfile(Type="Video", Container="mkv", VideoCodec="h264", AudioCodec="aac"),
+                DirectPlayProfile(Type="Video", Container="mp4", VideoCodec="hevc", AudioCodec="aac"),
+            ]
+        )
+        media_file = create_media_file(video_codec="hevc", audio_codec="aac", container=".mkv")
+
+        stream_info = StreamBuilder(profile).build_stream_info(media_file)
+
+        assert stream_info.PlayMethod == PlayMethod.DIRECT_STREAM
+        assert stream_info.TranscodingType == "remux"
+
+    def test_standalone_audio_support_does_not_authorize_audio_in_video_container(self) -> None:
+        profile = create_device_profile(
+            direct_play_profiles=[
+                DirectPlayProfile(Type="Video", Container="mp4", VideoCodec="h264", AudioCodec="aac"),
+                DirectPlayProfile(Type="Audio", Container="ogg", AudioCodec="vorbis"),
+            ]
+        )
+        media_file = create_media_file(video_codec="h264", audio_codec="vorbis", container=".mp4")
+
+        stream_info = StreamBuilder(profile).build_stream_info(media_file)
+
+        assert stream_info.PlayMethod == PlayMethod.TRANSCODE
+        assert stream_info.TranscodingType == "audio-only"
+
 
 class TestStreamBuilderTranscode:
     """Tests for transcoding scenarios."""
@@ -208,6 +253,35 @@ class TestStreamBuilderTranscode:
 
         # Should transcode audio while copying video
         assert stream_info.PlayMethod == PlayMethod.TRANSCODE
+
+
+class TestAudioTrackSelection:
+    def test_default_and_explicit_audio_use_the_selected_codec(self) -> None:
+        profile = create_device_profile(
+            direct_play_profiles=[DirectPlayProfile(Type="Video", Container="mp4", VideoCodec="h264", AudioCodec="aac")]
+        )
+        media_file = create_media_file(video_codec="h264", audio_codec="dts", container=".mkv")
+        media_file.audio_tracks[0].is_default = False
+        media_file.audio_tracks.append(AudioTrack(id=2, media_file_id=1, stream_index=3, codec="aac", is_default=True))
+        original_tracks = list(media_file.audio_tracks)
+        builder = StreamBuilder(profile)
+
+        default = builder.build_stream_info(media_file)
+        dts = builder.build_stream_info(media_file, audio_stream_index=1)
+        aac = builder.build_stream_info(media_file, audio_stream_index=3)
+
+        assert default.TranscodingType == "remux"
+        assert default.AudioStreamIndex == 3
+        assert dts.TranscodingType == "audio-only"
+        assert dts.TranscodingVideoCodec == "copy"
+        assert dts.AudioStreamIndex == 1
+        assert aac.TranscodingType == "remux"
+        assert aac.AudioStreamIndex == 3
+        assert media_file.audio_tracks == original_tracks
+
+    def test_unknown_audio_index_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Audio stream index 99 does not exist"):
+            StreamBuilder(create_device_profile()).build_stream_info(create_media_file(), audio_stream_index=99)
 
 
 class TestStreamBuilderResolution:
@@ -351,8 +425,9 @@ class TestStreamBuilderDisabledOptions:
             enable_transcoding=False,
         )
 
-        # Should fall back to transcode with error reason
-        assert stream_info.PlayMethod == PlayMethod.TRANSCODE
+        # A disabled transport must not be returned as an executable fallback.
+        assert stream_info.PlayMethod == PlayMethod.NONE
+        assert stream_info.TranscodingUrl is None
 
 
 class TestPlaybackResult:

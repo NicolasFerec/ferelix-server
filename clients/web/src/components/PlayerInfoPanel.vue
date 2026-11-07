@@ -2,7 +2,7 @@
   <div v-if="isVisible" class="info-panel">
     <div class="info-panel-header">
       <h3>{{ $t("player.info.title") }}</h3>
-      <button @click="$emit('toggle')" class="close-btn" :title="$t('player.info.close')">
+      <button type="button" @click="$emit('toggle')" class="close-btn" :title="$t('player.info.close')">
         ✕
       </button>
     </div>
@@ -183,7 +183,7 @@ const formatChannels = (channels: number): string => {
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   font-size: 12px;
-  z-index: 100;
+  z-index: 40;
   backdrop-filter: blur(10px);
 }
 

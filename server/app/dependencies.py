@@ -65,7 +65,7 @@ async def get_current_user(
 
     # Get user from database
     user = await session.get(User, user_id)
-    if user is None:
+    if user is None or payload.get("cv", 0) != user.credentials_version:
         raise credentials_exception
 
     return user
@@ -131,7 +131,7 @@ async def get_optional_user(
 
     # Get user from database
     user = await session.get(User, int(user_id_str))
-    return user
+    return user if user is not None and payload.get("cv", 0) == user.credentials_version else None
 
 
 def require_admin(

@@ -57,6 +57,7 @@ onUnmounted(() => {
     <CustomVideoPlayer
       v-if="mediaFile"
       :media-file="mediaFile"
+      :initial-video-stream-index="numberQueryValue(route.query.video)"
       :initial-audio-stream-index="numberQueryValue(route.query.audio)"
       :initial-subtitle-stream-index="numberQueryValue(route.query.subtitle)"
       @close="handleClose"
@@ -66,7 +67,7 @@ onUnmounted(() => {
     </div>
     <div v-else-if="error" class="flex flex-col items-center justify-center h-full text-white">
       <p class="mb-4">{{ $t('player.error') }}</p>
-      <button @click="loadMedia" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-md">
+      <button type="button" @click="loadMedia" class="px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-md">
         {{ $t('player.retry') }}
       </button>
     </div>

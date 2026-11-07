@@ -80,11 +80,11 @@ def initialize_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -
         kwargs={"grace_period_days": settings.cleanup_grace_period_days},
     )
 
-    # Schedule transcode files cleanup job (every 30 minutes)
+    # Schedule transcode files cleanup job (every minute)
     scheduler.add_job(
         cleanup_transcode_files_job,
         "interval",
-        minutes=30,
+        minutes=1,
         id="transcode_cleanup",
         replace_existing=True,
     )
@@ -94,7 +94,7 @@ def initialize_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -
         f"Scheduled database cleanup job (daily at {settings.cleanup_schedule_hour:02d}:{settings.cleanup_schedule_minute:02d}, "
         f"grace period: {settings.cleanup_grace_period_days} days)"
     )
-    logger.info("Scheduled transcode cleanup job (every 30 minutes)")
+    logger.info("Scheduled transcode cleanup job (every minute)")
 
 
 def update_scheduler_jobs(scheduler: AsyncIOScheduler, settings: Settings) -> None:

@@ -94,12 +94,12 @@ onBeforeUnmount(() => {
     </td>
     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
       <div ref="dropdownRef" class="relative inline-block text-left">
-        <button
+        <button type="button"
           @click="showDropdown = !showDropdown"
           class="inline-flex justify-center w-full rounded-md border border-gray-600 shadow-xs px-4 py-2 bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-primary-500"
         >
           {{ $t('common.actions') }}
-          <svg
+          <svg aria-hidden="true"
             class="-mr-1 ml-2 h-5 w-5"
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
@@ -118,20 +118,20 @@ onBeforeUnmount(() => {
           class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-2xl bg-gray-600 border border-gray-500 focus:outline-hidden z-50"
         >
           <div class="py-1">
-            <button
+            <button type="button"
               @click="handleEdit"
               class="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-500"
             >
               {{ $t('common.edit') }}
             </button>
-            <button
+            <button type="button"
               v-if="!row.is_special"
               @click="handleDelete"
               class="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-500"
             >
               {{ $t('common.delete') }}
             </button>
-            <button
+            <button type="button"
               v-else
               disabled
               class="block w-full text-left px-4 py-2 text-sm text-gray-500 cursor-not-allowed"

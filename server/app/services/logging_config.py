@@ -65,11 +65,12 @@ class LoggingChannelFilter(logging.Filter):
             if isinstance(arguments[2], str):
                 url = urlsplit(arguments[2])
                 query = parse_qsl(url.query, keep_blank_values=True)
-                if any(key == "api_key" for key, _value in query):
+                if any(key in {"api_key", "media_token"} for key, _value in query):
                     arguments[2] = urlunsplit(
                         url._replace(
                             query=urlencode([
-                                (key, "[redacted]" if key == "api_key" else value) for key, value in query
+                                (key, "[redacted]" if key in {"api_key", "media_token"} else value)
+                                for key, value in query
                             ])
                         )
                     )

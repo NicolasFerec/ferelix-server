@@ -1,51 +1,44 @@
 <script setup lang="ts">
-import { onMounted, type Ref, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { auth } from "@/api/client";
+import AuthLayout from "@/components/auth/AuthLayout.vue";
+import PasswordField from "@/components/auth/PasswordField.vue";
 import { useUser } from "@/composables/useUser";
+import { safeReturnTo } from "@/services/authNavigation";
 
 const { t, locale } = useI18n();
 const { updateUser } = useUser();
-
 const router = useRouter();
+const route = useRoute();
+const username = ref("");
+const password = ref("");
+const loading = ref(false);
+const error = ref("");
+const notice = computed(() => route.query.reason === "expired" ? t("auth.sessionExpired") : route.query.reason === "password-changed" ? t("auth.passwordChanged") : "");
 
-const username: Ref<string> = ref("");
-const password: Ref<string> = ref("");
-const loading: Ref<boolean> = ref(false);
-const error: Ref<string> = ref("");
-
-// Check setup status on mount
 onMounted(async () => {
   try {
     const status = await auth.checkSetupStatus();
-    if (!status.setup_complete) {
-      router.push("/setup");
-    }
-  } catch (err) {
-    console.error("Failed to check setup status:", err);
-  }
+    if (status && !status.setup_complete) await router.replace("/setup");
+  } catch { /* A temporary status failure must not prevent login. */ }
 });
 
-async function handleLogin(): Promise<void> {
+async function handleLogin() {
+  if (loading.value) return;
   error.value = "";
   loading.value = true;
-
   try {
-    await auth.login(username.value, password.value, navigator.userAgent);
-
-    // Load user information and set locale
+    await auth.login(username.value.trim(), password.value, navigator.userAgent);
     const user = await auth.getCurrentUser();
     updateUser(user);
-    if (user?.language) {
-      locale.value = user.language;
-    }
-
-    router.push("/");
-  } catch (err: unknown) {
-    console.error("Login failed:", err);
-    const apiErr = err as { data?: { detail?: string } };
-    error.value = apiErr.data?.detail || t("login.failed");
+    if (user.language) locale.value = user.language;
+    await router.replace(safeReturnTo(route.query.redirect));
+  } catch (cause) {
+    const status = cause && typeof cause === "object" && "status" in cause ? cause.status : undefined;
+    error.value = t(status === 401 || status === 403 ? "login.failed" : "auth.unavailable");
+    if (status === 401 || status === 403) document.getElementById("username")?.focus();
   } finally {
     loading.value = false;
   }
@@ -53,62 +46,19 @@ async function handleLogin(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-    <div class="max-w-md w-full space-y-8">
-      <div>
-        <h2 class="mt-6 text-center text-3xl font-extrabold text-white">
-          {{ $t('login.title') }}
-        </h2>
+  <AuthLayout :title="$t('login.title')" :subtitle="$t('auth.accountHelp')">
+    <p v-if="notice" role="status" class="mb-6 rounded-xl border border-primary-400/20 bg-primary-500/10 p-4 text-sm leading-6 text-primary-200">{{ notice }}</p>
+    <form class="space-y-6" :aria-busy="loading" @submit.prevent="handleLogin">
+      <p v-if="error" role="alert" class="form-error">{{ error }}</p>
+      <div class="space-y-2">
+        <label for="username" class="field-label">{{ $t('login.username') }}</label>
+        <input id="username" v-model="username" name="username" type="text" autocomplete="username" autocapitalize="none" :spellcheck="false" required class="field-input" />
       </div>
-
-      <form class="mt-8 space-y-6" @submit.prevent="handleLogin">
-        <div v-if="error" class="rounded-md bg-red-900 bg-opacity-50 p-4">
-          <div class="flex">
-            <div class="ml-3">
-              <h3 class="text-sm font-medium text-red-300">
-                {{ error }}
-              </h3>
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded-md shadow-xs -space-y-px">
-          <div>
-            <label for="username" class="sr-only">{{ $t('login.username') }}</label>
-            <input
-              id="username"
-              v-model="username"
-              name="username"
-              type="text"
-              required
-              class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-800 rounded-t-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-              :placeholder="$t('login.username')"
-            />
-          </div>
-          <div>
-            <label for="password" class="sr-only">{{ $t('login.password') }}</label>
-            <input
-              id="password"
-              v-model="password"
-              name="password"
-              type="password"
-              required
-              class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-700 placeholder-gray-500 text-white bg-gray-800 rounded-b-md focus:outline-hidden focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
-              :placeholder="$t('login.password')"
-            />
-          </div>
-        </div>
-
-        <div>
-          <button
-            type="submit"
-            :disabled="loading"
-            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ loading ? $t('login.signingIn') : $t('login.signIn') }}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
+      <PasswordField id="password" v-model="password" :label="$t('login.password')" autocomplete="current-password" required />
+      <button type="submit" :disabled="loading" class="button-primary w-full">
+        <span v-if="loading" class="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true"></span>
+        {{ loading ? $t('login.signingIn') : $t('login.signIn') }}
+      </button>
+    </form>
+  </AuthLayout>
 </template>

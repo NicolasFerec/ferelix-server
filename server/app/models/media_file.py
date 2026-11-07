@@ -34,6 +34,8 @@ class MediaFile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     scanned_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    last_scan_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scan_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     # Relationships
@@ -55,6 +57,24 @@ class MediaFile(Base):
         return f"/api/v1/media/{self.id}/thumbnail"
 
 
+class MediaCardSchema(BaseModel):
+    """Catalogue projection; tracks and server diagnostics belong to media details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    file_name: str
+    file_extension: str
+    thumbnail_url: str | None = None
+    duration: float | None = None
+    width: int | None = None
+    height: int | None = None
+    codec: str | None = None
+    bitrate: int | None = None
+    created_at: datetime
+    user_view: MediaViewSchema | None = None
+
+
 class MediaFileSchema(BaseModel):
     """Schema for MediaFile API responses."""
 
@@ -74,6 +94,8 @@ class MediaFileSchema(BaseModel):
     created_at: datetime
     updated_at: datetime
     scanned_at: datetime
+    last_scan_attempt_at: datetime | None = None
+    scan_error: str | None = None
     deleted_at: datetime | None = None
     user_view: MediaViewSchema | None = None
     video_tracks: list[VideoTrackSchema] = []
@@ -99,6 +121,7 @@ class VideoTrack(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Enhanced metadata for transcoding decisions
+    codec_tag: Mapped[str | None] = mapped_column(String, nullable=True)
     profile: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g., "High", "Main"
     level: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g., "4.1", "5.1"
     pixel_format: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g., "yuv420p", "yuv420p10le"
@@ -178,6 +201,7 @@ class VideoTrackSchema(BaseModel):
     # Enhanced metadata
     profile: str | None = None
     level: str | None = None
+    codec_tag: str | None = None
     pixel_format: str | None = None
     bit_depth: int | None = None
     color_range: str | None = None

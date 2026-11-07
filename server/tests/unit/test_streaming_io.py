@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException, status
 
 from app.services.streaming_io import (
-    append_api_key_to_playlist_segments,
+    append_media_token_to_playlist,
     first_playlist_segment,
     is_playlist_ready,
     parse_range_header,
@@ -51,18 +51,18 @@ def test_first_playlist_segment_ignores_tags() -> None:
     assert first_playlist_segment(content) == "segment_000.ts"
 
 
-def test_append_api_key_to_playlist_segments_rewrites_relative_segments() -> None:
+def test_append_media_token_to_playlist_rewrites_relative_segments() -> None:
     content = (
         '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:6.0,\nsegment_000.ts\n#EXTINF:6.0,\nsegment_001.ts?x=1\n/http.ts\n'
     )
 
-    assert append_api_key_to_playlist_segments(content, "abc.def") == (
+    assert append_media_token_to_playlist(content, "session", "abc.def") == (
         "#EXTM3U\n"
-        '#EXT-X-MAP:URI="init.mp4?api_key=abc.def"\n'
+        '#EXT-X-MAP:URI="init.mp4?session_id=session&media_token=abc.def"\n'
         "#EXTINF:6.0,\n"
-        "segment_000.ts?api_key=abc.def\n"
+        "segment_000.ts?session_id=session&media_token=abc.def\n"
         "#EXTINF:6.0,\n"
-        "segment_001.ts?x=1&api_key=abc.def\n"
+        "segment_001.ts?x=1&session_id=session&media_token=abc.def\n"
         "/http.ts\n"
     )
 
@@ -77,3 +77,20 @@ async def test_is_playlist_ready_requires_manifest_and_first_segment(tmp_path) -
     (tmp_path / "segment_000.ts").write_bytes(b"data")
 
     assert await is_playlist_ready(playlist) is True
+
+
+async def test_fmp4_readiness_requires_initialization_segment(tmp_path) -> None:
+    playlist = tmp_path / "playlist.m3u8"
+    playlist.write_text('#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:6.0,\nsegment_000.m4s\n')
+    (tmp_path / "segment_000.m4s").write_bytes(b"media")
+    assert await is_playlist_ready(playlist) is False
+    (tmp_path / "init.mp4").write_bytes(b"init")
+    assert await is_playlist_ready(playlist) is True
+
+
+async def test_readiness_handles_playlist_deleted_between_exists_and_stat(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    playlist = tmp_path / "playlist.m3u8"
+    monkeypatch.setattr(Path, "exists", lambda path: True)
+    assert await is_playlist_ready(playlist) is False

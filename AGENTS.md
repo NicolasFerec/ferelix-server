@@ -187,7 +187,11 @@ Decision logic compares `DeviceProfile` capabilities against media file metadata
 
 `PlaybackSessionService` starts HLS jobs for the selected method. `FFmpegTranscoder` coordinates ffmpeg processes while command construction, hardware detection, subtitle extraction, and HLS file I/O live in focused helper modules under `app/services/transcoding/` and `app/services/streaming_io.py`.
 
-The Vue player keeps playback orchestration in `CustomVideoPlayer.vue`, presentational controls/status overlays in `clients/web/src/components/player/`, and small formatting/type helpers in `clients/web/src/services/playerUi.ts`.
+The Vue player keeps session/HLS lifecycle and playback intentions in `clients/web/src/composables/usePlayerPlayback.ts`, player layout and controls in `CustomVideoPlayer.vue` and `clients/web/src/components/player/`, and formatting/type helpers in `clients/web/src/services/playerUi.ts`.
+
+Every playback requires an owned `PlaybackSession`. Native/HLS media URLs use its scoped credential; starts and heartbeats carry the current monotone playback generation. Keep session closure, stale-request rejection and encoder ownership coherent when changing these routes. Run one API worker: scheduler, FFmpeg handles and scan coordination are process-local.
+
+Catalogue/home responses use lightweight `MediaCardSchema` objects and bounded pagination; load tracks only for detail/playback. Shared account mutations go through `app/services/accounts.py` so identity uniqueness and credential revocation stay transactional.
 
 Optional runtime configuration:
 ```bash
@@ -235,7 +239,11 @@ When reviewing code, **focus on real bugs only** - not style preferences or mino
 - `server/app/services/stream_builder.py` - Playback decision logic
 - `server/app/services/directory_browser.py` - Admin filesystem browsing helper used by dashboard routes
 - `clients/web/src/api/client.ts` - Centralized API client with token refresh
-- `clients/web/src/components/CustomVideoPlayer.vue` - HLS player with transcode management
+- `clients/web/src/components/CustomVideoPlayer.vue` - Player layout and controls
+- `clients/web/src/composables/usePlayerPlayback.ts` - Playback intentions, owned sessions, HLS and media lifecycle
+- `server/app/services/media_access.py` - Playback-scoped media authorization
+- `server/app/services/catalogue.py` - Lightweight catalogue and batched recommendation queries
+- `server/app/services/accounts.py` - Shared identity and credential mutation invariants
 - `clients/web/src/components/player/` - Presentational video player controls and status overlays
 - `clients/web/src/services/playerPlayback.ts` - Playback job selection and HLS readiness polling
 - `clients/web/src/services/playerUi.ts` - Shared player UI types, labels, and time formatting

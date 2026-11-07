@@ -25,6 +25,7 @@ class TranscodingJobStatus(StrEnum):
 
     PENDING = "pending"
     RUNNING = "running"
+    STOPPING = "stopping"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -54,6 +55,10 @@ class TranscodingJob(Base):
 
     # Seek/offset info
     start_time: Mapped[float | None] = mapped_column(Float, nullable=True)
+    playback_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    video_stream_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_throttled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    encoded_ahead_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Output info
     output_path: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -113,6 +118,10 @@ class TranscodingJobSchema(BaseModel):
     current_fps: float | None = None
     current_bitrate: int | None = None
     start_time: float | None = None
+    playback_generation: int = 0
+    video_stream_index: int | None = None
+    is_throttled: bool = False
+    encoded_ahead_seconds: float | None = None
 
     # Error info
     error_message: str | None = None

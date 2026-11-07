@@ -165,7 +165,7 @@ onMounted(() => {
 <template>
   <div class="settings-panel">
     <div class="flex justify-between items-center mb-6">
-      <h2 class="text-2xl font-semibold text-white">{{ $t('settings.title') }}</h2>
+      <h2 class="page-heading">{{ $t('settings.title') }}</h2>
     </div>
 
     <!-- Loading state -->
@@ -176,7 +176,7 @@ onMounted(() => {
     <!-- Error state -->
     <div v-else-if="loadError" class="text-center text-red-400 py-12">
       <p>{{ loadError }}</p>
-      <button
+      <button type="button"
         @click="loadSettings"
         class="mt-4 px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md"
       >
@@ -187,7 +187,7 @@ onMounted(() => {
     <!-- Settings form -->
     <div v-else class="space-y-8">
       <!-- Library Scanner Settings -->
-      <div class="bg-gray-800 rounded-lg p-6">
+      <div class="surface-panel p-5 sm:p-6">
         <h3 class="text-xl font-semibold text-white mb-2">
           {{ $t('settings.libraryScanner.title') }}
         </h3>
@@ -197,15 +197,15 @@ onMounted(() => {
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="library_scan_interval_minutes" class="field-label mb-2">
               {{ $t('settings.libraryScanner.interval') }}
             </label>
             <div class="flex items-center gap-2">
               <input
-                v-model.number="formData.library_scan_interval_minutes"
+                id="library_scan_interval_minutes" v-model.number="formData.library_scan_interval_minutes"
                 type="number"
                 min="1"
-                class="flex-1 px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="min-w-0 flex-1 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 :disabled="saving"
               />
               <span class="text-gray-400 whitespace-nowrap">
@@ -220,7 +220,7 @@ onMounted(() => {
       </div>
 
       <!-- Database Cleanup Settings -->
-      <div class="bg-gray-800 rounded-lg p-6">
+      <div class="surface-panel p-5 sm:p-6">
         <h3 class="text-xl font-semibold text-white mb-2">
           {{ $t('settings.cleanupJob.title') }}
         </h3>
@@ -230,7 +230,7 @@ onMounted(() => {
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="cleanup_schedule_hour" class="field-label mb-2">
               {{ $t('settings.cleanupJob.schedule') }}
               <span class="text-gray-500 text-xs ml-1">
                 {{ $t('settings.cleanupJob.timeFormat') }}
@@ -238,21 +238,21 @@ onMounted(() => {
             </label>
             <div class="flex items-center gap-2">
               <input
-                v-model.number="formData.cleanup_schedule_hour"
+                id="cleanup_schedule_hour" v-model.number="formData.cleanup_schedule_hour"
                 type="number"
                 min="0"
                 max="23"
-                class="w-24 px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="w-24 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="3"
                 :disabled="saving"
               />
               <span class="text-gray-400">:</span>
               <input
-                v-model.number="formData.cleanup_schedule_minute"
+                :aria-label="$t('settings.cleanupJob.minute')" v-model.number="formData.cleanup_schedule_minute"
                 type="number"
                 min="0"
                 max="59"
-                class="w-24 px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="w-24 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="0"
                 :disabled="saving"
               />
@@ -263,15 +263,15 @@ onMounted(() => {
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="cleanup_grace_period_days" class="field-label mb-2">
               {{ $t('settings.cleanupJob.gracePeriod') }}
             </label>
             <div class="flex items-center gap-2">
               <input
-                v-model.number="formData.cleanup_grace_period_days"
+                id="cleanup_grace_period_days" v-model.number="formData.cleanup_grace_period_days"
                 type="number"
                 min="1"
-                class="flex-1 px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="min-w-0 flex-1 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 :disabled="saving"
               />
               <span class="text-gray-400 whitespace-nowrap">
@@ -286,17 +286,17 @@ onMounted(() => {
       </div>
 
       <!-- Hardware Transcoding Settings -->
-      <div class="bg-gray-800 rounded-lg p-6">
+      <div class="surface-panel p-5 sm:p-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
           <div>
             <h3 class="text-xl font-semibold text-white">
               {{ $t('settings.hardwareTranscoding.title') }}
             </h3>
           </div>
-          <button
+          <button type="button"
             @click="loadHardwareStatus(true)"
             :disabled="hardwareLoading || saving"
-            class="px-4 py-2 text-sm font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-md transition-colors"
+            class="px-4 py-2 text-sm font-medium text-white bg-surface-raised hover:bg-gray-600 disabled:bg-surface disabled:cursor-not-allowed rounded-md transition-colors"
           >
             {{ hardwareLoading ? $t('common.loading') : $t('settings.hardwareTranscoding.refresh') }}
           </button>
@@ -304,12 +304,12 @@ onMounted(() => {
 
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label for="hardware-device" class="field-label mb-2">
               {{ $t('settings.hardwareTranscoding.device') }}
             </label>
             <select
-              v-model="selectedHardwareDevice"
-              class="w-full px-4 py-2 bg-gray-700 text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              id="hardware-device" v-model="selectedHardwareDevice"
+              class="w-full px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               :disabled="saving"
             >
               <option v-for="option in hardwareDeviceOptions" :key="option.id" :value="option.id">
@@ -327,7 +327,7 @@ onMounted(() => {
               {{ $t('settings.hardwareTranscoding.noDevices') }}
             </div>
 
-            <div v-for="device in hardwareStatus.devices" :key="device.id" class="border border-gray-700 rounded-md p-4">
+            <div v-for="device in hardwareStatus.devices" :key="device.id" class="border border-outline rounded-md p-4">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div class="font-medium text-white">{{ device.name }}</div>
@@ -335,7 +335,7 @@ onMounted(() => {
                 </div>
                 <span
                   class="self-start rounded-full px-2 py-1 text-xs"
-                  :class="device.available ? 'bg-green-900/50 text-green-300' : 'bg-gray-700 text-gray-400'"
+                  :class="device.available ? 'bg-green-900/50 text-green-300' : 'bg-surface-raised text-gray-400'"
                 >
                   {{ device.available ? $t('common.enabled') : $t('common.disabled') }}
                 </span>
@@ -344,7 +344,7 @@ onMounted(() => {
                 <span
                   v-for="capability in device.capabilities"
                   :key="`${device.id}-${capability.codec}`"
-                  class="rounded-md bg-gray-700 px-2 py-1 text-xs text-gray-300"
+                  class="rounded-md bg-surface-raised px-2 py-1 text-xs text-gray-300"
                 >
                   {{ capabilityLabel(capability) }}
                 </span>
@@ -363,14 +363,14 @@ onMounted(() => {
 
       <!-- Save button -->
       <div class="flex justify-end gap-4">
-        <button
+        <button type="button"
           @click="loadSettings"
           :disabled="saving"
-          class="px-6 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-md transition-colors"
+          class="px-6 py-2 bg-surface-raised hover:bg-gray-600 disabled:bg-surface disabled:cursor-not-allowed text-white rounded-md transition-colors"
         >
           {{ $t('common.cancel') }}
         </button>
-        <button
+        <button type="button"
           @click="saveSettings"
           :disabled="saving || !hasChanges"
           class="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md transition-colors"

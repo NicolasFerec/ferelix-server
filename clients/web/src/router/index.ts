@@ -1,63 +1,56 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { auth, isAuthenticated } from "@/api/client";
-import DashboardView from "../views/DashboardView.vue";
-import HomeView from "../views/HomeView.vue";
-import LibraryView from "../views/LibraryView.vue";
-import LoginView from "../views/LoginView.vue";
-import MediaDetailView from "../views/MediaDetailView.vue";
-import PlayerView from "../views/PlayerView.vue";
-import SetupView from "../views/SetupView.vue";
-import UserSettingsView from "../views/UserSettingsView.vue";
 
 const routes: RouteRecordRaw[] = [
     {
         path: "/",
         name: "home",
-        component: HomeView,
+        component: () => import("../views/HomeView.vue"),
     },
     {
         path: "/media/:id",
         name: "media-detail",
-        component: MediaDetailView,
+        component: () => import("../views/MediaDetailView.vue"),
         props: true,
     },
     {
         path: "/play/:id",
         name: "player",
-        component: PlayerView,
+        component: () => import("../views/PlayerView.vue"),
         props: true,
     },
     {
         path: "/library/:id",
         name: "library",
-        component: LibraryView,
+        component: () => import("../views/LibraryView.vue"),
         props: true,
     },
     {
         path: "/login",
         name: "login",
-        component: LoginView,
+        component: () => import("../views/LoginView.vue"),
     },
     {
         path: "/setup",
         name: "setup",
-        component: SetupView,
+        component: () => import("../views/SetupView.vue"),
     },
     {
         path: "/settings",
         name: "settings",
-        component: UserSettingsView,
+        component: () => import("../views/UserSettingsView.vue"),
     },
     {
         path: "/dashboard/:section?",
         name: "dashboard",
-        component: DashboardView,
+        component: () => import("../views/DashboardView.vue"),
     },
 ];
 
 const router = createRouter({
     history: createWebHistory(),
     routes,
+    scrollBehavior: (_to, _from, savedPosition) => savedPosition || { top: 0 },
 });
 
 // Global navigation guard for authentication and admin routes
@@ -68,7 +61,7 @@ router.beforeEach(async (to, _from, next) => {
 
     // Check authentication
     if (authRequired && !isAuthenticated()) {
-        next("/login");
+        next({ name: "login", query: { redirect: to.fullPath } });
         return;
     }
 
@@ -76,13 +69,13 @@ router.beforeEach(async (to, _from, next) => {
     if (isAdminPage) {
         try {
             const user = await auth.getCurrentUser();
-            if (!user || !user.is_admin) {
+            if (!user?.is_admin) {
                 next("/");
                 return;
             }
         } catch (error) {
             console.error("Failed to check admin status:", error);
-            next("/");
+            next(isAuthenticated() ? "/" : { name: "login", query: { redirect: to.fullPath } });
             return;
         }
     }

@@ -36,6 +36,7 @@ from app.models import (
     UserSchema,
     UserUpdate,
 )
+from app.services.accounts import change_password, commit_account_changes, ensure_identity_available
 from app.services.directory_browser import DirectoryItem, browse_directory_items
 from app.services.jobs import (
     JobExecutionRecord,
@@ -953,21 +954,8 @@ async def create_user(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     """Create a user account from the admin dashboard."""
-    existing = await session.scalar(select(User).where(func.lower(User.username) == func.lower(user_data.username)))
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered",
-        )
-
     email = _normalize_email(user_data.email)
-    if email:
-        existing_email = await session.scalar(select(User).where(User.email == email))
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
-            )
+    await ensure_identity_available(session, username=user_data.username, email=email)
 
     user = User(
         username=user_data.username,
@@ -978,7 +966,7 @@ async def create_user(
         language=user_data.language,
     )
     session.add(user)
-    await session.commit()
+    await commit_account_changes(session)
     await session.refresh(user)
     return user
 
@@ -1038,32 +1026,22 @@ async def update_user(
     was_active_admin = user.is_admin and user.is_active
 
     if user_update.username is not None:
-        existing = await session.scalar(
-            select(User).where(
-                func.lower(User.username) == func.lower(user_update.username),
-                User.id != user_id,
-            )
-        )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already in use",
-            )
+        await ensure_identity_available(session, username=user_update.username, exclude_user_id=user_id)
         user.username = user_update.username
 
     if "email" in user_update.model_fields_set:
         email = _normalize_email(user_update.email)
-        # Check if email is already taken by another user
-        existing = await session.scalar(select(User).where(User.email == email, User.id != user_id)) if email else None
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already in use",
-            )
+        await ensure_identity_available(session, email=email, exclude_user_id=user_id)
         user.email = email
 
     if user_update.password is not None:
-        user.password = user_update.password
+        await change_password(
+            session,
+            user,
+            user_update.password,
+            current_password=user_update.current_password,
+            require_current=user_id == admin.id,
+        )
 
     if user_update.language is not None:
         user.language = user_update.language
@@ -1088,7 +1066,7 @@ async def update_user(
     await ensure_active_admin_remains(session, user, was_active_admin=was_active_admin)
 
     user.updated_at = datetime.now(UTC).replace(tzinfo=None)
-    await session.commit()
+    await commit_account_changes(session)
     await session.refresh(user)
 
     return user

@@ -4,16 +4,19 @@
  */
 
 import createClient, { type Middleware } from "openapi-fetch";
+import { SESSION_EXPIRED_EVENT } from "@/services/authNavigation";
 import type { components, paths } from "./types";
 
 const TOKEN_KEY = "auth_access_token";
 const REFRESH_KEY = "auth_refresh_token";
+let tokenGeneration = 0;
 
 // Re-export types from generated OpenAPI types
 export type Library = components["schemas"]["LibrarySchema"];
 export type LibraryCreate = components["schemas"]["LibraryCreate"];
 export type LibraryUpdate = components["schemas"]["LibraryUpdate"];
 export type MediaFile = components["schemas"]["MediaFileSchema"];
+export type MediaCardInfo = components["schemas"]["MediaCardSchema"];
 export type User = components["schemas"]["UserSchema"];
 export type UserCreate = components["schemas"]["UserCreate"];
 export type UserUpdate = components["schemas"]["UserUpdate"];
@@ -40,6 +43,22 @@ export type LogLine = components["schemas"]["LogLineSchema"];
 export type LogsResponse = components["schemas"]["LogsResponse"];
 export type LogsConfig = components["schemas"]["LogsConfigResponse"];
 
+export interface MediaAccess {
+    sessionId: string;
+    token: string;
+}
+
+/** Media URLs use a revocable playback grant, independent of short-lived API tokens. */
+export function mediaSessionUrl(value: string, access?: MediaAccess): string {
+    if (!access?.sessionId || !access.token) throw new Error("No active playback session");
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin) throw new Error("Invalid media origin");
+    url.searchParams.delete("api_key");
+    url.searchParams.set("session_id", access.sessionId);
+    url.searchParams.set("media_token", access.token);
+    return `${url.pathname}${url.search}${url.hash}`;
+}
+
 /**
  * Get access token from localStorage
  */
@@ -57,15 +76,20 @@ export function getRefreshToken(): string | null {
 /**
  * Save tokens to localStorage
  */
-export function saveTokens(accessToken: string, refreshToken: string): void {
+function persistTokens(accessToken: string, refreshToken: string): void {
     localStorage.setItem(TOKEN_KEY, accessToken);
     localStorage.setItem(REFRESH_KEY, refreshToken);
+}
+export function saveTokens(accessToken: string, refreshToken: string): void {
+    tokenGeneration++;
+    persistTokens(accessToken, refreshToken);
 }
 
 /**
  * Clear tokens from localStorage
  */
 export function clearTokens(): void {
+    tokenGeneration++;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
 }
@@ -77,8 +101,15 @@ export function isAuthenticated(): boolean {
     return !!getAccessToken();
 }
 
+function expireSession(): void {
+    const wasAuthenticated = isAuthenticated();
+    clearTokens();
+    if (wasAuthenticated) window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+}
+
 let refreshPromise: Promise<string> | null = null;
 const replayRequests = new WeakMap<Request, Request>();
+const requestGenerations = new WeakMap<Request, number>();
 
 function apiErrorMessage(error: unknown, fallback: string): string {
     if (error && typeof error === "object" && "detail" in error) {
@@ -94,6 +125,7 @@ function apiErrorMessage(error: unknown, fallback: string): string {
  * Attempt to refresh the access token
  */
 async function refreshAccessToken(): Promise<string> {
+    const generation = tokenGeneration;
     const refreshToken = getRefreshToken();
 
     if (!refreshToken) {
@@ -102,20 +134,22 @@ async function refreshAccessToken(): Promise<string> {
 
     const response = await fetch("/api/v1/auth/refresh", {
         method: "POST",
+        signal: AbortSignal.timeout(12000),
         headers: {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
+    if (generation !== tokenGeneration) throw new Error("Session changed during refresh");
     if (!response.ok) {
-        clearTokens();
-        window.location.href = "/login";
+        if (response.status === 401 || response.status === 403) expireSession();
         throw new Error("Token refresh failed");
     }
 
     const data = await response.json();
-    saveTokens(data.access_token, data.refresh_token);
+    if (generation !== tokenGeneration) throw new Error("Session changed during refresh");
+    persistTokens(data.access_token, data.refresh_token);
     return data.access_token;
 }
 
@@ -125,6 +159,7 @@ async function refreshAccessToken(): Promise<string> {
  */
 const authMiddleware: Middleware = {
     async onRequest({ request }) {
+        requestGenerations.set(request, tokenGeneration);
         const accessToken = getAccessToken();
         if (accessToken) {
             request.headers.set("Authorization", `Bearer ${accessToken}`);
@@ -135,18 +170,24 @@ const authMiddleware: Middleware = {
     },
 
     async onResponse({ request, response }) {
+        const generation = requestGenerations.get(request);
+        if (generation !== tokenGeneration) throw new Error("Session changed during request");
         if (response.status === 401 && getRefreshToken()) {
             refreshPromise ??= refreshAccessToken().finally(() => {
                 refreshPromise = null;
             });
             // All waiting requests share both the success and failure of this refresh.
             const accessToken = await refreshPromise;
+            if (generation !== tokenGeneration) throw new Error("Session changed during request");
             const retry = replayRequests.get(request);
             if (!retry) throw new Error("Request cannot be retried");
             retry.headers.set("Authorization", `Bearer ${accessToken}`);
-            return fetch(retry);
+            const retriedResponse = await fetch(retry);
+            if (generation !== tokenGeneration) throw new Error("Session changed during request");
+            if (retriedResponse.status === 401) expireSession();
+            return retriedResponse;
         }
-
+        if (response.status === 401) expireSession();
         return response;
     },
 };
@@ -171,12 +212,13 @@ export const auth = {
         password: string,
         deviceInfo?: string | null,
     ): Promise<{ access_token: string; refresh_token: string; user?: User }> {
-        const { data, error } = await publicClient.POST("/api/v1/auth/login", {
+        const { data, error, response } = await publicClient.POST("/api/v1/auth/login", {
+            signal: AbortSignal.timeout(15000),
             body: { username, password, device_info: deviceInfo },
         });
 
         if (error || !data) {
-            throw new Error("Login failed");
+            throw Object.assign(new Error("Login failed"), { status: response.status });
         }
 
         saveTokens(data.access_token, data.refresh_token);
@@ -188,18 +230,20 @@ export const auth = {
      */
     async logout(): Promise<void> {
         const refreshToken = getRefreshToken();
+        const accessToken = getAccessToken();
+        clearTokens();
 
         if (refreshToken) {
             try {
-                await client.POST("/api/v1/auth/logout", {
+                await publicClient.POST("/api/v1/auth/logout", {
+                    signal: AbortSignal.timeout(5000),
+                    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
                     body: { refresh_token: refreshToken },
                 });
             } catch (error) {
                 console.error("Logout request failed:", error);
             }
         }
-
-        clearTokens();
     },
 
     /**
@@ -218,11 +262,12 @@ export const auth = {
         password: string,
         language = "en",
     ): Promise<{ access_token: string; refresh_token: string } | null> {
-        const { data } = await publicClient.POST("/api/v1/setup/admin", {
+        const { data, error } = await publicClient.POST("/api/v1/setup/admin", {
             body: { username, password, language },
         });
 
-        if (data?.access_token && data?.refresh_token) {
+        if (error || !data) throw new Error(apiErrorMessage(error, "Setup failed"));
+        if (data.access_token && data.refresh_token) {
             saveTokens(data.access_token, data.refresh_token);
         }
 
@@ -233,7 +278,7 @@ export const auth = {
      * Get current user information
      */
     async getCurrentUser(): Promise<User> {
-        const { data, error } = await client.GET("/api/v1/users/me");
+        const { data, error } = await client.GET("/api/v1/users/me", { signal: AbortSignal.timeout(15000) });
         if (error || !data) {
             throw new Error("Failed to get current user");
         }
@@ -248,7 +293,7 @@ export const auth = {
             body: userData,
         });
         if (error || !data) {
-            throw new Error("Failed to update current user");
+            throw new Error(apiErrorMessage(error, "Failed to update current user"));
         }
         return data;
     },
@@ -292,7 +337,7 @@ export const media = {
     /**
      * Get media files the current user started but has not finished
      */
-    async getContinueWatching(limit = 24): Promise<MediaFile[]> {
+    async getContinueWatching(limit = 24): Promise<MediaCardInfo[]> {
         const { data, error } = await client.GET("/api/v1/media-files/continue-watching", {
             params: { query: { limit } },
         });
@@ -327,9 +372,15 @@ export const media = {
             enableDirectStream?: boolean;
             enableTranscoding?: boolean;
             requestedResolution?: { width: number; height: number } | null;
+            audioStreamIndex?: number;
+            videoStreamIndex?: number;
+            playbackSessionId?: string;
+            playbackGeneration?: number;
+            signal?: AbortSignal;
         },
     ): Promise<components["schemas"]["PlaybackInfoResponse"]> {
         const { data, error } = await client.POST("/api/v1/playback-info/{media_id}", {
+            signal: options?.signal,
             params: { path: { media_id: mediaId } },
             body: {
                 DeviceProfile: deviceProfile,
@@ -340,6 +391,10 @@ export const media = {
                 AllowAudioStreamCopy: true,
                 IsPlayback: true,
                 RequestedResolution: options?.requestedResolution,
+                AudioStreamIndex: options?.audioStreamIndex,
+                VideoStreamIndex: options?.videoStreamIndex,
+                PlaybackSessionId: options?.playbackSessionId,
+                PlaybackGeneration: options?.playbackGeneration ?? 1,
             },
         });
         if (error || !data) {
@@ -353,24 +408,32 @@ export const media = {
      */
     async startRemux(
         mediaId: number,
-        options?: {
+        options: {
             audioStreamIndex?: number;
             startTime?: number;
-            sessionId?: string | null;
+            sessionId: string;
+            playbackGeneration: number;
+            videoStreamIndex?: number;
+            signal?: AbortSignal;
         },
     ): Promise<components["schemas"]["TranscodingJobSchema"]> {
-        const { data, error } = await client.POST("/api/v1/hls/{media_id}/remux", {
+        const { data, error, response } = await client.POST("/api/v1/hls/{media_id}/remux", {
+            signal: options.signal,
             params: {
                 path: { media_id: mediaId },
                 query: {
                     audio_stream_index: options?.audioStreamIndex,
                     start_time: options?.startTime,
-                    session_id: options?.sessionId ?? undefined,
+                    session_id: options.sessionId,
+                    playback_generation: options.playbackGeneration,
+                    video_stream_index: options.videoStreamIndex,
                 },
             },
         });
         if (error || !data) {
-            throw new Error(apiErrorMessage(error, "Failed to start remux"));
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to start remux")), {
+                status: response.status,
+            });
         }
         return data;
     },
@@ -380,20 +443,25 @@ export const media = {
      */
     async startTranscode(
         mediaId: number,
-        options?: {
+        options: {
             videoCodec?: string;
             audioCodec?: string;
             videoBitrate?: number;
             audioBitrate?: number;
             maxWidth?: number;
             maxHeight?: number;
+            maxFrameRate?: number;
             audioStreamIndex?: number;
             subtitleStreamIndex?: number;
             startTime?: number;
-            sessionId?: string | null;
+            sessionId: string;
+            playbackGeneration: number;
+            videoStreamIndex?: number;
+            signal?: AbortSignal;
         },
     ): Promise<components["schemas"]["TranscodingJobSchema"]> {
-        const { data, error } = await client.POST("/api/v1/hls/{media_id}/start", {
+        const { data, error, response } = await client.POST("/api/v1/hls/{media_id}/start", {
+            signal: options.signal,
             params: {
                 path: { media_id: mediaId },
                 query: {
@@ -403,15 +471,20 @@ export const media = {
                     audio_bitrate: options?.audioBitrate,
                     max_width: options?.maxWidth,
                     max_height: options?.maxHeight,
+                    max_frame_rate: options?.maxFrameRate,
                     audio_stream_index: options?.audioStreamIndex,
                     subtitle_stream_index: options?.subtitleStreamIndex,
                     start_time: options?.startTime,
-                    session_id: options?.sessionId ?? undefined,
+                    session_id: options.sessionId,
+                    playback_generation: options.playbackGeneration,
+                    video_stream_index: options.videoStreamIndex,
                 },
             },
         });
         if (error || !data) {
-            throw new Error(apiErrorMessage(error, "Failed to start transcode"));
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to start transcode")), {
+                status: response.status,
+            });
         }
         return data;
     },
@@ -421,15 +494,19 @@ export const media = {
      */
     async startAudioTranscode(
         mediaId: number,
-        options?: {
+        options: {
             audioCodec?: string;
             audioBitrate?: number;
             audioStreamIndex?: number;
             startTime?: number;
-            sessionId?: string | null;
+            sessionId: string;
+            playbackGeneration: number;
+            videoStreamIndex?: number;
+            signal?: AbortSignal;
         },
     ): Promise<components["schemas"]["TranscodingJobSchema"]> {
-        const { data, error } = await client.POST("/api/v1/hls/{media_id}/audio-transcode", {
+        const { data, error, response } = await client.POST("/api/v1/hls/{media_id}/audio-transcode", {
+            signal: options.signal,
             params: {
                 path: { media_id: mediaId },
                 query: {
@@ -437,12 +514,16 @@ export const media = {
                     audio_bitrate: options?.audioBitrate ?? 128000,
                     audio_stream_index: options?.audioStreamIndex,
                     start_time: options?.startTime,
-                    session_id: options?.sessionId ?? undefined,
+                    session_id: options.sessionId,
+                    playback_generation: options.playbackGeneration,
+                    video_stream_index: options.videoStreamIndex,
                 },
             },
         });
         if (error || !data) {
-            throw new Error(apiErrorMessage(error, "Failed to start audio transcode"));
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to start audio transcode")), {
+                status: response.status,
+            });
         }
         return data;
     },
@@ -450,8 +531,9 @@ export const media = {
     /**
      * Get HLS job status
      */
-    async getHlsStatus(jobId: string): Promise<components["schemas"]["TranscodingJobSchema"]> {
+    async getHlsStatus(jobId: string, signal?: AbortSignal): Promise<components["schemas"]["TranscodingJobSchema"]> {
         const { data, error } = await client.GET("/api/v1/hls/{job_id}/status", {
+            signal,
             params: { path: { job_id: jobId } },
         });
         if (error || !data) {
@@ -465,6 +547,7 @@ export const media = {
      */
     async stopHls(jobId: string): Promise<void> {
         const { error } = await client.DELETE("/api/v1/hls/{job_id}/stop", {
+            signal: AbortSignal.timeout(10000),
             params: { path: { job_id: jobId } },
         });
         if (error) {
@@ -475,23 +558,12 @@ export const media = {
     /**
      * Get subtitle URL for external WebVTT
      */
-    getSubtitleUrl(mediaId: number, streamIndex: number): string {
-        const token = getAccessToken();
-        const baseUrl = `/api/v1/subtitle/${mediaId}/${streamIndex}`;
-        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
+    getSubtitleUrl(mediaId: number, streamIndex: number, access?: MediaAccess): string {
+        return mediaSessionUrl(`/api/v1/subtitle/${mediaId}/${streamIndex}`, access);
     },
 
-    /**
-     * Get direct stream URL
-     */
-    getDirectStreamUrl(mediaId: number, sessionId?: string | null): string {
-        const token = getAccessToken();
-        const baseUrl = `/api/v1/stream/${mediaId}`;
-        const params = new URLSearchParams();
-        if (token) params.set("api_key", token);
-        if (sessionId) params.set("session_id", sessionId);
-        const query = params.toString();
-        return query ? `${baseUrl}?${query}` : baseUrl;
+    getDirectStreamUrl(mediaId: number, access?: MediaAccess): string {
+        return mediaSessionUrl(`/api/v1/stream/${mediaId}`, access);
     },
 
     /**
@@ -506,10 +578,8 @@ export const media = {
     /**
      * Get HLS playlist URL
      */
-    getHlsPlaylistUrl(jobId: string): string {
-        const token = getAccessToken();
-        const baseUrl = `/api/v1/hls/${jobId}/playlist.m3u8`;
-        return token ? `${baseUrl}?api_key=${token}` : baseUrl;
+    getHlsPlaylistUrl(jobId: string, access?: MediaAccess): string {
+        return mediaSessionUrl(`/api/v1/hls/${jobId}/playlist.m3u8`, access);
     },
 };
 
@@ -529,8 +599,9 @@ export const libraries = {
     /**
      * Get items from a specific library
      */
-    async getLibraryItems(libraryId: number, skip = 0, limit = 100): Promise<MediaFile[]> {
+    async getLibraryItems(libraryId: number, skip = 0, limit = 48, signal?: AbortSignal): Promise<MediaCardInfo[]> {
         const { data, error } = await client.GET("/api/v1/libraries/{library_id}/items", {
+            signal,
             params: {
                 path: { library_id: libraryId },
                 query: { skip, limit },
@@ -540,16 +611,6 @@ export const libraries = {
             throw new Error("Failed to get library items");
         }
         return data;
-    },
-
-    async getAllLibraryItems(libraryId: number): Promise<MediaFile[]> {
-        const items: MediaFile[] = [];
-        const pageSize = 100;
-        while (true) {
-            const page = await libraries.getLibraryItems(libraryId, items.length, pageSize);
-            items.push(...page);
-            if (page.length < pageSize) return items;
-        }
     },
 
     /**
@@ -651,8 +712,9 @@ export const libraries = {
     /**
      * Get rows for a specific library
      */
-    async getLibraryRows(libraryId: number): Promise<HomepageRow[]> {
+    async getLibraryRows(libraryId: number, signal?: AbortSignal): Promise<HomepageRow[]> {
         const { data, error } = await client.GET("/api/v1/libraries/{library_id}/rows", {
+            signal,
             params: { path: { library_id: libraryId } },
         });
         if (error || !data) {
@@ -847,17 +909,23 @@ export const dashboardUsers = {
 
 // Export playback session-related functions
 export const playbackSessions = {
-    async create(payload: {
-        mediaFileId: number;
-        durationSeconds?: number | null;
-        audioStreamIndex?: number | null;
-        subtitleStreamIndex?: number | null;
-    }): Promise<PlaybackSession> {
+    async create(
+        payload: {
+            mediaFileId: number;
+            durationSeconds?: number | null;
+            audioStreamIndex?: number | null;
+            videoStreamIndex?: number | null;
+            subtitleStreamIndex?: number | null;
+        },
+        signal?: AbortSignal,
+    ): Promise<PlaybackSession> {
         const { data, error } = await client.POST("/api/v1/playback-sessions", {
+            signal,
             body: {
                 media_file_id: payload.mediaFileId,
                 duration_seconds: payload.durationSeconds,
                 audio_stream_index: payload.audioStreamIndex,
+                video_stream_index: payload.videoStreamIndex,
                 subtitle_stream_index: payload.subtitleStreamIndex,
             },
         });
@@ -871,12 +939,14 @@ export const playbackSessions = {
         sessionId: string,
         payload: {
             positionSeconds: number;
+            playbackGeneration: number;
             durationSeconds?: number | null;
             isPaused: boolean;
             playMethod?: string | null;
             transcodingType?: string | null;
             transcodingJobId?: string | null;
             audioStreamIndex?: number | null;
+            videoStreamIndex?: number | null;
             subtitleStreamIndex?: number | null;
         },
     ): Promise<PlaybackSessionHeartbeatResponse> {
@@ -884,12 +954,14 @@ export const playbackSessions = {
             params: { path: { session_id: sessionId } },
             body: {
                 position_seconds: payload.positionSeconds,
+                playback_generation: payload.playbackGeneration,
                 duration_seconds: payload.durationSeconds,
                 is_paused: payload.isPaused,
                 play_method: payload.playMethod,
                 transcoding_type: payload.transcodingType,
                 transcoding_job_id: payload.transcodingJobId,
                 audio_stream_index: payload.audioStreamIndex,
+                video_stream_index: payload.videoStreamIndex,
                 subtitle_stream_index: payload.subtitleStreamIndex,
             },
         });
@@ -899,8 +971,9 @@ export const playbackSessions = {
         return data;
     },
 
-    async end(sessionId: string): Promise<void> {
+    async end(sessionId: string, signal?: AbortSignal): Promise<void> {
         const { error } = await client.DELETE("/api/v1/playback-sessions/{session_id}", {
+            signal,
             params: { path: { session_id: sessionId } },
         });
         if (error) {

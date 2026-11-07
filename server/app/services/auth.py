@@ -54,6 +54,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         The encoded JWT token
     """
     to_encode = data.copy()
+    to_encode.setdefault("cv", 0)
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
@@ -75,6 +76,7 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> 
         The encoded JWT refresh token
     """
     to_encode = data.copy()
+    to_encode.setdefault("cv", 0)
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
@@ -99,6 +101,9 @@ def verify_token(token: str, token_type: str = "access") -> dict | None:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"require_exp": True})
         if payload.get("type") != token_type:
+            return None
+        version = payload.get("cv", 0)
+        if type(version) is not int or version < 0:
             return None
         subject = payload.get("sub")
         if not isinstance(subject, str) or not subject.isascii() or not subject.isdecimal() or int(subject) <= 0:

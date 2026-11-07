@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +17,7 @@ from app.dependencies import get_current_active_user
 from app.models import (
     Library,
     LibrarySchema,
+    MediaCardSchema,
     MediaFile,
     MediaFileSchema,
     MediaView,
@@ -28,10 +29,12 @@ from app.models import (
 from app.models.playback import (
     PlaybackInfoRequest,
     PlaybackInfoResponse,
+    PlayMethod,
 )
+from app.services.catalogue import media_card, media_card_query, recommendation_cards
 from app.services.library_paths import library_file_filter
+from app.services.media_access import require_owned_playback_session
 from app.services.playback_session import ClientContext, PlaybackSessionService
-from app.services.recommendation_row import apply_filter_criteria
 from app.services.stream_builder import StreamBuilder
 from app.services.thumbnails import generate_video_thumbnail
 
@@ -79,15 +82,25 @@ async def get_playback_info(
 
     # Build stream info using device profile
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
-    stream_info = stream_builder.build_stream_info(
-        media_file,
-        enable_direct_play=playback_request.EnableDirectPlay,
-        enable_direct_stream=playback_request.EnableDirectStream,
-        enable_transcoding=playback_request.EnableTranscoding,
-        requested_resolution=playback_request.RequestedResolution,
-    )
+    try:
+        stream_info = stream_builder.build_stream_info(
+            media_file,
+            enable_direct_play=playback_request.EnableDirectPlay,
+            enable_direct_stream=playback_request.EnableDirectStream,
+            enable_transcoding=playback_request.EnableTranscoding,
+            requested_resolution=playback_request.RequestedResolution,
+            audio_stream_index=playback_request.AudioStreamIndex,
+            video_stream_index=playback_request.VideoStreamIndex,
+            allow_video_stream_copy=playback_request.AllowVideoStreamCopy,
+            allow_audio_stream_copy=playback_request.AllowAudioStreamCopy,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return PlaybackInfoResponse(MediaSources=[stream_info])
+    return PlaybackInfoResponse(
+        MediaSources=[stream_info],
+        ErrorCode="NoCompatiblePlaybackMethod" if stream_info.PlayMethod == PlayMethod.NONE else None,
+    )
 
 
 class HomepageRow(BaseModel):
@@ -98,7 +111,7 @@ class HomepageRow(BaseModel):
     library_name: str
     name: str
     display_name: str
-    items: list[MediaFileSchema]
+    items: list[MediaCardSchema]
 
 
 # Library endpoints (authenticated users - enabled libraries only)
@@ -123,126 +136,73 @@ async def get_libraries(
     return list(result.scalars().all())
 
 
-@router.get("/libraries/{library_id}/items", response_model=list[MediaFileSchema])
+@router.get("/libraries/{library_id}/items", response_model=list[MediaCardSchema])
 async def get_library_items(
     library_id: int,
     user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[MediaFileSchema]:
-    """Get items (media files) from a specific library.
-
-    Args:
-        library_id: Library path ID
-        user: Authenticated user
-        session: Database session
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-
-    Returns:
-        List of media files from the library
-
-    Raises:
-        HTTPException: If library not found
-    """
-    # Get the library path
-    library_path = await session.get(Library, library_id)
-    if not library_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Library not found",
-        )
-
-    # Find MediaFiles that belong to this library (file_path starts with library path)
-    # Exclude soft-deleted files
-    result = await session.execute(
-        select(MediaFile)
-        .options(
-            selectinload(MediaFile.video_tracks),
-            selectinload(MediaFile.audio_tracks),
-            selectinload(MediaFile.subtitle_tracks),
-        )
-        .where(
-            library_file_filter(library_path.path),
-            MediaFile.deleted_at.is_(None),
-        )
-        .order_by(MediaFile.id)
-        .offset(skip)
-        .limit(limit)
-    )
-    media_files = list(result.scalars().all())
-    return await media_files_with_user_views(session, user.id, media_files)
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    after_id: Annotated[int | None, Query(ge=0)] = None,
+) -> list[MediaCardSchema]:
+    """Get a stable, bounded page of library cards and current-user progress."""
+    library = await session.get(Library, library_id)
+    if not library:
+        raise HTTPException(status_code=404, detail="Library not found")
+    if not library.enabled:
+        raise HTTPException(status_code=403, detail="Library is disabled")
+    query = media_card_query(user.id).where(library_file_filter(library.path), MediaFile.deleted_at.is_(None))
+    if after_id is not None:
+        if skip:
+            raise HTTPException(status_code=422, detail="Use either skip or after_id")
+        query = query.where(MediaFile.id > after_id)
+    result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
+    return [media_card(media_file, view) for media_file, view in result]
 
 
-# Media File endpoints (authenticated users)
-@router.get("/media-files", response_model=list[MediaFileSchema])
+@router.get("/media-files", response_model=list[MediaCardSchema])
 async def get_media_files(
     user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[MediaFileSchema]:
-    """Get all discovered media files.
-
-    Args:
-        user: Authenticated user
-        session: Database session
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-
-    Returns:
-        List of media files
-    """
-    # Exclude soft-deleted files
-    result = await session.execute(
-        select(MediaFile)
-        .options(
-            selectinload(MediaFile.video_tracks),
-            selectinload(MediaFile.audio_tracks),
-            selectinload(MediaFile.subtitle_tracks),
-        )
-        .where(MediaFile.deleted_at.is_(None))
-        .offset(skip)
-        .limit(limit)
-    )
-    media_files = list(result.scalars().all())
-    return await media_files_with_user_views(session, user.id, media_files)
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    after_id: Annotated[int | None, Query(ge=0)] = None,
+) -> list[MediaCardSchema]:
+    """Get a stable page; after_id supports traversal despite earlier deletions."""
+    query = media_card_query(user.id).where(MediaFile.deleted_at.is_(None))
+    if after_id is not None:
+        if skip:
+            raise HTTPException(status_code=422, detail="Use either skip or after_id")
+        query = query.where(MediaFile.id > after_id)
+    result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
+    return [media_card(media_file, view) for media_file, view in result]
 
 
-@router.get("/media-files/continue-watching", response_model=list[MediaFileSchema])
+@router.get("/media-files/continue-watching", response_model=list[MediaCardSchema])
 async def get_continue_watching_media_files(
     user: Annotated[User, Depends(get_current_active_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
-    limit: int = 24,
-) -> list[MediaFileSchema]:
-    """Get media files started by the current user but not completed."""
-    normalized_limit = min(max(limit, 1), 100)
-    query_limit = normalized_limit * 3
+    limit: Annotated[int, Query(ge=1, le=100)] = 24,
+) -> list[MediaCardSchema]:
+    """Get in-progress cards, filtering completed items before applying the limit."""
+    duration = func.coalesce(func.nullif(MediaView.duration_seconds, 0), MediaFile.duration)
     result = await session.execute(
-        select(MediaFile, MediaView)
-        .join(MediaView, MediaView.media_file_id == MediaFile.id)
-        .options(
-            selectinload(MediaFile.video_tracks),
-            selectinload(MediaFile.audio_tracks),
-            selectinload(MediaFile.subtitle_tracks),
-        )
+        media_card_query(user.id)
         .where(
-            MediaView.user_id == user.id,
             MediaFile.deleted_at.is_(None),
             MediaView.watched.is_(False),
             MediaView.position_seconds > 10,
+            or_(
+                duration.is_(None),
+                duration <= 0,
+                (MediaView.position_seconds < duration * 0.9)
+                & ((duration < 120) | (duration - MediaView.position_seconds > 60)),
+            ),
         )
-        .order_by(MediaView.last_viewed_at.desc())
-        .limit(query_limit)
+        .order_by(MediaView.last_viewed_at.desc(), MediaFile.id)
+        .limit(limit)
     )
-
-    items = [
-        media_file_with_user_view(media_file, view)
-        for media_file, view in result.all()
-        if is_media_in_progress(view, media_file.duration)
-    ]
-    return items[:normalized_limit]
+    return [media_card(media_file, view) for media_file, view in result]
 
 
 # Media item endpoints (authenticated users)
@@ -392,21 +352,11 @@ async def get_homepage_rows(
         .order_by(Library.name, RecommendationRow.name)
     )
 
+    row_libraries = [(row, library) for row, library in result.all()]
+    cards = await recommendation_cards(session, user.id, row_libraries)
     rows = []
 
-    for recommendation_row, library in result.all():
-        # Build base query with eager loading of tracks
-        query = select(MediaFile).options(
-            selectinload(MediaFile.video_tracks),
-            selectinload(MediaFile.audio_tracks),
-            selectinload(MediaFile.subtitle_tracks),
-        )
-        query = apply_filter_criteria(query, recommendation_row.filter_criteria, library.path)
-
-        # Execute query
-        media_result = await session.execute(query)
-        media_files = list(media_result.scalars().all())
-
+    for recommendation_row, library in row_libraries:
         # Determine display name
         # Replace %LIBRARY_NAME% placeholder with actual library name
         # Also support backward compatibility with {library_name}
@@ -423,7 +373,7 @@ async def get_homepage_rows(
             "library_name": library.name,
             "name": recommendation_row.name,
             "display_name": display_name,
-            "items": await media_files_with_user_views(session, user.id, media_files),
+            "items": cards[recommendation_row.id],
         })
 
     # Auto-prefix duplicate names with library name
@@ -500,21 +450,11 @@ async def get_library_rows(
         .order_by(RecommendationRow.name)
     )
 
+    row_libraries = [(row, library) for row in result.scalars().all()]
+    cards = await recommendation_cards(session, user.id, row_libraries)
     rows = []
 
-    for recommendation_row in result.scalars().all():
-        # Build base query with eager loading of tracks
-        query = select(MediaFile).options(
-            selectinload(MediaFile.video_tracks),
-            selectinload(MediaFile.audio_tracks),
-            selectinload(MediaFile.subtitle_tracks),
-        )
-        query = apply_filter_criteria(query, recommendation_row.filter_criteria, library.path)
-
-        # Execute query
-        media_result = await session.execute(query)
-        media_files = list(media_result.scalars().all())
-
+    for recommendation_row, _library in row_libraries:
         # Determine display name
         # Replace %LIBRARY_NAME% placeholder with actual library name
         # Also support backward compatibility with {library_name}
@@ -532,7 +472,7 @@ async def get_library_rows(
                 library_name=library.name,
                 name=recommendation_row.name,
                 display_name=display_name,
-                items=await media_files_with_user_views(session, user.id, media_files),
+                items=cards[recommendation_row.id],
             )
         )
 
@@ -553,25 +493,6 @@ async def get_user_media_view(session: AsyncSession, user_id: int, media_id: int
             MediaView.media_file_id == media_id,
         )
     )
-
-
-async def media_files_with_user_views(
-    session: AsyncSession,
-    user_id: int,
-    media_files: list[MediaFile],
-) -> list[MediaFileSchema]:
-    media_ids = [media_file.id for media_file in media_files if media_file.id is not None]
-    if not media_ids:
-        return [MediaFileSchema.model_validate(media_file) for media_file in media_files]
-
-    result = await session.execute(
-        select(MediaView).where(
-            MediaView.user_id == user_id,
-            MediaView.media_file_id.in_(media_ids),
-        )
-    )
-    views_by_media_id = {view.media_file_id: view for view in result.scalars().all()}
-    return [media_file_with_user_view(media_file, views_by_media_id.get(media_file.id)) for media_file in media_files]
 
 
 def media_file_with_user_view(media_file: MediaFile, view: MediaView | None) -> MediaFileSchema:
@@ -630,19 +551,34 @@ async def start_media_stream(
 
     # Get stream decision from StreamBuilder
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
-    stream_info = stream_builder.build_stream_info(
-        media_file,
-        enable_direct_play=playback_request.EnableDirectPlay,
-        enable_direct_stream=playback_request.EnableDirectStream,
-        enable_transcoding=playback_request.EnableTranscoding,
-    )
+    try:
+        stream_info = stream_builder.build_stream_info(
+            media_file,
+            enable_direct_play=playback_request.EnableDirectPlay,
+            enable_direct_stream=playback_request.EnableDirectStream,
+            enable_transcoding=playback_request.EnableTranscoding,
+            requested_resolution=playback_request.RequestedResolution,
+            audio_stream_index=playback_request.AudioStreamIndex,
+            video_stream_index=playback_request.VideoStreamIndex,
+            allow_video_stream_copy=playback_request.AllowVideoStreamCopy,
+            allow_audio_stream_copy=playback_request.AllowAudioStreamCopy,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    if not playback_request.PlaybackSessionId:
+        raise HTTPException(status_code=422, detail="PlaybackSessionId is required")
+    await require_owned_playback_session(session, playback_request.PlaybackSessionId, media_id, _user)
     service = PlaybackSessionService(session)
     client = ClientContext(
         client_ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
     try:
-        return await service.start_from_stream_info(media_id, stream_info, client)
+        return await service.start_from_stream_info(
+            media_id, stream_info, playback_request.PlaybackSessionId, playback_request.PlaybackGeneration, client
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start streaming: {e}") from e

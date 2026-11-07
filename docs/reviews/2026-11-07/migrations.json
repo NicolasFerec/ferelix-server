@@ -1,0 +1,18 @@
+{
+  "scenario": "upgrade head, downgrade previous head, upgrade head on real library copy",
+  "before": {
+    "user": 1,
+    "mediafile": 4,
+    "video_track": 4,
+    "audio_track": 9,
+    "subtitle_track": 14
+  },
+  "after": {
+    "user": 1,
+    "mediafile": 4,
+    "video_track": 4,
+    "audio_track": 9,
+    "subtitle_track": 14
+  },
+  "foreign_key_violations": 0
+}

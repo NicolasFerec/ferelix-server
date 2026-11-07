@@ -6,13 +6,13 @@ withDefaults(
   }>(),
   {
     scrollable: false,
-    tableClass: "min-w-full divide-y divide-gray-700",
+    tableClass: "min-w-full divide-y divide-outline",
   },
 );
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-lg bg-gray-800">
+  <div class="surface-panel overflow-hidden">
     <div :class="{ 'overflow-x-auto': scrollable }">
       <table :class="tableClass">
         <slot />

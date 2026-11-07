@@ -1,0 +1,42 @@
+{
+  "mode": "HTTP range with one unmeasured warmup",
+  "samples": [
+    {
+      "wall_seconds": 0.0956579550402239,
+      "server_cpu_seconds": 0.06000000000000005,
+      "bytes": 134217728
+    },
+    {
+      "wall_seconds": 0.09938491007778794,
+      "server_cpu_seconds": 0.06999999999999984,
+      "bytes": 134217728
+    },
+    {
+      "wall_seconds": 0.10890250897500664,
+      "server_cpu_seconds": 0.06000000000000005,
+      "bytes": 134217728
+    },
+    {
+      "wall_seconds": 0.09549703891389072,
+      "server_cpu_seconds": 0.07000000000000028,
+      "bytes": 134217728
+    },
+    {
+      "wall_seconds": 0.10412206908222288,
+      "server_cpu_seconds": 0.06999999999999984,
+      "bytes": 134217728
+    },
+    {
+      "wall_seconds": 0.09680497401859611,
+      "server_cpu_seconds": 0.04999999999999982,
+      "bytes": 134217728
+    },
+    {
+      "wall_seconds": 0.10193136311136186,
+      "server_cpu_seconds": 0.07000000000000028,
+      "bytes": 134217728
+    }
+  ],
+  "median_wall_seconds": 0.09938491007778794,
+  "median_server_cpu_seconds": 0.06999999999999984
+}

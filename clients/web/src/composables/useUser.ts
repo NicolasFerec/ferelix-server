@@ -17,6 +17,8 @@ interface UseUserReturn {
 // Reactive state for current user
 const currentUser: Ref<User | null> = ref(null);
 const isLoading: Ref<boolean> = ref(false);
+let pendingUser: Promise<User | null> | null = null;
+let userGeneration = 0;
 
 /**
  * Composable for managing user state and authentication
@@ -36,24 +38,38 @@ export function useUser(): UseUserReturn {
             return null;
         }
 
+        if (pendingUser) return pendingUser;
+        const generation = userGeneration;
         isLoading.value = true;
-        try {
-            const userData = await auth.getCurrentUser();
-            currentUser.value = userData;
-            return userData;
-        } catch (error) {
-            console.error("Failed to load user:", error);
-            currentUser.value = null;
-            return null;
-        } finally {
-            isLoading.value = false;
-        }
+        const pending = auth
+            .getCurrentUser()
+            .then((userData) => {
+                if (generation !== userGeneration || !checkAuth()) return null;
+                currentUser.value = userData;
+                return userData;
+            })
+            .catch((error) => {
+                console.error("Failed to load user:", error);
+                if (generation === userGeneration) currentUser.value = null;
+                return null;
+            })
+            .finally(() => {
+                if (pendingUser === pending) {
+                    pendingUser = null;
+                    isLoading.value = false;
+                }
+            });
+        pendingUser = pending;
+        return pending;
     }
 
     /**
      * Clear user data (on logout)
      */
     function clearUser(): void {
+        userGeneration++;
+        pendingUser = null;
+        isLoading.value = false;
         currentUser.value = null;
     }
 
@@ -61,6 +77,9 @@ export function useUser(): UseUserReturn {
      * Update user data
      */
     function updateUser(userData: Partial<User>): void {
+        userGeneration++;
+        pendingUser = null;
+        isLoading.value = false;
         currentUser.value = { ...currentUser.value, ...userData };
     }
 

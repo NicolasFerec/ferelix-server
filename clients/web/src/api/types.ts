@@ -328,20 +328,7 @@ export interface paths {
         };
         /**
          * Get Library Items
-         * @description Get items (media files) from a specific library.
-         *
-         *     Args:
-         *         library_id: Library path ID
-         *         user: Authenticated user
-         *         session: Database session
-         *         skip: Number of records to skip
-         *         limit: Maximum number of records to return
-         *
-         *     Returns:
-         *         List of media files from the library
-         *
-         *     Raises:
-         *         HTTPException: If library not found
+         * @description Get a stable, bounded page of library cards and current-user progress.
          */
         get: operations["get_library_items_api_v1_libraries__library_id__items_get"];
         put?: never;
@@ -361,16 +348,7 @@ export interface paths {
         };
         /**
          * Get Media Files
-         * @description Get all discovered media files.
-         *
-         *     Args:
-         *         user: Authenticated user
-         *         session: Database session
-         *         skip: Number of records to skip
-         *         limit: Maximum number of records to return
-         *
-         *     Returns:
-         *         List of media files
+         * @description Get a stable page; after_id supports traversal despite earlier deletions.
          */
         get: operations["get_media_files_api_v1_media_files_get"];
         put?: never;
@@ -390,7 +368,7 @@ export interface paths {
         };
         /**
          * Get Continue Watching Media Files
-         * @description Get media files started by the current user but not completed.
+         * @description Get in-progress cards, filtering completed items before applying the limit.
          */
         get: operations["get_continue_watching_media_files_api_v1_media_files_continue_watching_get"];
         put?: never;
@@ -1932,7 +1910,7 @@ export interface components {
             /** Display Name */
             display_name: string;
             /** Items */
-            items: components["schemas"]["MediaFileSchema"][];
+            items: components["schemas"]["MediaCardSchema"][];
         };
         /**
          * JobExecutionSchema
@@ -2122,6 +2100,36 @@ export interface components {
             path: string;
         };
         /**
+         * MediaCardSchema
+         * @description Catalogue projection; tracks and server diagnostics belong to media details.
+         */
+        MediaCardSchema: {
+            /** Id */
+            id: number;
+            /** File Name */
+            file_name: string;
+            /** File Extension */
+            file_extension: string;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Duration */
+            duration?: number | null;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Codec */
+            codec?: string | null;
+            /** Bitrate */
+            bitrate?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            user_view?: components["schemas"]["MediaViewSchema"] | null;
+        };
+        /**
          * MediaFileSchema
          * @description Schema for MediaFile API responses.
          */
@@ -2163,6 +2171,10 @@ export interface components {
              * Format: date-time
              */
             scanned_at: string;
+            /** Last Scan Attempt At */
+            last_scan_attempt_at?: string | null;
+            /** Scan Error */
+            scan_error?: string | null;
             /** Deleted At */
             deleted_at?: string | null;
             user_view?: components["schemas"]["MediaViewSchema"] | null;
@@ -2234,7 +2246,7 @@ export interface components {
          * @description Playback methods supported by the client.
          * @enum {string}
          */
-        PlayMethod: "DirectPlay" | "DirectStream" | "Transcode";
+        PlayMethod: "None" | "DirectPlay" | "DirectStream" | "Transcode";
         /**
          * PlaybackInfoRequest
          * @description Request for playback information.
@@ -2271,10 +2283,21 @@ export interface components {
              * @default true
              */
             IsPlayback: boolean;
+            /** Playbacksessionid */
+            PlaybackSessionId?: string | null;
+            /**
+             * Playbackgeneration
+             * @default 1
+             */
+            PlaybackGeneration: number;
             /** Requestedresolution */
             RequestedResolution?: {
                 [key: string]: unknown;
             } | null;
+            /** Audiostreamindex */
+            AudioStreamIndex?: number | null;
+            /** Videostreamindex */
+            VideoStreamIndex?: number | null;
         };
         /**
          * PlaybackInfoResponse
@@ -2297,6 +2320,8 @@ export interface components {
             media_file_id: number;
             /** Duration Seconds */
             duration_seconds?: number | null;
+            /** Video Stream Index */
+            video_stream_index?: number | null;
             /** Audio Stream Index */
             audio_stream_index?: number | null;
             /** Subtitle Stream Index */
@@ -2307,6 +2332,11 @@ export interface components {
          * @description Periodic playback session update sent by the player.
          */
         PlaybackSessionHeartbeat: {
+            /**
+             * Playback Generation
+             * @default 0
+             */
+            playback_generation: number;
             /**
              * Position Seconds
              * @default 0
@@ -2325,6 +2355,8 @@ export interface components {
             transcoding_type?: string | null;
             /** Transcoding Job Id */
             transcoding_job_id?: string | null;
+            /** Video Stream Index */
+            video_stream_index?: number | null;
             /** Audio Stream Index */
             audio_stream_index?: number | null;
             /** Subtitle Stream Index */
@@ -2351,6 +2383,13 @@ export interface components {
         PlaybackSessionSchema: {
             /** Id */
             id: string;
+            /** Media Access Token */
+            media_access_token?: string | null;
+            /**
+             * Playback Generation
+             * @default 0
+             */
+            playback_generation: number;
             /** User Id */
             user_id: number;
             /** Media File Id */
@@ -2370,6 +2409,8 @@ export interface components {
             duration_seconds?: number | null;
             /** Is Paused */
             is_paused: boolean;
+            /** Video Stream Index */
+            video_stream_index?: number | null;
             /** Audio Stream Index */
             audio_stream_index?: number | null;
             /** Subtitle Stream Index */
@@ -2599,6 +2640,10 @@ export interface components {
             MediaStreams: {
                 [key: string]: unknown;
             }[];
+            /** Audiostreamindex */
+            AudioStreamIndex?: number | null;
+            /** Videostreamindex */
+            VideoStreamIndex?: number | null;
             /** Transcodingcontainer */
             TranscodingContainer?: string | null;
             /** Transcodingvideocodec */
@@ -2607,8 +2652,7 @@ export interface components {
             TranscodingAudioCodec?: string | null;
             /** Transcodingtype */
             TranscodingType?: string | null;
-            /** Transcodesettings */
-            TranscodeSettings?: unknown;
+            TranscodeSettings?: components["schemas"]["TranscodeSettings"] | null;
             /** Runtimeticks */
             RunTimeTicks?: number | null;
             /** Bitrate */
@@ -2695,6 +2739,31 @@ export interface components {
          */
         TranscodeReason: "ContainerNotSupported" | "VideoCodecNotSupported" | "AudioCodecNotSupported" | "SubtitleCodecNotSupported" | "VideoProfileNotSupported" | "VideoLevelNotSupported" | "VideoResolutionNotSupported" | "VideoBitDepthNotSupported" | "VideoFramerateNotSupported" | "VideoBitrateNotSupported" | "VideoRangeNotSupported" | "AudioChannelsNotSupported" | "AudioSampleRateNotSupported" | "AudioBitrateNotSupported" | "VideoDisabled" | "AudioTranscodeRequired" | "DirectPlayError" | "UnknownVideoStreamInfo" | "UnknownAudioStreamInfo";
         /**
+         * TranscodeSettings
+         * @description Settings for transcoding operations.
+         */
+        TranscodeSettings: {
+            /** Videocodec */
+            VideoCodec?: string | null;
+            /** Audiocodec */
+            AudioCodec?: string | null;
+            /** Videobitrate */
+            VideoBitrate?: number | null;
+            /** Audiobitrate */
+            AudioBitrate?: number | null;
+            /** Maxwidth */
+            MaxWidth?: number | null;
+            /** Maxheight */
+            MaxHeight?: number | null;
+            /** Maxframerate */
+            MaxFrameRate?: number | null;
+            /**
+             * Isremuxonly
+             * @default false
+             */
+            IsRemuxOnly: boolean;
+        };
+        /**
          * TranscodingJobSchema
          * @description Schema for TranscodingJob API responses.
          */
@@ -2727,6 +2796,20 @@ export interface components {
             current_bitrate?: number | null;
             /** Start Time */
             start_time?: number | null;
+            /**
+             * Playback Generation
+             * @default 0
+             */
+            playback_generation: number;
+            /** Video Stream Index */
+            video_stream_index?: number | null;
+            /**
+             * Is Throttled
+             * @default false
+             */
+            is_throttled: boolean;
+            /** Encoded Ahead Seconds */
+            encoded_ahead_seconds?: number | null;
             /** Error Message */
             error_message?: string | null;
             /**
@@ -2754,7 +2837,7 @@ export interface components {
          * @description Status of transcoding jobs.
          * @enum {string}
          */
-        TranscodingJobStatus: "pending" | "running" | "completed" | "failed" | "cancelled";
+        TranscodingJobStatus: "pending" | "running" | "stopping" | "completed" | "failed" | "cancelled";
         /**
          * TranscodingJobType
          * @description Types of transcoding jobs.
@@ -2887,6 +2970,8 @@ export interface components {
             email?: string | null;
             /** Password */
             password?: string | null;
+            /** Current Password */
+            current_password?: string | null;
             role?: components["schemas"]["UserRole"] | null;
             /** Language */
             language?: string | null;
@@ -2939,6 +3024,8 @@ export interface components {
             profile?: string | null;
             /** Level */
             level?: string | null;
+            /** Codec Tag */
+            codec_tag?: string | null;
             /** Pixel Format */
             pixel_format?: string | null;
             /** Bit Depth */
@@ -3396,6 +3483,7 @@ export interface operations {
             query?: {
                 skip?: number;
                 limit?: number;
+                after_id?: number | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -3412,7 +3500,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MediaFileSchema"][];
+                    "application/json": components["schemas"]["MediaCardSchema"][];
                 };
             };
             /** @description Validation Error */
@@ -3431,6 +3519,7 @@ export interface operations {
             query?: {
                 skip?: number;
                 limit?: number;
+                after_id?: number | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -3445,7 +3534,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MediaFileSchema"][];
+                    "application/json": components["schemas"]["MediaCardSchema"][];
                 };
             };
             /** @description Validation Error */
@@ -3477,7 +3566,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MediaFileSchema"][];
+                    "application/json": components["schemas"]["MediaCardSchema"][];
                 };
             };
             /** @description Validation Error */
@@ -3835,9 +3924,9 @@ export interface operations {
     };
     stream_video_api_v1_stream__media_id__get: {
         parameters: {
-            query?: {
-                session_id?: string | null;
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: {
                 Range?: string | null;
@@ -3871,12 +3960,15 @@ export interface operations {
     };
     start_hls_remux_api_v1_hls__media_id__remux_post: {
         parameters: {
-            query?: {
+            query: {
+                session_id: string;
+                playback_generation: number;
+                /** @description Video stream index to include */
+                video_stream_index?: number | null;
                 /** @description Audio stream index to include */
                 audio_stream_index?: number | null;
                 /** @description Start time in seconds for seeking */
                 start_time?: number | null;
-                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -3909,7 +4001,11 @@ export interface operations {
     };
     start_hls_stream_api_v1_hls__media_id__start_post: {
         parameters: {
-            query?: {
+            query: {
+                session_id: string;
+                playback_generation: number;
+                /** @description Video stream index to include */
+                video_stream_index?: number | null;
                 /** @description Target video codec */
                 video_codec?: string;
                 /** @description Target audio codec */
@@ -3922,13 +4018,13 @@ export interface operations {
                 max_width?: number | null;
                 /** @description Maximum video height */
                 max_height?: number | null;
+                max_frame_rate?: number | null;
                 /** @description Audio stream index to include */
                 audio_stream_index?: number | null;
                 /** @description Subtitle stream index to burn */
                 subtitle_stream_index?: number | null;
                 /** @description Start time in seconds for seeking */
                 start_time?: number | null;
-                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -3961,7 +4057,11 @@ export interface operations {
     };
     start_hls_audio_transcode_api_v1_hls__media_id__audio_transcode_post: {
         parameters: {
-            query?: {
+            query: {
+                session_id: string;
+                playback_generation: number;
+                /** @description Video stream index to include */
+                video_stream_index?: number | null;
                 /** @description Target audio codec */
                 audio_codec?: string;
                 /** @description Target audio bitrate */
@@ -3970,7 +4070,6 @@ export interface operations {
                 audio_stream_index?: number | null;
                 /** @description Start time in seconds for seeking */
                 start_time?: number | null;
-                session_id?: string | null;
                 api_key?: string | null;
             };
             header?: never;
@@ -4003,8 +4102,9 @@ export interface operations {
     };
     get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_get: {
         parameters: {
-            query?: {
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: never;
             path: {
@@ -4036,8 +4136,9 @@ export interface operations {
     };
     get_hls_playlist_api_v1_hls__job_id__playlist_m3u8_head: {
         parameters: {
-            query?: {
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: never;
             path: {
@@ -4069,8 +4170,9 @@ export interface operations {
     };
     get_hls_segment_api_v1_hls__job_id__segment__segment_num__ts_get: {
         parameters: {
-            query?: {
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: never;
             path: {
@@ -4103,8 +4205,9 @@ export interface operations {
     };
     get_hls_fmp4_init_api_v1_hls__job_id__init_mp4_get: {
         parameters: {
-            query?: {
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: never;
             path: {
@@ -4136,8 +4239,9 @@ export interface operations {
     };
     get_hls_fmp4_segment_api_v1_hls__job_id__segment__segment_num__m4s_get: {
         parameters: {
-            query?: {
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: never;
             path: {
@@ -4238,8 +4342,9 @@ export interface operations {
     };
     get_subtitle_api_v1_subtitle__media_id___stream_index__get: {
         parameters: {
-            query?: {
-                api_key?: string | null;
+            query: {
+                session_id: string;
+                media_token?: string | null;
             };
             header?: never;
             path: {

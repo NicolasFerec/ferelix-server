@@ -1,0 +1,368 @@
+{
+  "date": "2026-11-06",
+  "baseline_commit": "cf3248ca49e300b5d9f08fd74061f60b173b97f6",
+  "cpu": "AMD Ryzen 5 PRO 8640HS w/ Radeon 760M Graphics",
+  "ffmpeg": "ffmpeg version 8.1.3 Copyright (c) 2000-2026 the FFmpeg developers",
+  "reader_microbenchmark": {
+    "python": "3.15.2",
+    "platform": "Linux-7.2.13-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "bytes_per_sample": 134217728,
+    "iterations": 7,
+    "cache": "warm; same range before each sample",
+    "results": [
+      {
+        "chunk_bytes": 8192,
+        "median_wall_seconds": 0.3765820050612092,
+        "median_cpu_seconds": 0.42399071,
+        "samples": [
+          {
+            "wall_seconds": 0.4241719900164753,
+            "cpu_seconds": 0.46815243,
+            "chunks": 16384
+          },
+          {
+            "wall_seconds": 0.3765820050612092,
+            "cpu_seconds": 0.446848594,
+            "chunks": 16384
+          },
+          {
+            "wall_seconds": 0.37660739303100854,
+            "cpu_seconds": 0.42399071,
+            "chunks": 16384
+          },
+          {
+            "wall_seconds": 0.38955327798612416,
+            "cpu_seconds": 0.43885857600000033,
+            "chunks": 16384
+          },
+          {
+            "wall_seconds": 0.37221388600301,
+            "cpu_seconds": 0.4215438340000004,
+            "chunks": 16384
+          },
+          {
+            "wall_seconds": 0.35244012298062444,
+            "cpu_seconds": 0.40195934899999974,
+            "chunks": 16384
+          },
+          {
+            "wall_seconds": 0.36503893800545484,
+            "cpu_seconds": 0.4153826970000001,
+            "chunks": 16384
+          }
+        ]
+      },
+      {
+        "chunk_bytes": 65536,
+        "median_wall_seconds": 0.0657980889081955,
+        "median_cpu_seconds": 0.072991896,
+        "samples": [
+          {
+            "wall_seconds": 0.06765592808369547,
+            "cpu_seconds": 0.07548062500000008,
+            "chunks": 2048
+          },
+          {
+            "wall_seconds": 0.06348321901168674,
+            "cpu_seconds": 0.07438252499999987,
+            "chunks": 2048
+          },
+          {
+            "wall_seconds": 0.06696927000302821,
+            "cpu_seconds": 0.072991896,
+            "chunks": 2048
+          },
+          {
+            "wall_seconds": 0.07279074098914862,
+            "cpu_seconds": 0.07940692000000027,
+            "chunks": 2048
+          },
+          {
+            "wall_seconds": 0.06351575907319784,
+            "cpu_seconds": 0.06985484399999997,
+            "chunks": 2048
+          },
+          {
+            "wall_seconds": 0.05829242104664445,
+            "cpu_seconds": 0.06424920499999986,
+            "chunks": 2048
+          },
+          {
+            "wall_seconds": 0.0657980889081955,
+            "cpu_seconds": 0.07087551399999992,
+            "chunks": 2048
+          }
+        ]
+      },
+      {
+        "chunk_bytes": 262144,
+        "median_wall_seconds": 0.02324070001486689,
+        "median_cpu_seconds": 0.0244082699999999,
+        "samples": [
+          {
+            "wall_seconds": 0.02526734897401184,
+            "cpu_seconds": 0.02676399499999993,
+            "chunks": 512
+          },
+          {
+            "wall_seconds": 0.022365955053828657,
+            "cpu_seconds": 0.0244082699999999,
+            "chunks": 512
+          },
+          {
+            "wall_seconds": 0.023539630929008126,
+            "cpu_seconds": 0.0245914690000002,
+            "chunks": 512
+          },
+          {
+            "wall_seconds": 0.024084146018140018,
+            "cpu_seconds": 0.025348823999999937,
+            "chunks": 512
+          },
+          {
+            "wall_seconds": 0.0222017930354923,
+            "cpu_seconds": 0.024147907000000135,
+            "chunks": 512
+          },
+          {
+            "wall_seconds": 0.02100696903653443,
+            "cpu_seconds": 0.022433428999999894,
+            "chunks": 512
+          },
+          {
+            "wall_seconds": 0.02324070001486689,
+            "cpu_seconds": 0.02434545900000007,
+            "chunks": 512
+          }
+        ]
+      }
+    ]
+  },
+  "http_streaming": {
+    "before": {
+      "mode": "stream",
+      "samples": [
+        {
+          "wall_seconds": 0.46351750392932445,
+          "server_cpu_seconds": 0.44999999999999996,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.4490084449062124,
+          "server_cpu_seconds": 0.44999999999999996,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.4233698300085962,
+          "server_cpu_seconds": 0.42999999999999994,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.4310087950434536,
+          "server_cpu_seconds": 0.43000000000000016,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.44738424802199006,
+          "server_cpu_seconds": 0.4500000000000002,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.4419478070922196,
+          "server_cpu_seconds": 0.43999999999999995,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.4650635360740125,
+          "server_cpu_seconds": 0.45999999999999996,
+          "bytes": 134217728
+        }
+      ],
+      "median_wall_seconds": 0.44738424802199006,
+      "median_server_cpu_seconds": 0.44999999999999996
+    },
+    "after": {
+      "mode": "stream",
+      "samples": [
+        {
+          "wall_seconds": 0.11375843803398311,
+          "server_cpu_seconds": 0.07999999999999996,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.09588607295881957,
+          "server_cpu_seconds": 0.07000000000000006,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.0915580369764939,
+          "server_cpu_seconds": 0.05999999999999994,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.10223216202575713,
+          "server_cpu_seconds": 0.06000000000000005,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.09818409301806241,
+          "server_cpu_seconds": 0.06999999999999995,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.10183872596826404,
+          "server_cpu_seconds": 0.06000000000000005,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.09907293203286827,
+          "server_cpu_seconds": 0.05999999999999994,
+          "bytes": 134217728
+        }
+      ],
+      "median_wall_seconds": 0.09907293203286827,
+      "median_server_cpu_seconds": 0.06000000000000005
+    },
+    "method": "7 sequential authenticated HTTP range downloads of the same warm 128MiB; server /proc CPU excludes client, resolution 10ms. Baseline then patched; one client, loopback, no transcode.",
+    "final_verification": {
+      "mode": "HTTP range with one unmeasured warmup",
+      "samples": [
+        {
+          "wall_seconds": 0.10790427098982036,
+          "server_cpu_seconds": 0.07999999999999985,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.10613389301579446,
+          "server_cpu_seconds": 0.07000000000000028,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.1154641630128026,
+          "server_cpu_seconds": 0.06999999999999984,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.11459190805908293,
+          "server_cpu_seconds": 0.06999999999999984,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.10543437500018626,
+          "server_cpu_seconds": 0.08000000000000007,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.11046446196269244,
+          "server_cpu_seconds": 0.06000000000000005,
+          "bytes": 134217728
+        },
+        {
+          "wall_seconds": 0.1082734300289303,
+          "server_cpu_seconds": 0.07000000000000028,
+          "bytes": 134217728
+        }
+      ],
+      "median_wall_seconds": 0.1082734300289303,
+      "median_server_cpu_seconds": 0.07000000000000028
+    }
+  },
+  "real_hls": {
+    "remux": {
+      "before": {
+        "mode": "remux",
+        "job_start_seconds": 0.20991152292117476,
+        "ready_seconds": 0.21604688290972263,
+        "has_map": true,
+        "first_segment_bytes": 4492636,
+        "running_before_end": 1,
+        "session_delete_seconds": 0.00649785902351141,
+        "running_after_end": 1,
+        "status_after_end": "running",
+        "remaining_ffmpeg": 0
+      },
+      "after": {
+        "mode": "remux",
+        "job_start_seconds": 0.13159786199685186,
+        "ready_seconds": 0.3921911850338802,
+        "has_map": true,
+        "first_segment_bytes": 4492636,
+        "running_before_end": 1,
+        "session_delete_seconds": 0.2701833669561893,
+        "running_after_end": 0,
+        "status_after_end": "cancelled",
+        "remaining_ffmpeg": 0
+      }
+    },
+    "transcode": {
+      "before": {
+        "mode": "transcode",
+        "job_start_seconds": 0.1171771950321272,
+        "ready_seconds": 2.4432852959726006,
+        "has_map": false,
+        "first_segment_bytes": 1537652,
+        "running_before_end": 1,
+        "session_delete_seconds": 0.017349290079437196,
+        "running_after_end": 1,
+        "status_after_end": "running",
+        "remaining_ffmpeg": 0
+      },
+      "after": {
+        "mode": "transcode",
+        "job_start_seconds": 0.12289044610224664,
+        "ready_seconds": 2.471578217111528,
+        "has_map": false,
+        "first_segment_bytes": 1527124,
+        "running_before_end": 1,
+        "session_delete_seconds": 0.37822001695167273,
+        "running_after_end": 0,
+        "status_after_end": "cancelled",
+        "remaining_ffmpeg": 0
+      }
+    },
+    "method": "Matrix (1999), HEVC 3840x1600, seek600s; remux fMP4 or libx264/AAC max1280x720 2Mbps. Request timeout30s with process watchdog35s; explicit cleanup every run."
+  },
+  "scanner_sqlite": {
+    "method": "5 writes during blocked ffprobe on second file; SQLite busy timeout 200ms; two separate connections",
+    "before_ms": [
+      203.77,
+      204.17,
+      204.33,
+      204.81,
+      204.13
+    ],
+    "before_successes": 0,
+    "after_ms": [
+      0.53,
+      0.64,
+      0.65,
+      0.55,
+      0.79
+    ],
+    "after_successes": 5
+  },
+  "validation": {
+    "backend_tests": 260,
+    "web_tests": 62,
+    "launcher_tests": 4,
+    "backend_initial_tests": 207,
+    "web_initial_tests": 40,
+    "backend_types": "passed",
+    "web_types": "passed",
+    "ruff": "passed",
+    "web_build": "passed; main bundle 979.20kB (301.60kB gzip), existing warning",
+    "remaining_ffmpeg": 0,
+    "temporary_database_removed": true,
+    "ui": {
+      "resume_at_seconds": 18,
+      "observed_absolute_position_seconds": 40,
+      "quality_target": "1280x720 with original aspect ratio",
+      "selected_audio_stream_index": 2,
+      "output_audio_codec": "aac",
+      "readiness": 4,
+      "api_max_seconds": 30,
+      "api_watchdog_seconds": 35,
+      "ui_watchdog_max_seconds": 45
+    }
+  }
+}

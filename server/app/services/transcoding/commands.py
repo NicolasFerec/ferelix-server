@@ -20,7 +20,9 @@ class HlsCommandOptions:
     audio_bitrate: int | None = None
     max_width: int | None = None
     max_height: int | None = None
+    max_frame_rate: float | None = None
     segment_duration: int = 6
+    video_stream_index: int | None = None
     audio_stream_index: int | None = None
     subtitle_stream_index: int | None = None
     subtitle_filter_index: int = 0
@@ -44,17 +46,18 @@ class HlsCommandBuilder:
         segment_pattern: str,
         segment_duration: int = 6,
         audio_stream_index: int | None = None,
+        video_stream_index: int | None = None,
+        source_video_codec: str | None = None,
         start_time: float | None = None,
         hls_segment_type: str = "mpegts",
     ) -> list[str]:
         """Build an HLS remux command with stream copy."""
-        cmd = [self.ffmpeg_path, "-hide_banner", "-y"]
+        cmd = [self.ffmpeg_path, "-hide_banner", "-y", "-stats_period", "0.1"]
         self._append_seek_and_input(cmd, input_path, start_time)
 
-        if audio_stream_index is not None:
-            cmd.extend(["-map", "0:v:0", "-map", f"0:{audio_stream_index}"])
-        else:
-            cmd.extend(["-map", "0:v:0", "-map", "0:a?"])
+        self._append_default_maps(cmd, audio_stream_index, video_stream_index)
+        if hls_segment_type == "fmp4" and source_video_codec in {"hevc", "h265"}:
+            cmd.extend(["-tag:v", "hvc1"])
 
         cmd.extend(self._output_sanitizing_args())
         cmd.extend(["-c", "copy", "-copyts", "-start_at_zero", "-avoid_negative_ts", "make_zero"])
@@ -71,7 +74,7 @@ class HlsCommandBuilder:
 
     def build_transcode(self, options: HlsCommandOptions) -> list[str]:
         """Build an HLS command that can transcode video, audio, or both."""
-        cmd = [self.ffmpeg_path, "-hide_banner", "-y"]
+        cmd = [self.ffmpeg_path, "-hide_banner", "-y", "-stats_period", "0.1"]
 
         active_device = self.hw_accel.get_active_device()
         encoder, encoder_args = self.hw_accel.get_video_encoder(options.video_codec)
@@ -88,6 +91,8 @@ class HlsCommandBuilder:
 
         cmd.extend(self._output_sanitizing_args())
         cmd.extend(["-c:v", encoder])
+        if options.hls_segment_type == "fmp4" and options.source_video_codec in {"hevc", "h265"}:
+            cmd.extend(["-tag:v", "hvc1"])
         if self._needs_tonemap(options):
             cmd.extend(["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"])
         if encoder != "copy":
@@ -96,7 +101,11 @@ class HlsCommandBuilder:
                 cmd.extend(["-pix_fmt", "cuda"])
             elif "vaapi" not in encoder:
                 cmd.extend(["-pix_fmt", "yuv420p"])
-            cmd.extend(self._keyframe_args(encoder, options.segment_duration, options.real_frame_rate))
+            output_fps = options.real_frame_rate
+            if options.max_frame_rate:
+                output_fps = min(output_fps, options.max_frame_rate) if output_fps else options.max_frame_rate
+                cmd.extend(["-r", str(output_fps)])
+            cmd.extend(self._keyframe_args(encoder, options.segment_duration, output_fps))
 
         cmd.extend(["-c:a", options.audio_codec])
         if options.audio_codec == "aac":
@@ -124,7 +133,7 @@ class HlsCommandBuilder:
         if options.subtitle_stream_index is not None and encoder != "copy":
             self._append_subtitle_filters(cmd, options, encoder, vf_filters)
         else:
-            self._append_default_maps(cmd, options.audio_stream_index)
+            self._append_default_maps(cmd, options.audio_stream_index, options.video_stream_index)
             if vf_filters and encoder != "copy":
                 cmd.extend(["-vf", ",".join(vf_filters)])
 
@@ -187,9 +196,10 @@ class HlsCommandBuilder:
             output_filter = ",".join(["overlay", *software_filters])
             if "vaapi" in encoder:
                 output_filter += ",format=nv12,hwupload"
+            video_input = f"0:{options.video_stream_index}" if options.video_stream_index is not None else "0:v:0"
             cmd.extend([
                 "-filter_complex",
-                f"[0:v][0:{options.subtitle_stream_index}]{output_filter}[vout]",
+                f"[{video_input}][0:{options.subtitle_stream_index}]{output_filter}[vout]",
                 "-map",
                 "[vout]",
             ])
@@ -204,7 +214,7 @@ class HlsCommandBuilder:
         else:
             vf_filters.append(subtitle_filter)
 
-        self._append_default_maps(cmd, options.audio_stream_index)
+        self._append_default_maps(cmd, options.audio_stream_index, options.video_stream_index)
         cmd.extend(["-vf", ",".join(vf_filters)])
 
     def _video_filters(self, options: HlsCommandOptions, encoder: str, hardware_decode: bool) -> list[str]:
@@ -227,21 +237,25 @@ class HlsCommandBuilder:
 
         if (options.max_width or options.max_height) and encoder != "copy":
             scale = "scale_vaapi" if uses_vaapi_encoder else "scale"
-            if options.max_width and options.max_height:
-                scale_args = [
-                    f"w={options.max_width}",
-                    f"h={options.max_height}",
-                    "force_original_aspect_ratio=decrease",
-                    "force_divisible_by=2",
-                ]
-            elif options.max_width:
-                scale_args = [f"w={options.max_width}", "h=-2"]
-            else:
-                scale_args = ["w=-2", f"h={options.max_height}"]
+            ratios = ["1"]
+            if options.max_width:
+                ratios.append(f"{options.max_width}/(iw*sar)")
+            if options.max_height:
+                ratios.append(f"{options.max_height}/ih")
+            ratio = ratios[0]
+            for bound in ratios[1:]:
+                ratio = f"min({ratio},{bound})"
+            # Round down both dimensions from the same display-aspect factor.
+            # -2/force_original_aspect_ratio can round up and produce non-square
+            # SAR, making HTMLVideoElement.videoWidth exceed the requested cap.
+            scale_args = [
+                f"w='max(2,trunc(iw*sar*{ratio}/2)*2)'",
+                f"h='max(2,trunc(ih*{ratio}/2)*2)'",
+            ]
 
             if uses_vaapi_encoder:
                 scale_args.append("format=nv12")
-            filters.append(f"{scale}={':'.join(scale_args)}")
+            filters.extend([f"{scale}={':'.join(scale_args)}", "setsar=1"])
         elif uses_vaapi_encoder and hardware_decode and encoder == "h264_vaapi":
             filters.append("scale_vaapi=format=nv12")
 
@@ -292,8 +306,10 @@ class HlsCommandBuilder:
 
         return []
 
-    def _append_default_maps(self, cmd: list[str], audio_stream_index: int | None) -> None:
-        cmd.extend(["-map", "0:v:0"])
+    def _append_default_maps(
+        self, cmd: list[str], audio_stream_index: int | None, video_stream_index: int | None = None
+    ) -> None:
+        cmd.extend(["-map", f"0:{video_stream_index}" if video_stream_index is not None else "0:v:0"])
         self._append_audio_map(cmd, audio_stream_index)
 
     def _append_audio_map(self, cmd: list[str], audio_stream_index: int | None) -> None:

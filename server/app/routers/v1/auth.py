@@ -5,12 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.dependencies import get_current_user, require_admin
 from app.models import RefreshToken, User, UserCreate, UserSchema
+from app.services.accounts import commit_account_changes, ensure_identity_available
 from app.services.auth import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
@@ -67,21 +68,7 @@ async def register(
     Raises:
         HTTPException: If username or email already exists
     """
-    # Check if username exists (case-insensitive)
-    existing = await session.scalar(select(User).where(func.lower(User.username) == func.lower(user_data.username)))
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered",
-        )
-
-    # Check if email exists
-    existing = await session.scalar(select(User).where(User.email == user_data.email)) if user_data.email else None
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
+    await ensure_identity_available(session, username=user_data.username, email=user_data.email)
 
     # Create new user
     new_user = User(
@@ -94,7 +81,7 @@ async def register(
     )
 
     session.add(new_user)
-    await session.commit()
+    await commit_account_changes(session)
     await session.refresh(new_user)
 
     return new_user
@@ -118,7 +105,7 @@ async def login(
         HTTPException: If credentials are invalid
     """
     # Get user by username (case-insensitive)
-    user = await session.scalar(select(User).where(func.lower(User.username) == func.lower(login_data.username)))
+    user = await session.scalar(select(User).where(User.username_normalized == login_data.username.strip().casefold()))
 
     if not user or user.password != login_data.password:
         raise HTTPException(
@@ -134,8 +121,8 @@ async def login(
         )
 
     # Create tokens
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token_str = create_refresh_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "cv": user.credentials_version})
+    refresh_token_str = create_refresh_token(data={"sub": str(user.id), "cv": user.credentials_version})
 
     # Store refresh token in database
     refresh_token = RefreshToken(
@@ -190,7 +177,7 @@ async def refresh(
 
     # Get user
     user = await session.get(User, user_id)
-    if not user or not user.is_active:
+    if not user or not user.is_active or payload.get("cv", 0) != user.credentials_version:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
@@ -222,8 +209,8 @@ async def refresh(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token already used")
 
     # Create new tokens
-    access_token = create_access_token(data={"sub": str(user.id)})
-    new_refresh_token_str = create_refresh_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "cv": user.credentials_version})
+    new_refresh_token_str = create_refresh_token(data={"sub": str(user.id), "cv": user.credentials_version})
 
     # Store new refresh token and delete old one
     new_refresh_token = RefreshToken(

@@ -88,7 +88,7 @@ onUnmounted(() => { clearTimeout(debounce); request?.abort(); });
       <div v-else-if="isSearch && !query" class="empty-state"><p>{{ $t('discovery.prompt') }}</p></div>
       <template v-else>
         <p v-if="items.length" role="status" class="mb-5 text-sm text-muted">{{ $t('library.pageInfo', {page, count:items.length}) }}</p>
-        <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
           <MediaCard v-for="item in items" :key="item.id" :media-file="item" :return-to="route.fullPath" />
         </div>
         <div v-else role="status" class="empty-state">

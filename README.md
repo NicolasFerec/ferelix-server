@@ -84,6 +84,14 @@ Run `pnpm run` at the repository root to list all commands.
 | `pnpm type-check:server` / `pnpm type-check:web` | Check one component's types |
 | `pnpm build` | Build the web client |
 
+## Discovery and personal playback
+
+Search finds titles across enabled libraries without downloading the entire catalogue. Search and **My List** use paginated cards; My List belongs to the signed-in account and can be changed from a film's detail page.
+
+Settings lets each account choose an audio language, a subtitle language, and a subtitle mode (off, forced only, or always when available). Automatic track selection happens on the server when playback opens; explicit selections in the player take priority. Matching uses language metadata and forced-track flags, not track titles. See the [playback preference contract](docs/playback-preferences.md) for client integration and fallback rules.
+
+Text subtitle extraction is deduplicated per file, limited to 30 seconds and published atomically. Replacing a source file invalidates its subtitle cache. This follows the single-worker deployment requirement above.
+
 ## Detailed Setup
 
 For detailed setup instructions, configuration, and development guidelines, refer to the individual README files:

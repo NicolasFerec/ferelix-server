@@ -135,12 +135,14 @@ async function openPlayer(
     initialAudioStreamIndex?: number,
     realOverlays = false,
     initialVideoStreamIndex?: number,
+    initialSubtitleStreamIndex?: number,
 ) {
     wrapper = mount(CustomVideoPlayer, {
         props: {
             mediaFile: { id: 1, duration: 3600, audio_tracks: audio, subtitle_tracks: [imageSubtitle], ...extra },
             initialAudioStreamIndex,
             initialVideoStreamIndex,
+            initialSubtitleStreamIndex,
         },
         global: { stubs: { PlayerControls: true, PlayerInfoPanel: true, PlayerStatusOverlays: !realOverlays } },
     });
@@ -583,4 +585,109 @@ it.each([
     await flushPromises();
     expect(controls.props("isPlaying")).toBe(true);
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
+});
+
+it("resolves automatic track preferences once before creating the first stream", async () => {
+    const subtitle = { id: 5, stream_index: 5, codec: "subrip", language: "fra", is_default: false, is_forced: true };
+    vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+        MediaSources: [
+            { ...remuxSource, AudioStreamIndex: 2, SubtitleStreamIndex: 5, SubtitleDeliveryMethod: "External" },
+        ],
+    } as never);
+    const player = await openPlayer({ subtitle_tracks: [subtitle] });
+    expect(media.getPlaybackInfo).toHaveBeenCalledOnce();
+    expect(media.getPlaybackInfo).toHaveBeenCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ audioStreamIndex: undefined, subtitleStreamIndex: undefined }),
+    );
+    expect(media.startRemux).toHaveBeenCalledExactlyOnceWith(1, expect.objectContaining({ audioStreamIndex: 2 }));
+    const controls = player.findComponent(PlayerControls);
+    expect(controls.props("selectedAudioTrack").stream_index).toBe(2);
+    expect(controls.props("selectedSubtitleTrack").stream_index).toBe(5);
+    expect(player.find("track[data-external]").exists()).toBe(true);
+    controls.vm.$emit("select-subtitle-track", null);
+    await flushPromises();
+    expect(media.startRemux).toHaveBeenCalledOnce();
+    controls.vm.$emit("select-resolution", smaller);
+    await flushPromises();
+    expect(media.getPlaybackInfo).toHaveBeenLastCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ audioStreamIndex: 2, subtitleStreamIndex: -1 }),
+    );
+    expect(controls.props("selectedSubtitleTrack")).toBeNull();
+    controls.vm.$emit("seek", 800);
+    await flushPromises();
+    expect(controls.props("selectedSubtitleTrack")).toBeNull();
+    expect(media.startRemux).toHaveBeenCalledTimes(3);
+});
+
+it("passes explicit audio and subtitles-off before resolving preferences", async () => {
+    vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+        MediaSources: [{ ...remuxSource, AudioStreamIndex: 3, SubtitleStreamIndex: null }],
+    } as never);
+    const player = await openPlayer({}, 3, false, undefined, -1);
+    expect(media.getPlaybackInfo).toHaveBeenCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ audioStreamIndex: 3, subtitleStreamIndex: -1 }),
+    );
+    expect(player.findComponent(PlayerControls).props("selectedAudioTrack").stream_index).toBe(3);
+    expect(player.findComponent(PlayerControls).props("selectedSubtitleTrack")).toBeNull();
+});
+
+it("renegotiates a preferred image-subtitle plan when the user turns subtitles off", async () => {
+    vi.mocked(media.getPlaybackInfo).mockResolvedValueOnce({
+        MediaSources: [
+            {
+                ...remuxSource,
+                PlayMethod: "Transcode",
+                IsRemuxOnly: false,
+                TranscodingType: "full",
+                AudioStreamIndex: 1,
+                SubtitleStreamIndex: 4,
+                SubtitleDeliveryMethod: "Encode",
+                TranscodeSettings: { VideoCodec: "h264" },
+            },
+        ],
+    } as never);
+    const player = await openPlayer();
+    expect(media.startTranscode).toHaveBeenCalledWith(1, expect.objectContaining({ subtitleStreamIndex: 4 }));
+    vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+        MediaSources: [{ ...remuxSource, AudioStreamIndex: 1, SubtitleStreamIndex: null }],
+    } as never);
+    player.findComponent(PlayerControls).vm.$emit("select-subtitle-track", null);
+    await flushPromises();
+    expect(media.getPlaybackInfo).toHaveBeenLastCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ subtitleStreamIndex: -1 }),
+    );
+    expect(media.startRemux).toHaveBeenCalledOnce();
+    expect(media.stopHls).toHaveBeenCalledWith("job-1");
+});
+
+it("keeps an explicit Off chosen while the first preference negotiation is pending", async () => {
+    let complete: (response: never) => void = () => {};
+    vi.mocked(media.getPlaybackInfo).mockReturnValueOnce(
+        new Promise((resolve) => {
+            complete = resolve;
+        }),
+    );
+    const player = await openPlayer();
+    player.findComponent(PlayerControls).vm.$emit("select-subtitle-track", null);
+    vi.mocked(media.getPlaybackInfo).mockResolvedValue({
+        MediaSources: [{ ...remuxSource, AudioStreamIndex: 1, SubtitleStreamIndex: null }],
+    } as never);
+    complete({ MediaSources: [{ ...remuxSource, AudioStreamIndex: 1, SubtitleStreamIndex: 4 }] } as never);
+    await flushPromises();
+    expect(media.getPlaybackInfo).toHaveBeenLastCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({ subtitleStreamIndex: -1 }),
+    );
+    expect(player.findComponent(PlayerControls).props("selectedSubtitleTrack")).toBeNull();
+    expect(media.startTranscode).not.toHaveBeenCalled();
+    expect(media.startRemux).toHaveBeenCalledOnce();
 });

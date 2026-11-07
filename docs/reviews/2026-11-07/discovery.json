@@ -1,0 +1,121 @@
+{
+  "media_count": 10000,
+  "method": "Authenticated ASGI routes, temporary disk SQLite, one warm-up plus seven samples; SQL includes authentication",
+  "limitations": "Synthetic metadata and local latency only; no previous search API to compare, no CPU claim. Separate-connection API test also synchronizes eight concurrent adds.",
+  "search": {
+    "Film 10000": {
+      "sql_queries": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "json_bytes": 266,
+      "returned_ids": [
+        10000
+      ],
+      "median_ms": 5.867,
+      "samples_ms": [
+        5.867,
+        6.598,
+        8.239,
+        7.988,
+        5.198,
+        5.018,
+        4.547
+      ]
+    },
+    "Film": {
+      "sql_queries": [
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+      ],
+      "json_bytes": 16150,
+      "returned_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49
+      ],
+      "median_ms": 3.39,
+      "samples_ms": [
+        5.37,
+        3.39,
+        3.767,
+        3.315,
+        3.147,
+        3.166,
+        3.692
+      ]
+    }
+  },
+  "watchlist": {
+    "concurrent_put_statuses": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "persisted_entries": 1,
+    "list_sql_queries": 2,
+    "list_json_bytes": 265,
+    "in_watchlist": true
+  }
+}

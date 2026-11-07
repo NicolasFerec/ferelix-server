@@ -80,7 +80,7 @@ watch(() => [libraryId.value, activeTab.value, page.value, revision.value], asyn
       </template>
       <template v-else>
         <p class="mb-5 text-sm text-muted" role="status">{{ $t('library.pageInfo', { page, count: items.length }) }}</p>
-        <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
           <MediaCard v-for="item in items" :key="item.id" :media-file="item" :source-library-id="libraryId" />
         </div>
         <p v-else class="empty-state">{{ $t('home.noItems') }}</p>

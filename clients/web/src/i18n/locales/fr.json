@@ -247,9 +247,7 @@
         "loadingMediaFiles": "Chargement des fichiers multimédias...",
         "loadFailed": "Échec du chargement de la bibliothèque. Veuillez réessayer.",
         "noRows": "Aucune ligne disponible. Configurez les listes de lecture pour afficher le contenu.",
-        "continueWatching": "Continuer de regarder",
-        "inYourLibrary": "Dans votre bibliothèque",
-        "details": "Voir les détails"
+        "continueWatching": "Continuer de regarder"
     },
     "recommendationRows": {
         "title": "Lignes de recommandation",

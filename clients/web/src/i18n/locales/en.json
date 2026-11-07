@@ -247,9 +247,7 @@
         "loadingMediaFiles": "Loading media files...",
         "loadFailed": "Failed to load media files. Please try again.",
         "noRows": "No rows available. Configure playlists to display content.",
-        "continueWatching": "Continue watching",
-        "inYourLibrary": "In your library",
-        "details": "View details"
+        "continueWatching": "Continue watching"
     },
     "recommendationRows": {
         "title": "Recommendation Rows",

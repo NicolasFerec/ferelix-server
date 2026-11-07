@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, type Ref, ref } from "vue";
+import { onMounted, type Ref, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { type HomepageRow, libraries as libraryApi, type MediaCardInfo, media, watchlist } from "@/api/client";
-import FeaturedMedia from "@/components/FeaturedMedia.vue";
 import MediaRow from "../components/MediaRow.vue";
 import MenuBar from "../components/MenuBar.vue";
 
@@ -13,7 +12,6 @@ const watchlistItems = ref<MediaCardInfo[]>([]);
 const continueWatchingItems: Ref<MediaCardInfo[]> = ref([]);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string> = ref("");
-const featured = computed(() => continueWatchingItems.value[0] || rows.value.flatMap(row => row.items)[0]);
 
 function getDisplayName(row: HomepageRow): string {
   // Use display_name from API (already processed - replaces {library_name} if present)
@@ -61,6 +59,7 @@ onMounted(async () => {
     <MenuBar />
 
     <main id="main-content" class="page-shell">
+      <h1 class="sr-only">{{ $t('common.homepage') }}</h1>
       <div v-if="loading" role="status" class="text-center text-gray-400 py-12">
         {{ $t('home.loadingMediaFiles') }}
       </div>
@@ -81,7 +80,6 @@ onMounted(async () => {
           <p>{{ $t('home.noRows') }}</p>
         </div>
         <div v-else>
-          <FeaturedMedia v-if="featured" :item="featured" />
           <MediaRow
             v-if="continueWatchingItems.length > 0"
             :display-name="$t('home.continueWatching')"

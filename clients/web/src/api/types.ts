@@ -359,6 +359,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/media-files/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Media Files
+         * @description Search the complete visible catalogue, interpreting SQL wildcards literally.
+         */
+        get: operations["search_media_files_api_v1_media_files_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Watchlist
+         * @description Get a stable page of the current user's visible saved films.
+         */
+        get: operations["get_watchlist_api_v1_users_me_watchlist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/me/watchlist/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save To Watchlist */
+        put: operations["save_to_watchlist_api_v1_users_me_watchlist__media_id__put"];
+        post?: never;
+        /** Delete From Watchlist */
+        delete: operations["delete_from_watchlist_api_v1_users_me_watchlist__media_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/media-files/continue-watching": {
         parameters: {
             query?: never;
@@ -2128,6 +2186,11 @@ export interface components {
              */
             created_at: string;
             user_view?: components["schemas"]["MediaViewSchema"] | null;
+            /**
+             * In Watchlist
+             * @default false
+             */
+            in_watchlist: boolean;
         };
         /**
          * MediaFileSchema
@@ -2178,6 +2241,11 @@ export interface components {
             /** Deleted At */
             deleted_at?: string | null;
             user_view?: components["schemas"]["MediaViewSchema"] | null;
+            /**
+             * In Watchlist
+             * @default false
+             */
+            in_watchlist: boolean;
             /**
              * Video Tracks
              * @default []
@@ -2298,6 +2366,11 @@ export interface components {
             AudioStreamIndex?: number | null;
             /** Videostreamindex */
             VideoStreamIndex?: number | null;
+            /**
+             * Subtitlestreamindex
+             * @description Omit for preference; -1 disables subtitles
+             */
+            SubtitleStreamIndex?: number | null;
         };
         /**
          * PlaybackInfoResponse
@@ -2644,6 +2717,12 @@ export interface components {
             AudioStreamIndex?: number | null;
             /** Videostreamindex */
             VideoStreamIndex?: number | null;
+            /** Subtitlestreamindex */
+            SubtitleStreamIndex?: number | null;
+            /** Subtitledeliverymethod */
+            SubtitleDeliveryMethod?: ("External" | "Encode") | null;
+            /** Subtitleurl */
+            SubtitleUrl?: string | null;
             /** Transcodingcontainer */
             TranscodingContainer?: string | null;
             /** Transcodingvideocodec */
@@ -2684,6 +2763,12 @@ export interface components {
              */
             is_hardware: boolean;
         };
+        /**
+         * SubtitleMode
+         * @description Initial subtitle selection; explicit playback choices always take priority.
+         * @enum {string}
+         */
+        SubtitleMode: "off" | "forced" | "always";
         /**
          * SubtitleProfile
          * @description Profile defining subtitle format support.
@@ -2948,6 +3033,12 @@ export interface components {
             is_active: boolean;
             /** Language */
             language: string;
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
+            /** @default off */
+            subtitle_mode: components["schemas"]["SubtitleMode"];
             /**
              * Created At
              * Format: date-time
@@ -2979,6 +3070,11 @@ export interface components {
             is_admin?: boolean | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Preferred Audio Language */
+            preferred_audio_language?: string | null;
+            /** Preferred Subtitle Language */
+            preferred_subtitle_language?: string | null;
+            subtitle_mode?: components["schemas"]["SubtitleMode"] | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -3046,6 +3142,13 @@ export interface components {
             max_cll?: number | null;
             /** Max Fall */
             max_fall?: number | null;
+        };
+        /** WatchlistState */
+        WatchlistState: {
+            /** Media File Id */
+            media_file_id: number;
+            /** In Watchlist */
+            in_watchlist: boolean;
         };
     };
     responses: never;
@@ -3535,6 +3638,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaCardSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_media_files_api_v1_media_files_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                library_id?: number | null;
+                skip?: number;
+                limit?: number;
+                after_id?: number | null;
+                sort?: "id" | "relevance";
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaCardSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_watchlist_api_v1_users_me_watchlist_get: {
+        parameters: {
+            query?: {
+                skip?: number;
+                limit?: number;
+                after_id?: number | null;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaCardSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_to_watchlist_api_v1_users_me_watchlist__media_id__put: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_from_watchlist_api_v1_users_me_watchlist__media_id__delete: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistState"];
                 };
             };
             /** @description Validation Error */

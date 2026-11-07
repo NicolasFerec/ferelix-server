@@ -45,6 +45,7 @@ from .transcoding import (
     TranscodingProgressUpdate,
 )
 from .user import User, UserCreate, UserRole, UserSchema, UserUpdate
+from .watchlist import WatchlistEntry, WatchlistState
 
 __all__ = [
     "AudioTrack",
@@ -86,4 +87,6 @@ __all__ = [
     "UserUpdate",
     "VideoTrack",
     "VideoTrackSchema",
+    "WatchlistEntry",
+    "WatchlistState",
 ]

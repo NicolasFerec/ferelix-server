@@ -301,6 +301,9 @@ class PlaybackSessionService:
                 max_height=getattr(settings, "MaxHeight", None),
                 max_frame_rate=getattr(settings, "MaxFrameRate", None),
                 audio_stream_index=stream_info.AudioStreamIndex,
+                subtitle_stream_index=(
+                    stream_info.SubtitleStreamIndex if stream_info.SubtitleDeliveryMethod == "Encode" else None
+                ),
             ),
             client,
         )

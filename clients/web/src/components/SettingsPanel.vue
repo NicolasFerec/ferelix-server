@@ -205,7 +205,7 @@ onMounted(() => {
                 id="library_scan_interval_minutes" v-model.number="formData.library_scan_interval_minutes"
                 type="number"
                 min="1"
-                class="min-w-0 flex-1 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="min-w-0 flex-1 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600"
                 :disabled="saving"
               />
               <span class="text-gray-400 whitespace-nowrap">
@@ -242,7 +242,7 @@ onMounted(() => {
                 type="number"
                 min="0"
                 max="23"
-                class="w-24 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="w-24 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600"
                 placeholder="3"
                 :disabled="saving"
               />
@@ -252,7 +252,7 @@ onMounted(() => {
                 type="number"
                 min="0"
                 max="59"
-                class="w-24 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="w-24 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600"
                 placeholder="0"
                 :disabled="saving"
               />
@@ -271,7 +271,7 @@ onMounted(() => {
                 id="cleanup_grace_period_days" v-model.number="formData.cleanup_grace_period_days"
                 type="number"
                 min="1"
-                class="min-w-0 flex-1 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                class="min-w-0 flex-1 px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600"
                 :disabled="saving"
               />
               <span class="text-gray-400 whitespace-nowrap">
@@ -309,7 +309,7 @@ onMounted(() => {
             </label>
             <select
               id="hardware-device" v-model="selectedHardwareDevice"
-              class="w-full px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              class="w-full px-4 py-2 bg-surface-raised text-white rounded-md border border-gray-600"
               :disabled="saving"
             >
               <option v-for="option in hardwareDeviceOptions" :key="option.id" :value="option.id">

@@ -49,6 +49,9 @@ export function usePlayerPlayback(
     const canRetry = ref(true);
     let playbackGeneration = 0;
     let mediaSourceRevision = 0;
+    let initialTracksResolved = false;
+    let audioSelectionExplicit = props.initialAudioStreamIndex !== undefined;
+    let subtitleSelectionExplicit = props.initialSubtitleStreamIndex !== undefined;
     const selectedVideoTrack = computed(
         () =>
             props.mediaFile.video_tracks?.find((track) => track.stream_index === props.initialVideoStreamIndex) ||
@@ -315,7 +318,7 @@ export function usePlayerPlayback(
 
     function sourceSettingsKey(): string {
         const resolution = requestedResolution();
-        return `${selectedVideoTrack.value?.stream_index ?? "default"}/${selectedAudioStreamIndex() ?? "default"}/${resolution ? `${resolution.width}x${resolution.height}` : "original"}`;
+        return `${selectedVideoTrack.value?.stream_index ?? "default"}/${selectedAudioStreamIndex() ?? "default"}/${resolution ? `${resolution.width}x${resolution.height}` : "original"}/${selectedBurnedSubtitleStreamIndex() ?? "off"}`;
     }
 
     function playbackSettingsKey(): string {
@@ -488,7 +491,12 @@ export function usePlayerPlayback(
                     (selectedAudioStreamIndex() === defaultAudioStreamIndex(audioTracks.value) || canSelectNativeAudio),
                 enableDirectStream: !resolution,
                 requestedResolution: resolution,
-                audioStreamIndex: selectedAudioStreamIndex(),
+                audioStreamIndex:
+                    initialTracksResolved || audioSelectionExplicit ? selectedAudioStreamIndex() : undefined,
+                subtitleStreamIndex:
+                    initialTracksResolved || subtitleSelectionExplicit
+                        ? (selectedSubtitleTrack.value?.stream_index ?? -1)
+                        : undefined,
                 videoStreamIndex: selectedVideoTrack.value?.stream_index,
                 playbackSessionId: playbackSessionId.value ?? undefined,
                 playbackGeneration: playbackGeneration + 1,
@@ -498,6 +506,20 @@ export function usePlayerPlayback(
         signal.throwIfAborted();
         const source = response.MediaSources?.[0] as StreamSource | undefined;
         if (!source || source.PlayMethod === "None") throw new Error(t("player.noCompatibleMethod"));
+        if (!initialTracksResolved) {
+            // The server owns language aliases, fallback and forced/image-subtitle decisions.
+            // Resolve once: subsequent transitions always send the user's current explicit choices.
+            if (typeof source.AudioStreamIndex === "number") {
+                selectedAudioTrack.value =
+                    audioTracks.value.find((track) => track.stream_index === source.AudioStreamIndex) ||
+                    selectedAudioTrack.value;
+            }
+            if ("SubtitleStreamIndex" in source) {
+                selectedSubtitleTrack.value =
+                    subtitleTracks.value.find((track) => track.stream_index === source.SubtitleStreamIndex) || null;
+            }
+            initialTracksResolved = true;
+        }
         return source;
     }
 
@@ -784,6 +806,7 @@ export function usePlayerPlayback(
     }
 
     async function selectAudioTrack(track: AudioTrackOption) {
+        audioSelectionExplicit = true;
         selectedAudioTrack.value = track;
         if (!isHlsPlayback.value && transitionPosition.value === null && selectNativeAudioTrack(track)) {
             activePlaybackKey = playbackSettingsKey();
@@ -828,9 +851,10 @@ export function usePlayerPlayback(
     }
 
     async function selectSubtitleTrack(track: SubtitleTrackOption | null) {
+        subtitleSelectionExplicit = true;
         selectedSubtitleTrack.value = track;
         clearExternalSubtitles();
-        if (selectedBurnedSubtitleStreamIndex() !== appliedBurnedSubtitle) {
+        if (!initialTracksResolved || selectedBurnedSubtitleStreamIndex() !== appliedBurnedSubtitle) {
             const position = absolutePosition();
             await transitionPlayback(
                 position,

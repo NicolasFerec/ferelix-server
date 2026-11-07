@@ -1,0 +1,65 @@
+{
+  "environment": "Real local HTTP server, isolated database copy, existing four-film library, no FFmpeg started",
+  "search": {
+    "first_page_ids": [
+      1
+    ],
+    "query": "Resurrections",
+    "result_ids": [
+      3
+    ]
+  },
+  "watchlist": {
+    "concurrent_put_statuses": [
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200,
+      200
+    ],
+    "db_entries": 1,
+    "owner_visible": 1,
+    "other_user_visible": 0,
+    "repeat_delete_statuses": [
+      200,
+      200
+    ]
+  },
+  "preferences": {
+    "media": "The Matrix Reloaded (2003)",
+    "automatic_en_forced_fr_no_forced_track_in_file": {
+      "AudioStreamIndex": 2,
+      "SubtitleStreamIndex": null,
+      "SubtitleDeliveryMethod": null,
+      "PlayMethod": "Transcode"
+    },
+    "automatic_en_always_fr_text": {
+      "AudioStreamIndex": 2,
+      "SubtitleStreamIndex": 3,
+      "SubtitleDeliveryMethod": "External",
+      "PlayMethod": "Transcode"
+    },
+    "explicit_image_subtitle": {
+      "AudioStreamIndex": 2,
+      "SubtitleStreamIndex": 5,
+      "SubtitleDeliveryMethod": "Encode",
+      "PlayMethod": "Transcode"
+    },
+    "explicit_audio_1_and_subtitles_off": {
+      "AudioStreamIndex": 1,
+      "SubtitleStreamIndex": null,
+      "SubtitleDeliveryMethod": null,
+      "PlayMethod": "Transcode"
+    },
+    "unavailable_ja_fallback": {
+      "AudioStreamIndex": 1,
+      "SubtitleStreamIndex": null,
+      "SubtitleDeliveryMethod": null,
+      "PlayMethod": "Transcode"
+    }
+  },
+  "source_metadata_note": "The Matrix (1999) audio stream2 is labelled English DTS 5.1 but tagged fre in the file (verified ffprobe). Automatic preferences follow language tags; explicit selection remains available."
+}

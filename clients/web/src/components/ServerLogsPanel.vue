@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
         <input
           v-model="searchQuery"
           type="search"
-          class="w-full rounded-md border border-gray-600 bg-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-primary-500 focus:outline-none"
+          class="w-full rounded-md border border-gray-600 bg-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-gray-500"
           :placeholder="$t('logs.search')"
         />
       </label>
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
       <div>
         <select
           v-model="selectedRange"
-          class="rounded-md border border-gray-600 bg-surface px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+          class="rounded-md border border-gray-600 bg-surface px-3 py-2 text-sm text-white"
           @change="loadLogs"
         >
           <option v-for="option in rangeOptions" :key="option.value" :value="option.value">

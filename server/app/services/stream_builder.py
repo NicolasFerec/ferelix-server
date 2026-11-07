@@ -15,6 +15,7 @@ from app.models.playback import (
     TranscodeSettings,
 )
 from app.services.stream_info_helpers import build_media_streams, calculate_available_resolutions
+from app.services.transcoding.codecs import IMAGE_SUBTITLE_CODECS, TEXT_SUBTITLE_CODECS
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class StreamBuilder:
         requested_resolution: dict | None = None,
         audio_stream_index: int | None = None,
         video_stream_index: int | None = None,
+        subtitle_stream_index: int | None = None,
         allow_video_stream_copy: bool = True,
         allow_audio_stream_copy: bool = True,
     ) -> StreamInfo:
@@ -73,9 +75,17 @@ class StreamBuilder:
         stream_info.AudioStreamIndex = audio_track.stream_index if audio_track is not None else None
         stream_info.VideoStreamIndex = video_track.stream_index if video_track is not None else None
         stream_info.AvailableResolutions = calculate_available_resolutions(media_file, video_track)
+        if not self._apply_subtitle_selection(stream_info, media_file, subtitle_stream_index):
+            return self._unavailable(stream_info)
         if requested_resolution:
             if enable_transcoding and self._supports_h264_aac_output():
                 return self._apply_resolution_override(stream_info, media_file, requested_resolution)
+            return self._unavailable(stream_info)
+
+        if stream_info.SubtitleDeliveryMethod == "Encode":
+            if enable_transcoding and self._supports_h264_aac_output():
+                self._apply_full_transcode(stream_info, media_file)
+                return stream_info
             return self._unavailable(stream_info)
 
         native_tracks = video_track is select_video_track(media_file) and audio_track is select_audio_track(media_file)
@@ -102,6 +112,24 @@ class StreamBuilder:
             self._apply_full_transcode(stream_info, media_file)
             return stream_info
         return self._unavailable(stream_info)
+
+    def _apply_subtitle_selection(self, info: StreamInfo, media: MediaFile, index: int | None) -> bool:
+        if index is None or index == -1:
+            return True
+        track = next((track for track in media.subtitle_tracks if track.stream_index == index), None)
+        if track is None:
+            raise ValueError(f"Subtitle stream index {index} does not exist")
+        info.SubtitleStreamIndex = index
+        codec = track.codec.lower()
+        if codec in TEXT_SUBTITLE_CODECS:
+            info.SubtitleDeliveryMethod = "External"
+            info.SubtitleUrl = f"/api/v1/subtitle/{media.id}/{index}"
+            return True
+        info.TranscodeReasons.append(TranscodeReason.SUBTITLE_CODEC_NOT_SUPPORTED)
+        if codec in IMAGE_SUBTITLE_CODECS:
+            info.SubtitleDeliveryMethod = "Encode"
+            return True
+        return False
 
     def _supports_h264_aac_output(self) -> bool:
         profiles = self.device_profile.TranscodingProfiles or self.direct_play_profiles

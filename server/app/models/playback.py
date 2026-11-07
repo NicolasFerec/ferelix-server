@@ -1,9 +1,9 @@
 """Playback models and schemas for transcoding decisions."""
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PlayMethod(StrEnum):
@@ -130,6 +130,9 @@ class PlaybackInfoRequest(BaseModel):
     RequestedResolution: dict | None = None  # Manual resolution override {"width": 1920, "height": 1080}
     AudioStreamIndex: int | None = None
     VideoStreamIndex: int | None = None
+    SubtitleStreamIndex: int | None = Field(
+        default=None, ge=-1, description="Omit for preference; -1 disables subtitles"
+    )
 
 
 class TranscodeSettings(BaseModel):
@@ -176,6 +179,9 @@ class StreamInfo(BaseModel):
     MediaStreams: list[dict] = []  # Video, audio, subtitle stream info
     AudioStreamIndex: int | None = None
     VideoStreamIndex: int | None = None
+    SubtitleStreamIndex: int | None = None
+    SubtitleDeliveryMethod: Literal["External", "Encode"] | None = None
+    SubtitleUrl: str | None = None
 
     # Transcoding settings (when applicable)
     TranscodingContainer: str | None = None

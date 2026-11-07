@@ -2,17 +2,45 @@
 
 from collections.abc import Sequence
 
-from sqlalchemy import Select, and_, func, literal, select, union_all
+from sqlalchemy import ColumnElement, Select, and_, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only, raiseload
 
-from app.models import Library, MediaCardSchema, MediaFile, MediaView, MediaViewSchema, RecommendationRow
+from app.models import (
+    Library,
+    MediaCardSchema,
+    MediaFile,
+    MediaView,
+    MediaViewSchema,
+    RecommendationRow,
+    WatchlistEntry,
+)
 from app.services.recommendation_row import apply_filter_criteria, recommendation_ordering
 
 
-def media_card_query(user_id: int) -> Select[MediaFile, MediaView]:
+def watchlist_membership(user_id: int) -> ColumnElement[bool]:
     return (
-        select(MediaFile, MediaView)
+        select(WatchlistEntry.id)
+        .where(WatchlistEntry.user_id == user_id, WatchlistEntry.media_file_id == MediaFile.id)
+        .exists()
+    )
+
+
+def visible_media_filter(library_id: int | None = None) -> ColumnElement[bool]:
+    """Match an enabled library by a literal directory prefix, never a LIKE pattern."""
+    prefix = func.rtrim(Library.path, "/").concat("/")
+    library = select(Library.id).where(
+        Library.enabled.is_(True),
+        func.substr(MediaFile.file_path, 1, func.length(prefix)) == prefix,
+    )
+    if library_id is not None:
+        library = library.where(Library.id == library_id)
+    return and_(MediaFile.deleted_at.is_(None), library.exists())
+
+
+def media_card_query(user_id: int) -> Select[MediaFile, MediaView, bool]:
+    return (
+        select(MediaFile, MediaView, watchlist_membership(user_id))
         .outerjoin(MediaView, and_(MediaView.media_file_id == MediaFile.id, MediaView.user_id == user_id))
         .options(
             load_only(
@@ -32,9 +60,10 @@ def media_card_query(user_id: int) -> Select[MediaFile, MediaView]:
     )
 
 
-def media_card(media_file: MediaFile, view: MediaView | None) -> MediaCardSchema:
+def media_card(media_file: MediaFile, view: MediaView | None, in_watchlist: bool = False) -> MediaCardSchema:
     card = MediaCardSchema.model_validate(media_file)
     card.user_view = MediaViewSchema.model_validate(view) if view else None
+    card.in_watchlist = in_watchlist
     return card
 
 
@@ -61,6 +90,6 @@ async def recommendation_cards(
         .order_by(candidates.c.row_id, candidates.c.position)
     )
     cards: dict[int, list[MediaCardSchema]] = {row.id: [] for row, _library in rows}
-    for media_file, view, row_id in result:
-        cards[row_id].append(media_card(media_file, view))
+    for media_file, view, in_watchlist, row_id in result:
+        cards[row_id].append(media_card(media_file, view, in_watchlist))
     return cards

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { auth, getAccessToken, type Library, libraries as libraryApi } from "@/api/client";
+import InlineSearch from "@/components/InlineSearch.vue";
 import { useUser } from "@/composables/useUser";
 
 const route = useRoute();
@@ -47,9 +48,11 @@ watch(() => route.fullPath, () => closeMenus());
       <RouterLink to="/" class="shrink-0 text-2xl font-bold tracking-tight" translate="no">Ferelix<span class="text-primary-400">.</span></RouterLink>
       <nav class="ferelix-hide-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex" :aria-label="$t('common.menu')">
         <RouterLink to="/" class="shrink-0 rounded-lg px-3 py-2 text-sm transition-colors" :class="route.name === 'home' ? 'bg-white/8 text-white' : 'text-muted hover:text-white'">{{ $t('common.homepage') }}</RouterLink>
+        <RouterLink to="/watchlist" class="shrink-0 rounded-lg px-3 py-2 text-sm transition-colors" :class="route.name === 'watchlist' ? 'bg-white/8 text-white' : 'text-muted hover:text-white'">{{ $t('watchlist.title') }}</RouterLink>
         <RouterLink v-for="library in libraries" :key="library.id" :to="`/library/${library.id}`" class="max-w-48 shrink-0 truncate rounded-lg px-3 py-2 text-sm transition-colors" :class="activeLibrary === library.id ? 'bg-white/8 text-white' : 'text-muted hover:text-white'">{{ library.name }}</RouterLink>
       </nav>
       <div class="ml-auto flex shrink-0 items-center gap-3">
+        <InlineSearch />
         <RouterLink v-if="isAdmin" to="/dashboard" class="hidden rounded-lg px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-white lg:block">{{ $t('common.dashboard') }}</RouterLink>
         <details ref="userMenu" class="relative">
           <summary class="flex size-10 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full border border-outline bg-surface text-sm font-semibold text-gray-200 hover:border-primary-400 [&::-webkit-details-marker]:hidden" :aria-label="$t('common.userMenu')">
@@ -69,6 +72,7 @@ watch(() => route.fullPath, () => closeMenus());
     </div>
     <nav v-if="mobileOpen" id="mobile-navigation" class="max-h-[60dvh] overflow-y-auto border-t border-outline px-5 py-3 md:hidden" :aria-label="$t('common.menu')">
       <RouterLink to="/" class="block rounded-lg px-3 py-3 text-sm hover:bg-surface">{{ $t('common.homepage') }}</RouterLink>
+      <RouterLink to="/watchlist" class="block rounded-lg px-3 py-3 text-sm hover:bg-surface" :class="route.name === 'watchlist' ? 'text-primary-300' : 'text-gray-200'">{{ $t('watchlist.title') }}</RouterLink>
       <RouterLink v-for="library in libraries" :key="library.id" :to="`/library/${library.id}`" class="block truncate rounded-lg px-3 py-3 text-sm hover:bg-surface" :class="activeLibrary === library.id ? 'text-primary-300' : 'text-gray-200'">{{ library.name }}</RouterLink>
     </nav>
   </header>

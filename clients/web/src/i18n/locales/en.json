@@ -247,9 +247,7 @@
         "loadingMediaFiles": "Loading media files...",
         "loadFailed": "Failed to load media files. Please try again.",
         "noRows": "No rows available. Configure playlists to display content.",
-        "continueWatching": "Continue watching",
-        "inYourLibrary": "In your library",
-        "details": "View details"
+        "continueWatching": "Continue watching"
     },
     "recommendationRows": {
         "title": "Recommendation Rows",
@@ -523,5 +521,43 @@
         "securityDescription": "Changing your password signs you out on all devices.",
         "passwordChangeFailed": "Could not update your password. Check your current password and try again.",
         "unavailable": "The server could not be reached. Check your connection and try again."
+    },
+    "discovery": {
+        "bestMatches": "Best matches",
+        "viewAll": "View all results",
+        "title": "Search",
+        "searchLabel": "Search your libraries",
+        "placeholder": "Search all your films…",
+        "action": "Search",
+        "prompt": "Find a title across all your libraries.",
+        "empty": "No titles found for “{query}”.",
+        "searchFailed": "Search is unavailable. Please try again."
+    },
+    "watchlist": {
+        "title": "My list",
+        "description": "Films you want to watch, saved for your account.",
+        "add": "Add to my list",
+        "remove": "Remove from my list",
+        "empty": "Your list is empty. Save films from their details page to find them here.",
+        "browse": "Browse my libraries",
+        "viewAll": "View my list",
+        "loadFailed": "Could not load your list. Please try again.",
+        "updateFailed": "Your change was not confirmed. Please try again."
+    },
+    "preferences": {
+        "title": "Playback preferences",
+        "description": "Apply automatically when you start a film. You can always choose another track in the player.",
+        "audioLanguage": "Audio language",
+        "subtitleLanguage": "Subtitle language",
+        "subtitleMode": "Subtitles",
+        "defaultTrack": "Default track",
+        "off": "Off",
+        "forced": "Forced only",
+        "always": "Always when available",
+        "forcedHelp": "Forced subtitles usually translate foreign dialogue or signs. They must be marked as forced in the file.",
+        "fallback": "If your preferred language is unavailable, the default track is used. Changes apply to your next playback.",
+        "saved": "Playback preferences saved.",
+        "saveFailed": "Could not save playback preferences. Please try again.",
+        "auto": "Automatic · my preferences"
     }
 }

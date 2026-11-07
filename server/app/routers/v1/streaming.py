@@ -1,6 +1,7 @@
 """Video streaming endpoints with HTTP Range and HLS transcoding support."""
 
 import asyncio
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -729,8 +730,10 @@ async def get_subtitle(
         raise HTTPException(status_code=404, detail="Media file not found")
 
     file_path = Path(media_file.file_path)
-    if not (await asyncio.to_thread(file_path.exists)):
-        raise HTTPException(status_code=404, detail="Media file not found on disk")
+    try:
+        source_stat = await asyncio.to_thread(file_path.stat)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Media file not found on disk") from exc
 
     subtitle_track = next(
         (track for track in media_file.subtitle_tracks if track.stream_index == stream_index),
@@ -753,19 +756,19 @@ async def get_subtitle(
     subtitle_cache_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
     subtitle_cache_dir.chmod(0o755)
 
-    # Check if already extracted (cache)
-    output_file = subtitle_cache_dir / f"{media_id}_{stream_index}.vtt"
-
-    if not output_file.exists():
-        # Extract subtitle to WebVTT
-        success = await transcoder.extract_subtitle_to_webvtt(
-            media_file_path=str(file_path),
-            subtitle_stream_index=stream_index,
-            output_path=str(output_file),
-        )
-
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to extract subtitle")
+    # Version the cache by the actual source, not stale scanned metadata. The
+    # new namespace also bypasses legacy files that may contain partial output.
+    source_version = hashlib.sha256(
+        f"{file_path}:{source_stat.st_size}:{source_stat.st_mtime_ns}".encode()
+    ).hexdigest()[:24]
+    output_file = subtitle_cache_dir / f"v2_{media_id}_{stream_index}_{source_version}.vtt"
+    success = await transcoder.extract_subtitle_to_webvtt(
+        media_file_path=str(file_path),
+        subtitle_stream_index=stream_index,
+        output_path=str(output_file),
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to extract subtitle")
 
     # Read and return the WebVTT content
     try:

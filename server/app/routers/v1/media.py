@@ -25,18 +25,27 @@ from app.models import (
     MediaViewUpdate,
     RecommendationRow,
     User,
+    WatchlistState,
 )
 from app.models.playback import (
     PlaybackInfoRequest,
     PlaybackInfoResponse,
     PlayMethod,
 )
-from app.services.catalogue import media_card, media_card_query, recommendation_cards
+from app.services.catalogue import (
+    media_card,
+    media_card_query,
+    recommendation_cards,
+    visible_media_filter,
+    watchlist_membership,
+)
 from app.services.library_paths import library_file_filter
 from app.services.media_access import require_owned_playback_session
+from app.services.playback_preferences import resolve_playback_tracks
 from app.services.playback_session import ClientContext, PlaybackSessionService
 from app.services.stream_builder import StreamBuilder
 from app.services.thumbnails import generate_video_thumbnail
+from app.services.watchlist import add_to_watchlist, remove_from_watchlist
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
@@ -83,13 +92,17 @@ async def get_playback_info(
     # Build stream info using device profile
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
     try:
+        audio_index, subtitle_index = resolve_playback_tracks(
+            media_file, _user, playback_request.AudioStreamIndex, playback_request.SubtitleStreamIndex
+        )
         stream_info = stream_builder.build_stream_info(
             media_file,
             enable_direct_play=playback_request.EnableDirectPlay,
             enable_direct_stream=playback_request.EnableDirectStream,
             enable_transcoding=playback_request.EnableTranscoding,
             requested_resolution=playback_request.RequestedResolution,
-            audio_stream_index=playback_request.AudioStreamIndex,
+            audio_stream_index=audio_index,
+            subtitle_stream_index=subtitle_index,
             video_stream_index=playback_request.VideoStreamIndex,
             allow_video_stream_copy=playback_request.AllowVideoStreamCopy,
             allow_audio_stream_copy=playback_request.AllowAudioStreamCopy,
@@ -157,7 +170,7 @@ async def get_library_items(
             raise HTTPException(status_code=422, detail="Use either skip or after_id")
         query = query.where(MediaFile.id > after_id)
     result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
-    return [media_card(media_file, view) for media_file, view in result]
+    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
 
 
 @router.get("/media-files", response_model=list[MediaCardSchema])
@@ -175,7 +188,71 @@ async def get_media_files(
             raise HTTPException(status_code=422, detail="Use either skip or after_id")
         query = query.where(MediaFile.id > after_id)
     result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
-    return [media_card(media_file, view) for media_file, view in result]
+    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+
+
+@router.get("/media-files/search", response_model=list[MediaCardSchema])
+async def search_media_files(
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    q: Annotated[str, Query(min_length=1, max_length=200)],
+    library_id: Annotated[int | None, Query(ge=1)] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 48,
+    after_id: Annotated[int | None, Query(ge=0)] = None,
+) -> list[MediaCardSchema]:
+    """Search the complete visible catalogue, interpreting SQL wildcards literally."""
+    search = q.strip()
+    if not search:
+        raise HTTPException(status_code=422, detail="Search query must not be blank")
+    query = media_card_query(user.id).where(
+        visible_media_filter(library_id),
+        MediaFile.file_name.icontains(search, autoescape=True),
+    )
+    if after_id is not None:
+        if skip:
+            raise HTTPException(status_code=422, detail="Use either skip or after_id")
+        query = query.where(MediaFile.id > after_id)
+    result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
+    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+
+
+@router.get("/users/me/watchlist", response_model=list[MediaCardSchema])
+async def get_watchlist(
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 48,
+    after_id: Annotated[int | None, Query(ge=0)] = None,
+) -> list[MediaCardSchema]:
+    """Get a stable page of the current user's visible saved films."""
+    query = media_card_query(user.id).where(visible_media_filter(), watchlist_membership(user.id))
+    if after_id is not None:
+        if skip:
+            raise HTTPException(status_code=422, detail="Use either skip or after_id")
+        query = query.where(MediaFile.id > after_id)
+    result = await session.execute(query.order_by(MediaFile.id).offset(skip).limit(limit))
+    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
+
+
+@router.put("/users/me/watchlist/{media_id}", response_model=WatchlistState)
+async def save_to_watchlist(
+    media_id: int,
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> WatchlistState:
+    await add_to_watchlist(session, user.id, media_id)
+    return WatchlistState(media_file_id=media_id, in_watchlist=True)
+
+
+@router.delete("/users/me/watchlist/{media_id}", response_model=WatchlistState)
+async def delete_from_watchlist(
+    media_id: int,
+    user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> WatchlistState:
+    await remove_from_watchlist(session, user.id, media_id)
+    return WatchlistState(media_file_id=media_id, in_watchlist=False)
 
 
 @router.get("/media-files/continue-watching", response_model=list[MediaCardSchema])
@@ -202,7 +279,7 @@ async def get_continue_watching_media_files(
         .order_by(MediaView.last_viewed_at.desc(), MediaFile.id)
         .limit(limit)
     )
-    return [media_card(media_file, view) for media_file, view in result]
+    return [media_card(media_file, view, in_watchlist) for media_file, view, in_watchlist in result]
 
 
 # Media item endpoints (authenticated users)
@@ -226,7 +303,7 @@ async def get_media_file(
         HTTPException: If media file not found or is deleted
     """
     result = await session.execute(
-        select(MediaFile)
+        select(MediaFile, watchlist_membership(user.id))
         .options(
             selectinload(MediaFile.video_tracks),
             selectinload(MediaFile.audio_tracks),
@@ -234,7 +311,8 @@ async def get_media_file(
         )
         .where(MediaFile.id == media_id)
     )
-    media_file = result.scalar_one_or_none()
+    media_result = result.one_or_none()
+    media_file = media_result[0] if media_result else None
 
     if not media_file or media_file.deleted_at is not None:
         raise HTTPException(
@@ -243,7 +321,9 @@ async def get_media_file(
         )
 
     view = await get_user_media_view(session, user.id, media_id)
-    return media_file_with_user_view(media_file, view)
+    schema = media_file_with_user_view(media_file, view)
+    schema.in_watchlist = bool(media_result and media_result[1])
+    return schema
 
 
 @router.get("/media/{media_id}/view", response_model=MediaViewSchema)
@@ -552,13 +632,17 @@ async def start_media_stream(
     # Get stream decision from StreamBuilder
     stream_builder = StreamBuilder(playback_request.DeviceProfile)
     try:
+        audio_index, subtitle_index = resolve_playback_tracks(
+            media_file, _user, playback_request.AudioStreamIndex, playback_request.SubtitleStreamIndex
+        )
         stream_info = stream_builder.build_stream_info(
             media_file,
             enable_direct_play=playback_request.EnableDirectPlay,
             enable_direct_stream=playback_request.EnableDirectStream,
             enable_transcoding=playback_request.EnableTranscoding,
             requested_resolution=playback_request.RequestedResolution,
-            audio_stream_index=playback_request.AudioStreamIndex,
+            audio_stream_index=audio_index,
+            subtitle_stream_index=subtitle_index,
             video_stream_index=playback_request.VideoStreamIndex,
             allow_video_stream_copy=playback_request.AllowVideoStreamCopy,
             allow_audio_stream_copy=playback_request.AllowAudioStreamCopy,
@@ -575,9 +659,16 @@ async def start_media_stream(
         user_agent=request.headers.get("user-agent"),
     )
     try:
-        return await service.start_from_stream_info(
+        response = await service.start_from_stream_info(
             media_id, stream_info, playback_request.PlaybackSessionId, playback_request.PlaybackGeneration, client
         )
+        if stream_info.SubtitleStreamIndex is not None:
+            response["subtitle_stream_index"] = str(stream_info.SubtitleStreamIndex)
+        if stream_info.SubtitleDeliveryMethod:
+            response["subtitle_delivery_method"] = stream_info.SubtitleDeliveryMethod
+        if stream_info.SubtitleUrl:
+            response["subtitle_url"] = stream_info.SubtitleUrl
+        return response
     except HTTPException:
         raise
     except Exception as e:

@@ -1,0 +1,84 @@
+{
+  "scenario": "Read-only SQLite backup of original server/ferelix.db; upgrade PR1 base, then PR2 upgrade/downgrade/upgrade on separate temporary copy only",
+  "source_unchanged_sha256": true,
+  "original_copy": {
+    "head": "add_media_file_modified_at",
+    "core_rows": {
+      "user": 1,
+      "mediafile": 4,
+      "video_track": 4,
+      "audio_track": 9,
+      "subtitle_track": 14
+    },
+    "watchlist_exists": false,
+    "preferences": null,
+    "foreign_key_violations": 0
+  },
+  "before_features": {
+    "head": "media_scan_diagnostics",
+    "core_rows": {
+      "user": 1,
+      "mediafile": 4,
+      "video_track": 4,
+      "audio_track": 9,
+      "subtitle_track": 14
+    },
+    "watchlist_exists": false,
+    "preferences": null,
+    "foreign_key_violations": 0
+  },
+  "upgraded": {
+    "head": "playback_preferences",
+    "core_rows": {
+      "user": 1,
+      "mediafile": 4,
+      "video_track": 4,
+      "audio_track": 9,
+      "subtitle_track": 14
+    },
+    "watchlist_exists": true,
+    "preferences": [
+      [
+        null,
+        null,
+        "off"
+      ]
+    ],
+    "foreign_key_violations": 0
+  },
+  "downgraded": {
+    "head": "media_scan_diagnostics",
+    "core_rows": {
+      "user": 1,
+      "mediafile": 4,
+      "video_track": 4,
+      "audio_track": 9,
+      "subtitle_track": 14
+    },
+    "watchlist_exists": false,
+    "preferences": null,
+    "foreign_key_violations": 0
+  },
+  "reupgraded": {
+    "head": "playback_preferences",
+    "core_rows": {
+      "user": 1,
+      "mediafile": 4,
+      "video_track": 4,
+      "audio_track": 9,
+      "subtitle_track": 14
+    },
+    "watchlist_exists": true,
+    "preferences": [
+      [
+        null,
+        null,
+        "off"
+      ]
+    ],
+    "foreign_key_violations": 0
+  },
+  "duplicate_watchlist_rejected": true,
+  "invalid_media_foreign_key_rejected": true,
+  "downgrade_note": "Downgrade intentionally drops watchlist data and preference columns; re-upgrade restores empty watchlist and off/null defaults. Existing accounts and media/tracks are preserved."
+}

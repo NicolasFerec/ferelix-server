@@ -332,8 +332,43 @@ export const auth = {
     },
 };
 
+export const watchlist = {
+    async list(skip = 0, limit = 49, signal?: AbortSignal): Promise<MediaCardInfo[]> {
+        const { data, error } = await client.GET("/api/v1/users/me/watchlist", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+            params: { query: { skip, limit } },
+        });
+        if (error || !data) throw new Error("Failed to get watchlist");
+        return data;
+    },
+    async add(mediaId: number) {
+        const { data, error } = await client.PUT("/api/v1/users/me/watchlist/{media_id}", {
+            signal: AbortSignal.timeout(15000),
+            params: { path: { media_id: mediaId } },
+        });
+        if (error || !data) throw new Error("Failed to add to watchlist");
+        return data;
+    },
+    async remove(mediaId: number) {
+        const { data, error } = await client.DELETE("/api/v1/users/me/watchlist/{media_id}", {
+            signal: AbortSignal.timeout(15000),
+            params: { path: { media_id: mediaId } },
+        });
+        if (error || !data) throw new Error("Failed to remove from watchlist");
+        return data;
+    },
+};
+
 // Export media-related functions
 export const media = {
+    async search(q: string, skip = 0, limit = 49, signal?: AbortSignal): Promise<MediaCardInfo[]> {
+        const { data, error } = await client.GET("/api/v1/media-files/search", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+            params: { query: { q, skip, limit } },
+        });
+        if (error || !data) throw new Error("Failed to search media");
+        return data;
+    },
     /**
      * Get media files the current user started but has not finished
      */
@@ -373,6 +408,7 @@ export const media = {
             enableTranscoding?: boolean;
             requestedResolution?: { width: number; height: number } | null;
             audioStreamIndex?: number;
+            subtitleStreamIndex?: number;
             videoStreamIndex?: number;
             playbackSessionId?: string;
             playbackGeneration?: number;
@@ -392,6 +428,7 @@ export const media = {
                 IsPlayback: true,
                 RequestedResolution: options?.requestedResolution,
                 AudioStreamIndex: options?.audioStreamIndex,
+                SubtitleStreamIndex: options?.subtitleStreamIndex,
                 VideoStreamIndex: options?.videoStreamIndex,
                 PlaybackSessionId: options?.playbackSessionId,
                 PlaybackGeneration: options?.playbackGeneration ?? 1,

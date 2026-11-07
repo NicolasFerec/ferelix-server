@@ -3,6 +3,8 @@ import { computed, onMounted, type Ref, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 import { type MediaFile, media } from "@/api/client";
+import WatchlistButton from "@/components/WatchlistButton.vue";
+import { safeReturnTo } from "@/services/authNavigation";
 import { getMediaTitleInfo } from "@/services/mediaDisplay";
 import {
   type AudioTrackOption,
@@ -39,14 +41,16 @@ const videoTrackOptions = computed<DropdownOption[]>(() =>
     label: formatVideoTrackLabel(track),
   })),
 );
-const audioTrackOptions = computed<DropdownOption[]>(() =>
-  audioTracks.value.map((track) => ({
+const audioTrackOptions = computed<DropdownOption[]>(() => [
+  {value:null, label:t("preferences.auto")},
+  ...audioTracks.value.map((track) => ({
     value: track.stream_index,
     label: formatAudioTrackLabel(track),
   })),
-);
+]);
 const subtitleTrackOptions = computed<DropdownOption[]>(() => [
-  { value: null, label: t("mediaDetail.track.subtitlesOff") },
+  { value: null, label: t("preferences.auto") },
+  { value: -1, label: t("mediaDetail.track.subtitlesOff") },
   ...subtitleTracks.value.map((track) => ({
     value: track.stream_index,
     label: getSubtitleTrackLabel(track),
@@ -74,10 +78,8 @@ async function loadMedia(): Promise<void> {
       videoTracks.value.find((track) => track.is_default)?.stream_index ??
       videoTracks.value[0]?.stream_index ??
       null;
-    selectedAudioStreamIndex.value =
-      audioTracks.value.find((track) => track.is_default)?.stream_index ??
-      audioTracks.value[0]?.stream_index ??
-      null;
+    selectedAudioStreamIndex.value = null;
+    selectedSubtitleStreamIndex.value = null;
   } catch (err: unknown) {
     console.error("Failed to load media:", err);
     error.value = t("mediaDetail.loadFailed");
@@ -171,7 +173,7 @@ const playbackLocation = computed(() => ({
     ...(selectedSubtitleStreamIndex.value !== null ? { subtitle: String(selectedSubtitleStreamIndex.value) } : {}),
   },
 }));
-const backLocation = computed(() => Number(route.query.libraryId) > 0 ? `/library/${Number(route.query.libraryId)}` : "/");
+const backLocation = computed(() => route.query.returnTo ? safeReturnTo(route.query.returnTo) : Number(route.query.libraryId) > 0 ? `/library/${Number(route.query.libraryId)}` : "/");
 
 function getResumePosition(): number {
   const view = mediaFile.value?.user_view;
@@ -316,6 +318,7 @@ onMounted(() => {
                 {{ primaryPlayLabel }}
               </RouterLink>
             </div>
+            <WatchlistButton class="mb-5" :media-id="mediaFile.id" :in-watchlist="mediaFile.in_watchlist" @updated="mediaFile.in_watchlist = $event" />
             <div class="flex items-center gap-4 mb-6 text-gray-300">
               <span v-if="mediaFile.duration">{{ formatDuration(mediaFile.duration) }}</span>
               <span v-if="mediaFile.duration && displayInfo.year">•</span>

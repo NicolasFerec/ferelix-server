@@ -4,11 +4,11 @@ import { useI18n } from "vue-i18n";
 import { type MediaCardInfo, media } from "@/api/client";
 import { getMediaTitleInfo } from "@/services/mediaDisplay";
 
-const props = defineProps<{ mediaFile: MediaCardInfo; sourceLibraryId?: number | string | null }>();
+const props = defineProps<{ mediaFile: MediaCardInfo; returnTo?: string; sourceLibraryId?: number | string | null }>();
 const { t } = useI18n();
 const thumbnailFailed = ref(false);
 const displayInfo = computed(() => getMediaTitleInfo(props.mediaFile.file_name));
-const destination = computed(() => ({ name: "media-detail", params: { id: String(props.mediaFile.id) }, query: props.sourceLibraryId ? { libraryId: String(props.sourceLibraryId) } : undefined }));
+const destination = computed(() => ({ name: "media-detail", params: { id: String(props.mediaFile.id) }, query: {...(props.sourceLibraryId ? { libraryId: String(props.sourceLibraryId) } : {}), ...(props.returnTo ? {returnTo:props.returnTo} : {})} }));
 const progress = computed(() => {
   const view = props.mediaFile.user_view;
   const duration = view?.duration_seconds || props.mediaFile.duration;

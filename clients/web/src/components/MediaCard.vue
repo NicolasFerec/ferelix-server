@@ -5,7 +5,7 @@ import { items, type MediaCardInfo, media } from "@/api/client";
 import { getMediaTitleInfo } from "@/services/mediaDisplay";
 import WatchStateMenu from "./WatchStateMenu.vue";
 
-const props = defineProps<{ mediaFile: MediaCardInfo; returnTo?: string; sourceLibraryId?: number | string | null }>();
+const props = defineProps<{ mediaFile: MediaCardInfo; returnTo?: string; sourceLibraryId?: number | string | null; hideWatchActions?: boolean }>();
 const emit=defineEmits<{changed:[]}>();
 const { t } = useI18n();
 const thumbnailFailed = ref(false);
@@ -40,9 +40,9 @@ const durationLabel = computed(() => {
         <div class="h-full min-w-0.5 bg-white/45" :style="{ width: `${progress}%` }"></div>
       </div>
     </div>
-    <h3 class="mt-3 truncate pr-10 text-sm font-semibold text-gray-100 group-hover:text-white" :title="displayInfo.title">{{ displayInfo.title }}</h3>
-    <p class="mt-1 flex gap-2 pr-10 text-xs text-muted"><span v-if="displayInfo.year">{{ displayInfo.year }}</span><span v-if="displayInfo.year && mediaFile.duration" aria-hidden="true">·</span><span v-if="mediaFile.duration">{{ durationLabel }}</span></p>
+    <h3 class="mt-3 truncate text-sm font-semibold text-gray-100 group-hover:text-white" :title="displayInfo.title" :class="{ 'pr-10': mediaFile.item_id && !hideWatchActions }">{{ displayInfo.title }}</h3>
+    <p class="mt-1 flex gap-2 text-xs text-muted" :class="{ 'pr-10': mediaFile.item_id && !hideWatchActions }"><span v-if="displayInfo.year">{{ displayInfo.year }}</span><span v-if="displayInfo.year && mediaFile.duration" aria-hidden="true">·</span><span v-if="mediaFile.duration">{{ durationLabel }}</span></p>
   </RouterLink>
-  <div v-if="mediaFile.item_id" class="absolute bottom-0 right-0"><WatchStateMenu :item-id="mediaFile.item_id" kind="movie" :watched="mediaFile.watched ?? mediaFile.user_view?.watched ?? false" :state-revision="mediaFile.state_revision ?? 0" @changed="emit('changed')" /></div>
+  <div v-if="mediaFile.item_id && !hideWatchActions" class="absolute bottom-0 right-0"><WatchStateMenu :item-id="mediaFile.item_id" kind="movie" :watched="mediaFile.watched ?? mediaFile.user_view?.watched ?? false" :state-revision="mediaFile.state_revision ?? 0" @changed="emit('changed')" /></div>
   </article>
 </template>

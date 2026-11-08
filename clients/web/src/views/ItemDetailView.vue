@@ -136,14 +136,14 @@ onUnmounted(()=>{itemRequest?.abort();childrenRequest?.abort();});
                 <div class="flex flex-wrap items-start gap-3">
                   <RouterLink v-if="playable" :to="playLocation" class="button-primary"><svg aria-hidden="true" class="size-5" viewBox="0 0 24 24" fill="currentColor"><path d="M9 5v14l11-7z"/></svg>{{ $t(playable.resume_active ? 'mediaDetail.resume' : item.kind==='series' || item.kind==='season' ? 'items.continue' : 'mediaDetail.play') }}</RouterLink>
                   <WatchlistButton v-if="item.playable_file_id" :media-id="item.playable_file_id" :in-watchlist="item.in_watchlist" @updated="item.in_watchlist=$event" />
-                  <WatchStateMenu :item-id="item.id" :kind="item.kind" :watched="item.watched" :state-revision="item.state_revision" @changed="revision++" />
+                  <WatchStateMenu direct :item-id="item.id" :kind="item.kind" :watched="item.watched" :state-revision="item.state_revision" @changed="revision++" />
                   <button v-if="isAdmin" type="button" class="button-secondary" @click="editing=true">{{ $t('metadata.edit') }}</button>
                 </div>
                 <p v-if="continuationError" role="alert" class="text-sm text-red-200">{{ continuationError }}</p>
                 <p v-else-if="continuation && continuation.status!=='ready'" class="text-sm text-muted">{{ $t(`items.continuation.${continuation.status}`) }}<span v-if="continuation.item"> · {{ continuation.item.title }}</span></p>
                 <p v-else-if="item.availability!=='available' && !playable" class="text-sm text-muted">{{ $t(`items.availability.${item.availability}`) }}</p>
                 <p v-if="item.multi_episode_file" class="max-w-2xl text-xs leading-5 text-muted">{{ $t('items.multiEpisode') }}</p>
-                <div class="flex flex-wrap gap-5 text-sm text-primary-300"><RouterLink v-if="item.series_id && item.series_id!==item.id" :to="`/items/${item.series_id}`">{{ $t('items.viewSeries') }}</RouterLink><RouterLink v-if="item.collection_id" :to="`/items/${item.collection_id}`">{{ $t('items.viewCollection') }}</RouterLink><RouterLink v-if="item.playable_file_id" :to="{name:'media-detail',params:{id:item.playable_file_id},query:{returnTo:route.fullPath}}">{{ $t('items.fileDetails') }}</RouterLink></div>
+                <div class="flex flex-wrap gap-5 text-sm text-primary-300"><RouterLink v-if="item.series_id && item.series_id!==item.id" :to="`/items/${item.series_id}`">{{ $t('items.viewSeries') }}</RouterLink><RouterLink v-if="item.collection_id" :to="`/items/${item.collection_id}`">{{ $t('items.viewCollection') }}</RouterLink></div>
               </div>
             </div>
           </div>

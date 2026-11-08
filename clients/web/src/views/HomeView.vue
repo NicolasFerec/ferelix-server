@@ -91,17 +91,17 @@ onMounted(async () => {
           <p>{{ $t('home.noRows') }}</p>
         </div>
         <div v-else>
-          <MediaRow
+          <MediaRow hide-watch-actions
             v-if="continueWatchingItems.length > 0"
             :display-name="$t('home.continueWatching')"
             :items="continueWatchingItems" @changed="loadRows"
           />
-          <MediaRow v-if="nextUpItems.length" :display-name="$t('items.nextUp')" :items="nextUpItems" @changed="loadRows" />
+          <MediaRow hide-watch-actions v-if="nextUpItems.length" :display-name="$t('items.nextUp')" :items="nextUpItems" @changed="loadRows" />
           <section v-if="watchlistItems.length" class="relative">
             <RouterLink to="/watchlist" class="mb-3 inline-block text-sm font-medium text-primary-300 hover:text-primary-200">{{ $t('watchlist.viewAll') }} →</RouterLink>
-            <MediaRow :display-name="$t('watchlist.title')" :items="watchlistItems" @changed="loadRows" />
+            <MediaRow hide-watch-actions :display-name="$t('watchlist.title')" :items="watchlistItems" @changed="loadRows" />
           </section>
-          <MediaRow
+          <MediaRow hide-watch-actions
             v-for="row in rows"
             :key="`${row.playlist_id}-${row.library_id}`"
             :display-name="getDisplayName(row)"

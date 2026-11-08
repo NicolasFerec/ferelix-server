@@ -76,3 +76,14 @@ it("discards a stale bulk preview and never reports unconfirmed changes", async 
     expect(view.find('[role="dialog"] .button-primary').exists()).toBe(false);
     expect(view.emitted("changed")).toBeUndefined();
 });
+it("marks an item directly from its detail action and offers the reverse action", async () => {
+    vi.mocked(items.setWatched).mockResolvedValue({ watched: true, state_revision: 4 } as never);
+    const view = open();
+    await view.setProps({ direct: true });
+    expect(view.find(".watch-state-trigger").exists()).toBe(false);
+    expect(view.get("button").text()).toBe("items.markWatched");
+    await view.get("button").trigger("click");
+    await flushPromises();
+    expect(items.setWatched).toHaveBeenCalledExactlyOnceWith(7, true, 3);
+    expect(view.get("button").text()).toBe("items.markUnwatched");
+});

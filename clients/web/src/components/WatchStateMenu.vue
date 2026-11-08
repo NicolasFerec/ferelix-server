@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { type ItemCard, items } from "@/api/client";
 import ModalDialog from "@/components/ModalDialog.vue";
 
-const props=defineProps<{itemId:number;kind:ItemCard["kind"];watched:boolean;stateRevision:number}>();
+const props=defineProps<{itemId:number;kind:ItemCard["kind"];watched:boolean;stateRevision:number;direct?:boolean}>();
 const emit=defineEmits<{changed:[]}>();
 const {t}=useI18n();
 const trigger=ref<HTMLButtonElement|null>(null);
@@ -74,13 +74,17 @@ async function confirmBulk() {
 
 <template>
   <div class="relative">
-    <button ref="trigger" type="button" class="watch-state-trigger flex size-9 items-center justify-center rounded-sm bg-black/65 text-white" :aria-label="$t('items.watchActions')" :aria-controls="menuId" :aria-expanded="menuOpen" :aria-busy="pending" :title="$t(currentWatched ? 'items.markUnwatched' : 'items.markWatched')" @click="toggleMenu" @keydown="handleKey"><svg aria-hidden="true" class="size-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+    <button v-if="direct" type="button" class="button-secondary" :disabled="pending" :aria-busy="pending" @click="setWatched(!currentWatched)">
+      {{ $t(currentWatched ? 'items.markUnwatched' : 'items.markWatched') }}
+    </button>
+    <button v-else ref="trigger" type="button" class="watch-state-trigger flex size-9 items-center justify-center rounded-sm bg-black/65 text-white" :aria-label="$t('items.watchActions')" :aria-controls="menuId" :aria-expanded="menuOpen" :aria-busy="pending" :title="$t(currentWatched ? 'items.markUnwatched' : 'items.markWatched')" @click="toggleMenu" @keydown="handleKey"><svg aria-hidden="true" class="size-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
     <Teleport to="body">
       <div v-if="menuOpen" :id="menuId" ref="menu" class="fixed z-[70] w-60 rounded-sm border border-outline bg-surface p-1 text-foreground shadow-xl" :style="menuPosition">
         <button type="button" :disabled="pending" @keydown="handleKey" class="watch-state-action block w-full px-3 py-3 text-left text-sm hover:bg-white/5 disabled:opacity-50" @click="setWatched(!currentWatched)">{{ $t(currentWatched ? 'items.markUnwatched' : 'items.markWatched') }}</button>
       </div>
     </Teleport>
-    <Teleport to="body"><div v-if="error && !dialog" role="alert" :style="menuPosition" class="fixed z-[70] w-60 rounded-sm bg-surface p-3 text-xs leading-relaxed text-red-200"><p>{{ error }}</p><button type="button" class="mt-3 underline" @click="error=''">{{ $t('common.close') }}</button></div></Teleport>
+    <p v-if="direct && error && !dialog" role="alert" class="mt-2 text-sm text-red-200">{{ error }}</p>
+    <Teleport to="body"><div v-if="!direct && error && !dialog" role="alert" :style="menuPosition" class="fixed z-[70] w-60 rounded-sm bg-surface p-3 text-xs leading-relaxed text-red-200"><p>{{ error }}</p><button type="button" class="mt-3 underline" @click="error=''">{{ $t('common.close') }}</button></div></Teleport>
     <ModalDialog v-if="dialog" :label="$t('items.bulkTitle')" @close="!pending && (dialog=false)">
       <section class="surface-panel w-full max-w-md space-y-5 p-6">
         <h2 class="text-xl font-semibold">{{ $t('items.bulkTitle') }}</h2>

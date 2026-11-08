@@ -614,7 +614,7 @@
         "multiEpisode": "Ce fichier contient plusieurs épisodes. La lecture suit le fichier ; la continuation automatique nécessite des limites d’épisodes confirmées.",
         "viewSeries": "Voir la série",
         "viewCollection": "Voir la collection",
-        "fileDetails": "Détails du fichier et de lecture",
+        "playbackOptions": "Options de lecture",
         "nextEpisode": "Épisode suivant",
         "nextCountdown": "Démarrage dans {seconds} secondes",
         "playNext": "Lire maintenant",

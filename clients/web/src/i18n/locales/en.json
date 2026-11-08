@@ -614,7 +614,7 @@
         "multiEpisode": "This file contains multiple episodes. Playback follows the file; automatic continuation requires confirmed episode boundaries.",
         "viewSeries": "View series",
         "viewCollection": "View collection",
-        "fileDetails": "File and playback details",
+        "playbackOptions": "Playback options",
         "nextEpisode": "Next episode",
         "nextCountdown": "Starting in {seconds} seconds",
         "playNext": "Play now",

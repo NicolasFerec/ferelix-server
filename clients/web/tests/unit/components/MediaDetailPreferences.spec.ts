@@ -43,6 +43,7 @@ it("starts with automatic preferences and carries only explicitly selected audio
     expect(wrapper.get('a[href^="/search"]').attributes("href")).toBe("/search?q=film&page=2");
     const selects = wrapper.findAllComponents(DropdownSelect);
     selects[1].vm.$emit("update:modelValue", 2);
+    await flushPromises();
     selects[2].vm.$emit("update:modelValue", -1);
     await flushPromises();
     destination = new URL(wrapper.get<HTMLAnchorElement>('a[href^="/play/"]').element.href, "http://localhost");

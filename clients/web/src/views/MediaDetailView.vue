@@ -6,16 +6,8 @@ import { type MediaFile, media } from "@/api/client";
 import WatchlistButton from "@/components/WatchlistButton.vue";
 import { safeReturnTo } from "@/services/authNavigation";
 import { getMediaTitleInfo } from "@/services/mediaDisplay";
-import {
-  type AudioTrackOption,
-  getAudioTrackLabel,
-  getSubtitleTrackLabel,
-  type SubtitleTrackOption,
-} from "@/services/playerUi";
-import DropdownSelect, { type DropdownOption } from "../components/DropdownSelect.vue";
+import PlaybackTrackOptions, { type TrackSelection } from "@/components/PlaybackTrackOptions.vue";
 import MenuBar from "../components/MenuBar.vue";
-
-type VideoTrackOption = MediaFile["video_tracks"][number];
 
 const route = useRoute();
 const { t } = useI18n();
@@ -23,39 +15,12 @@ const mediaFile: Ref<MediaFile | null> = ref(null);
 const loading: Ref<boolean> = ref(false);
 const error: Ref<string> = ref("");
 const thumbnailFailed = ref(false);
-const selectedVideoStreamIndex = ref<number | null>(null);
-const selectedAudioStreamIndex = ref<number | null>(null);
-const selectedSubtitleStreamIndex = ref<number | null>(null);
-
-const audioTracks = computed(() => (mediaFile.value?.audio_tracks || []) as AudioTrackOption[]);
-const videoTracks = computed(() => (mediaFile.value?.video_tracks || []) as VideoTrackOption[]);
-const subtitleTracks = computed(() => (mediaFile.value?.subtitle_tracks || []) as SubtitleTrackOption[]);
+const tracks = ref<TrackSelection>({});
 const displayInfo = computed(() =>
   mediaFile.value?.file_name
     ? getMediaTitleInfo(mediaFile.value.file_name)
     : { title: mediaFile.value?.id ? String(mediaFile.value.id) : "", year: null },
 );
-const videoTrackOptions = computed<DropdownOption[]>(() =>
-  videoTracks.value.map((track) => ({
-    value: track.stream_index,
-    label: formatVideoTrackLabel(track),
-  })),
-);
-const audioTrackOptions = computed<DropdownOption[]>(() => [
-  {value:null, label:t("preferences.auto")},
-  ...audioTracks.value.map((track) => ({
-    value: track.stream_index,
-    label: formatAudioTrackLabel(track),
-  })),
-]);
-const subtitleTrackOptions = computed<DropdownOption[]>(() => [
-  { value: null, label: t("preferences.auto") },
-  { value: -1, label: t("mediaDetail.track.subtitlesOff") },
-  ...subtitleTracks.value.map((track) => ({
-    value: track.stream_index,
-    label: getSubtitleTrackLabel(track),
-  })),
-]);
 const resumePosition = computed(() => getResumePosition());
 const primaryPlayLabel = computed(() =>
   resumePosition.value > 0 ? t("mediaDetail.resume") : t("mediaDetail.play"),
@@ -74,12 +39,7 @@ async function loadMedia(): Promise<void> {
 
   try {
     mediaFile.value = await media.getMediaFile(Number(route.params.id));
-    selectedVideoStreamIndex.value =
-      videoTracks.value.find((track) => track.is_default)?.stream_index ??
-      videoTracks.value[0]?.stream_index ??
-      null;
-    selectedAudioStreamIndex.value = null;
-    selectedSubtitleStreamIndex.value = null;
+    tracks.value = {};
   } catch (err: unknown) {
     console.error("Failed to load media:", err);
     error.value = t("mediaDetail.loadFailed");
@@ -97,81 +57,10 @@ function formatDuration(seconds: number): string {
   return t("mediaDetail.duration.minutes", { minutes });
 }
 
-function formatBitrate(bitrate: number): string {
-  if (bitrate >= 1000000) {
-    return `${(bitrate / 1000000).toFixed(2)} Mbps`;
-  }
-  return `${(bitrate / 1000).toFixed(0)} Kbps`;
-}
-
-function formatTrackBitrate(bitrate?: number | null): string {
-  return bitrate ? formatBitrate(bitrate) : t("mediaDetail.track.unknown");
-}
-
-function formatSampleRate(sampleRate?: number | null): string {
-  if (!sampleRate) return t("mediaDetail.track.unknown");
-  return `${(sampleRate / 1000).toFixed(sampleRate % 1000 === 0 ? 0 : 1)} kHz`;
-}
-
-function formatVideoTrackLabel(track: VideoTrackOption): string {
-  return [
-    track.width && track.height ? `${track.width}x${track.height}` : null,
-    track.codec?.toUpperCase(),
-    getVideoRangeLabel(track),
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function formatAudioTrackLabel(track: AudioTrackOption): string {
-  return [
-    getAudioTrackLabel(track),
-    track.codec?.toUpperCase(),
-    track.bitrate ? formatTrackBitrate(track.bitrate) : null,
-    track.sample_rate ? formatSampleRate(track.sample_rate) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function getVideoRangeLabel(track: VideoTrackOption): string | null {
-  const metadata = [
-    track.profile,
-    track.color_space,
-    track.color_primaries,
-    track.color_transfer,
-    track.pixel_format,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (metadata.includes("dolby") || metadata.includes("dvhe") || metadata.includes("dovi")) {
-    return "DV";
-  }
-  if (
-    metadata.includes("bt2020") ||
-    metadata.includes("smpte2084") ||
-    metadata.includes("arib-std-b67") ||
-    metadata.includes("hlg")
-  ) {
-    return "HDR";
-  }
-  if (track.bit_depth && track.bit_depth > 8) {
-    return `${track.bit_depth}-bit`;
-  }
-
-  return null;
-}
-
 const playbackLocation = computed(() => ({
   name: "player",
   params: { id: String(mediaFile.value?.id) },
-  query: {
-    ...(selectedVideoStreamIndex.value !== null ? { video: String(selectedVideoStreamIndex.value) } : {}),
-    ...(selectedAudioStreamIndex.value !== null ? { audio: String(selectedAudioStreamIndex.value) } : {}),
-    ...(selectedSubtitleStreamIndex.value !== null ? { subtitle: String(selectedSubtitleStreamIndex.value) } : {}),
-  },
+  query: tracks.value,
 }));
 const backLocation = computed(() => route.query.returnTo ? safeReturnTo(route.query.returnTo) : Number(route.query.libraryId) > 0 ? `/library/${Number(route.query.libraryId)}` : "/");
 
@@ -329,37 +218,7 @@ onMounted(() => {
               <span v-if="resumePosition > 0">{{ t("mediaDetail.resume") }} {{ formatDuration(resumePosition) }}</span>
             </div>
 
-            <div class="max-w-2xl space-y-2 text-sm">
-              <label for="video-stream" class="flex items-center gap-3">
-                <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.video") }}</span>
-                <DropdownSelect
-                  id="video-stream"
-                  v-model="selectedVideoStreamIndex"
-                  :options="videoTrackOptions"
-                  :disabled="videoTrackOptions.length <= 1"
-                />
-              </label>
-              <label for="audio-stream" class="flex items-center gap-3">
-                <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.audio") }}</span>
-                <DropdownSelect
-                  id="audio-stream"
-                  v-model="selectedAudioStreamIndex"
-                  :options="audioTrackOptions"
-                  :disabled="audioTrackOptions.length <= 1"
-                />
-              </label>
-              <label for="subtitle-stream" class="flex items-center gap-3">
-                <span class="w-24 shrink-0 text-gray-400">{{
-                  t("mediaDetail.tracks.subtitles")
-                }}</span>
-                <DropdownSelect
-                  id="subtitle-stream"
-                  v-model="selectedSubtitleStreamIndex"
-                  :options="subtitleTrackOptions"
-                  :disabled="subtitleTrackOptions.length <= 1"
-                />
-              </label>
-            </div>
+            <PlaybackTrackOptions :file="mediaFile" v-model="tracks" />
           </div>
         </div>
       </div>

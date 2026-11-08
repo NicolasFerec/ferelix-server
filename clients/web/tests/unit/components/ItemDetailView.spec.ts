@@ -1,10 +1,12 @@
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { items } from "@/api/client";
+import { items, media } from "@/api/client";
+import DropdownSelect from "@/components/DropdownSelect.vue";
 import ItemDetailView from "@/views/ItemDetailView.vue";
 
 vi.mock("@/api/client", () => ({
+    media: { getMediaFile: vi.fn() },
     items: { get: vi.fn(), list: vi.fn(), continuation: vi.fn(), artworkUrl: () => null },
 }));
 const access = vi.hoisted(() => ({ admin: false }));
@@ -167,4 +169,30 @@ it("restores the default season when browser history removes the season query", 
     );
     expect(items.get).toHaveBeenCalledTimes(1);
     expect(vi.mocked(items.list).mock.calls.filter(([options]) => options.kind === "season")).toHaveLength(1);
+});
+
+it("loads playback options on demand and launches the chosen file with the selected tracks", async () => {
+    vi.mocked(items.get).mockResolvedValue({
+        ...series, id: 1, kind: "movie", availability: "available", playable_file_id: 42, position_seconds: 120,
+    } as never);
+    vi.mocked(media.getMediaFile).mockResolvedValue({
+        id: 42,
+        audio_tracks: [{ stream_index: 2, codec: "aac" }],
+        subtitle_tracks: [{ stream_index: 3, codec: "subrip" }],
+    } as never);
+    const { view } = await open();
+    expect(media.getMediaFile).not.toHaveBeenCalled();
+    const details = view.get<HTMLDetailsElement>("details");
+    details.element.open = true;
+    await details.trigger("toggle");
+    await flushPromises();
+    expect(media.getMediaFile).toHaveBeenCalledWith(42, expect.any(AbortSignal));
+    const controls = view.findAllComponents(DropdownSelect);
+    controls[1].vm.$emit("update:modelValue", 2);
+    await flushPromises();
+    controls[2].vm.$emit("update:modelValue", -1);
+    await flushPromises();
+    const href = view.get('a[href^="/player/42"]').attributes("href");
+    const query = new URL(href, "http://localhost").searchParams;
+    expect(Object.fromEntries(query)).toMatchObject({ item: "1", position: "120", audio: "2", subtitle: "-1" });
 });

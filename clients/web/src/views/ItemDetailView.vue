@@ -2,8 +2,9 @@
 import { computed, defineAsyncComponent, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import { type ItemCard, type ItemDetail, items } from "@/api/client";
+import { type ItemCard, type ItemDetail, items, type MediaFile, media } from "@/api/client";
 import ItemCardView from "@/components/ItemCard.vue";
+import PlaybackTrackOptions, { type TrackSelection } from "@/components/PlaybackTrackOptions.vue";
 import MenuBar from "@/components/MenuBar.vue";
 import WatchlistButton from "@/components/WatchlistButton.vue";
 import WatchStateMenu from "@/components/WatchStateMenu.vue";
@@ -42,7 +43,29 @@ const backLocation=computed(()=>route.query.returnTo ? safeReturnTo(route.query.
 const poster=computed(()=>items.artworkUrl(item.value?.poster_url));
 const backdrop=computed(()=>items.artworkUrl(item.value?.backdrop_url));
 const playable=computed(()=>item.value?.kind === "series" || item.value?.kind === "season" ? continuation.value?.status === "ready" ? continuation.value.item : null : item.value?.availability === "available" && item.value.playable_file_id ? item.value : null);
-const playLocation=computed(()=>({name:"player",params:{id:String(playable.value?.playable_file_id)},query:{item:String(playable.value?.id),position:String(continuation.value?.status === "ready" ? continuation.value.position_seconds : playable.value?.position_seconds ?? 0),returnTo:route.fullPath}}));
+const playableFileId = computed(() => playable.value?.playable_file_id);
+const trackFile = ref<MediaFile>();
+const tracks = ref<TrackSelection>({});
+const tracksRequested = ref(false);
+const tracksError = ref(false);
+const tracksRetry = ref(0);
+watch(playableFileId, () => {
+  trackFile.value = undefined;
+  tracks.value = {};
+}, { flush: "sync" });
+watch([playableFileId, tracksRequested, tracksRetry], async ([id, requested], _, onCleanup) => {
+  if (!id || !requested) return;
+  const controller = new AbortController();
+  onCleanup(() => controller.abort());
+  tracksError.value = false;
+  try {
+    const result = await media.getMediaFile(id, controller.signal);
+    if (!controller.signal.aborted && playableFileId.value === id) trackFile.value = result;
+  } catch {
+    if (!controller.signal.aborted) tracksError.value = true;
+  }
+});
+const playLocation=computed(()=>({name:"player",params:{id:String(playable.value?.playable_file_id)},query:{...tracks.value,item:String(playable.value?.id),position:String(continuation.value?.status === "ready" ? continuation.value.position_seconds : playable.value?.position_seconds ?? 0),returnTo:route.fullPath}}));
 const childrenParent=computed(()=>item.value?.kind === "series" ? selectedSeason.value : item.value?.kind === "season" ? item.value.id : null);
 const hasChildren=computed(()=>item.value && ["series","season","collection"].includes(item.value.kind));
 function label(value:Record<string,unknown>){return typeof value.name==="string" ? value.name : "";}
@@ -139,6 +162,15 @@ onUnmounted(()=>{itemRequest?.abort();childrenRequest?.abort();});
                   <WatchStateMenu direct :item-id="item.id" :kind="item.kind" :watched="item.watched" :state-revision="item.state_revision" @changed="revision++" />
                   <button v-if="isAdmin" type="button" class="button-secondary" @click="editing=true">{{ $t('metadata.edit') }}</button>
                 </div>
+                <details v-if="playableFileId" class="max-w-2xl" @toggle="tracksRequested ||= ($event.currentTarget as HTMLDetailsElement).open">
+                  <summary class="w-fit cursor-pointer rounded-sm py-2 text-sm text-muted hover:text-white">{{ $t('items.playbackOptions') }}</summary>
+                  <PlaybackTrackOptions v-if="trackFile" v-model="tracks" :file="trackFile" />
+                  <p v-else-if="tracksError" role="alert" class="text-sm text-red-200">
+                    {{ $t('mediaDetail.loadFailed') }}
+                    <button type="button" class="ml-2 underline" @click="tracksRetry++">{{ $t('common.retry') }}</button>
+                  </p>
+                  <p v-else role="status" class="text-sm text-muted">{{ $t('common.loading') }}</p>
+                </details>
                 <p v-if="continuationError" role="alert" class="text-sm text-red-200">{{ continuationError }}</p>
                 <p v-else-if="continuation && continuation.status!=='ready'" class="text-sm text-muted">{{ $t(`items.continuation.${continuation.status}`) }}<span v-if="continuation.item"> · {{ continuation.item.title }}</span></p>
                 <p v-else-if="item.availability!=='available' && !playable" class="text-sm text-muted">{{ $t(`items.availability.${item.availability}`) }}</p>

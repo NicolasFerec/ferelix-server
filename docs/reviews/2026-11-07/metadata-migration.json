@@ -1,0 +1,14 @@
+{
+  "round_trip": [
+    "upgrade head",
+    "downgrade playback_preferences",
+    "upgrade head"
+  ],
+  "preserved": {
+    "media_view": 1,
+    "mediafile": 4,
+    "user": 1
+  },
+  "positions_and_play_counts_unchanged": true,
+  "foreign_key_violations": 0
+}

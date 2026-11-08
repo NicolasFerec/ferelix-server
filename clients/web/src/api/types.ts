@@ -1639,6 +1639,313 @@ export interface paths {
         patch: operations["update_settings_api_v1_dashboard_settings_patch"];
         trace?: never;
     };
+    "/api/v1/items/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resume Items */
+        get: operations["get_resume_items_api_v1_items_resume_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/next-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Next Up Items */
+        get: operations["get_next_up_items_api_v1_items_next_up_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item_id}/watch-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Watch State */
+        put: operations["put_watch_state_api_v1_items__item_id__watch_state_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item_id}/watch-state/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Bulk Watch State */
+        post: operations["post_bulk_watch_state_api_v1_items__item_id__watch_state_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item_id}/continuation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Continuation */
+        get: operations["get_continuation_api_v1_items__item_id__continuation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Items */
+        get: operations["list_items_api_v1_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/for-file/{media_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item For File */
+        get: operations["item_for_file_api_v1_items_for_file__media_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item Detail */
+        get: operations["item_detail_api_v1_items__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item_id}/images/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Item Image */
+        get: operations["item_image_api_v1_items__item_id__images__role__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Providers */
+        get: operations["providers_api_v1_dashboard_metadata_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search */
+        get: operations["search_api_v1_dashboard_metadata_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Jobs */
+        get: operations["jobs_api_v1_dashboard_metadata_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Metadata */
+        get: operations["get_metadata_api_v1_dashboard_metadata_items__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Metadata */
+        patch: operations["edit_metadata_api_v1_dashboard_metadata_items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/items/{item_id}/identify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Identify */
+        post: operations["identify_api_v1_dashboard_metadata_items__item_id__identify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/items/{item_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh */
+        post: operations["refresh_api_v1_dashboard_metadata_items__item_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/items/{item_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore */
+        post: operations["restore_api_v1_dashboard_metadata_items__item_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/items/{item_id}/images/{role}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Image */
+        post: operations["upload_image_api_v1_dashboard_metadata_items__item_id__images__role__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard/metadata/items/{item_id}/associate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Associate */
+        post: operations["associate_api_v1_dashboard_metadata_items__item_id__associate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1779,10 +2086,38 @@ export interface components {
             /** Image */
             image: string;
         };
+        /** Body_upload_image_api_v1_dashboard_metadata_items__item_id__images__role__post */
+        Body_upload_image_api_v1_dashboard_metadata_items__item_id__images__role__post: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** File */
+            file: string;
+        };
         /** Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put */
         Body_upload_user_profile_image_api_v1_dashboard_users__user_id__profile_image_put: {
             /** Image */
             image: string;
+        };
+        /** BulkWatchStateRequest */
+        BulkWatchStateRequest: {
+            /** Watched */
+            watched: boolean;
+            /**
+             * Preview
+             * @default true
+             */
+            preview: boolean;
+            /** Revision Token */
+            revision_token?: string | null;
+        };
+        /** BulkWatchStateResponse */
+        BulkWatchStateResponse: {
+            /** Count */
+            count: number;
+            /** Revision Token */
+            revision_token: string;
+            /** Applied */
+            applied: boolean;
         };
         /**
          * CodecProfile
@@ -1798,6 +2133,22 @@ export interface components {
              * @default []
              */
             Conditions: components["schemas"]["DeviceProfileCondition"][];
+        };
+        /** ContinuationResponse */
+        ContinuationResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "missing" | "upcoming" | "unknown_order" | "complete";
+            item?: components["schemas"]["ItemCardSchema"] | null;
+            /** Media File Id */
+            media_file_id?: number | null;
+            /**
+             * Position Seconds
+             * @default 0
+             */
+            position_seconds: number;
         };
         /**
          * DeviceProfile
@@ -1882,6 +2233,20 @@ export interface components {
             is_symlink: boolean;
             /** Symlink Target */
             symlink_target?: string | null;
+        };
+        /** EpisodeAssociationRequest */
+        EpisodeAssociationRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Target Item Id */
+            target_item_id: number;
+            /** Target Expected Revision */
+            target_expected_revision: number;
+        };
+        /** EpisodeAssociationResponse */
+        EpisodeAssociationResponse: {
+            /** Item Id */
+            item_id: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1970,6 +2335,212 @@ export interface components {
             /** Items */
             items: components["schemas"]["MediaCardSchema"][];
         };
+        /** IdentifyRequest */
+        IdentifyRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "tmdb" | "anidb";
+            /** Provider Id */
+            provider_id: string;
+        };
+        /**
+         * ItemCardSchema
+         * @description Bounded projection used by catalogue, search and viewing rows.
+         */
+        ItemCardSchema: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "movie" | "series" | "season" | "episode" | "collection";
+            /** Title */
+            title: string;
+            /** Original Title */
+            original_title?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Release Date */
+            release_date?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Series Id */
+            series_id?: number | null;
+            /** Collection Id */
+            collection_id?: number | null;
+            /** Season Number */
+            season_number?: number | null;
+            /** Episode Number */
+            episode_number?: number | null;
+            /** Poster Url */
+            poster_url?: string | null;
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "available" | "missing" | "upcoming" | "incomplete";
+            /** Playable File Id */
+            playable_file_id?: number | null;
+            /**
+             * Watched
+             * @default false
+             */
+            watched: boolean;
+            /**
+             * State Revision
+             * @default 0
+             */
+            state_revision: number;
+            /**
+             * Position Seconds
+             * @default 0
+             */
+            position_seconds: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /**
+             * Progress Percent
+             * @default 0
+             */
+            progress_percent: number;
+            /**
+             * Resume Active
+             * @default false
+             */
+            resume_active: boolean;
+            /**
+             * Hierarchy Complete
+             * @default false
+             */
+            hierarchy_complete: boolean;
+            /**
+             * Metadata Status
+             * @default pending
+             */
+            metadata_status: string;
+        };
+        /** ItemDetailSchema */
+        ItemDetailSchema: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "movie" | "series" | "season" | "episode" | "collection";
+            /** Title */
+            title: string;
+            /** Original Title */
+            original_title?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Release Date */
+            release_date?: string | null;
+            /** Parent Id */
+            parent_id?: number | null;
+            /** Series Id */
+            series_id?: number | null;
+            /** Collection Id */
+            collection_id?: number | null;
+            /** Season Number */
+            season_number?: number | null;
+            /** Episode Number */
+            episode_number?: number | null;
+            /** Poster Url */
+            poster_url?: string | null;
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "available" | "missing" | "upcoming" | "incomplete";
+            /** Playable File Id */
+            playable_file_id?: number | null;
+            /**
+             * Watched
+             * @default false
+             */
+            watched: boolean;
+            /**
+             * State Revision
+             * @default 0
+             */
+            state_revision: number;
+            /**
+             * Position Seconds
+             * @default 0
+             */
+            position_seconds: number;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /**
+             * Progress Percent
+             * @default 0
+             */
+            progress_percent: number;
+            /**
+             * Resume Active
+             * @default false
+             */
+            resume_active: boolean;
+            /**
+             * Hierarchy Complete
+             * @default false
+             */
+            hierarchy_complete: boolean;
+            /**
+             * Metadata Status
+             * @default pending
+             */
+            metadata_status: string;
+            /**
+             * In Watchlist
+             * @default false
+             */
+            in_watchlist: boolean;
+            /** Overview */
+            overview?: string | null;
+            /** Tagline */
+            tagline?: string | null;
+            /** Metadata Locale */
+            metadata_locale: string;
+            /** Aliases */
+            aliases?: string[];
+            /** Genres */
+            genres?: {
+                [key: string]: unknown;
+            }[];
+            /** Keywords */
+            keywords?: {
+                [key: string]: unknown;
+            }[];
+            /** Credits */
+            credits?: {
+                [key: string]: unknown;
+            }[];
+            /** Provider Ids */
+            provider_ids?: {
+                [key: string]: string;
+            };
+            /** Backdrop Url */
+            backdrop_url?: string | null;
+            /** File Ids */
+            file_ids?: number[];
+            /**
+             * Multi Episode File
+             * @default false
+             */
+            multi_episode_file: boolean;
+            /**
+             * Order Confirmed
+             * @default false
+             */
+            order_confirmed: boolean;
+        };
         /**
          * JobExecutionSchema
          * @description Schema for job execution history.
@@ -2052,6 +2623,21 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Metadata Locale
+             * @default fr-FR
+             */
+            metadata_locale: string;
+            /**
+             * Metadata Profile
+             * @default standard
+             */
+            metadata_profile: string;
+            /**
+             * Metadata Export Nfo
+             * @default false
+             */
+            metadata_export_nfo: boolean;
         };
         /**
          * LibrarySchema
@@ -2075,6 +2661,21 @@ export interface components {
              */
             enabled: boolean;
             /**
+             * Metadata Locale
+             * @default fr-FR
+             */
+            metadata_locale: string;
+            /**
+             * Metadata Profile
+             * @default standard
+             */
+            metadata_profile: string;
+            /**
+             * Metadata Export Nfo
+             * @default false
+             */
+            metadata_export_nfo: boolean;
+            /**
              * Created At
              * Format: date-time
              */
@@ -2093,6 +2694,12 @@ export interface components {
             library_type?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Metadata Locale */
+            metadata_locale?: string | null;
+            /** Metadata Profile */
+            metadata_profile?: string | null;
+            /** Metadata Export Nfo */
+            metadata_export_nfo?: boolean | null;
         };
         /**
          * LogLineSchema
@@ -2157,6 +2764,31 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** MatchCandidate */
+        MatchCandidate: {
+            /** Provider */
+            provider: string;
+            /** Provider Id */
+            provider_id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Original Title
+             * @default
+             */
+            original_title: string;
+            /** Year */
+            year?: number | null;
+            /**
+             * Overview
+             * @default
+             */
+            overview: string;
+            /** Poster Url */
+            poster_url?: string | null;
+        };
         /**
          * MediaCardSchema
          * @description Catalogue projection; tracks and server diagnostics belong to media details.
@@ -2164,6 +2796,24 @@ export interface components {
         MediaCardSchema: {
             /** Id */
             id: number;
+            /** Item Id */
+            item_id?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Poster Url */
+            poster_url?: string | null;
+            /**
+             * Watched
+             * @default false
+             */
+            watched: boolean;
+            /**
+             * State Revision
+             * @default 0
+             */
+            state_revision: number;
             /** File Name */
             file_name: string;
             /** File Extension */
@@ -2198,13 +2848,27 @@ export interface components {
          */
         MediaFileSchema: {
             /** Id */
-            id?: number | null;
-            /** File Path */
-            file_path: string;
+            id: number;
+            /** Item Id */
+            item_id?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Year */
+            year?: number | null;
+            /** Poster Url */
+            poster_url?: string | null;
+            /**
+             * Watched
+             * @default false
+             */
+            watched: boolean;
+            /**
+             * State Revision
+             * @default 0
+             */
+            state_revision: number;
             /** File Name */
             file_name: string;
-            /** File Size */
-            file_size: number;
             /** File Extension */
             file_extension: string;
             /** Thumbnail Url */
@@ -2224,6 +2888,16 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            user_view?: components["schemas"]["MediaViewSchema"] | null;
+            /**
+             * In Watchlist
+             * @default false
+             */
+            in_watchlist: boolean;
+            /** File Path */
+            file_path: string;
+            /** File Size */
+            file_size: number;
             /**
              * Updated At
              * Format: date-time
@@ -2240,12 +2914,12 @@ export interface components {
             scan_error?: string | null;
             /** Deleted At */
             deleted_at?: string | null;
-            user_view?: components["schemas"]["MediaViewSchema"] | null;
-            /**
-             * In Watchlist
-             * @default false
-             */
-            in_watchlist: boolean;
+            /** Default Video Stream Index */
+            default_video_stream_index?: number | null;
+            /** Default Audio Stream Index */
+            default_audio_stream_index?: number | null;
+            /** Default Subtitle Stream Index */
+            default_subtitle_stream_index?: number | null;
             /**
              * Video Tracks
              * @default []
@@ -2279,6 +2953,16 @@ export interface components {
             duration_seconds?: number | null;
             /** Watched */
             watched: boolean;
+            /**
+             * Resume Active
+             * @default false
+             */
+            resume_active: boolean;
+            /**
+             * State Revision
+             * @default 0
+             */
+            state_revision: number;
             /** Play Count */
             play_count: number;
             /**
@@ -2308,6 +2992,126 @@ export interface components {
             duration_seconds?: number | null;
             /** Watched */
             watched?: boolean | null;
+        };
+        /** MetadataItemSchema */
+        MetadataItemSchema: {
+            /** Id */
+            id: number;
+            /** Metadata Library Id */
+            metadata_library_id: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "movie" | "series" | "season" | "episode" | "collection";
+            /** Title */
+            title: string;
+            /** Original Title */
+            original_title: string | null;
+            /** Sort Title */
+            sort_title: string | null;
+            /** Overview */
+            overview: string | null;
+            /** Tagline */
+            tagline: string | null;
+            /** Original Language */
+            original_language: string | null;
+            /** Release Date */
+            release_date: string | null;
+            /** Season Number */
+            season_number: number | null;
+            /** Episode Number */
+            episode_number: number | null;
+            /** Aliases */
+            aliases: string[];
+            /** Genres */
+            genres: {
+                [key: string]: unknown;
+            }[];
+            /** Keywords */
+            keywords: {
+                [key: string]: unknown;
+            }[];
+            /** Credits */
+            credits: {
+                [key: string]: unknown;
+            }[];
+            /** Studios */
+            studios: {
+                [key: string]: unknown;
+            }[];
+            /** Countries */
+            countries: string[];
+            /** Provider Ids */
+            provider_ids: {
+                [key: string]: string;
+            };
+            /** Metadata Locale */
+            metadata_locale: string;
+            /** Locked Fields */
+            locked_fields: string[];
+            /** Locked */
+            locked: boolean;
+            /** Provenance */
+            provenance: {
+                [key: string]: unknown;
+            };
+            /** Provider Data */
+            provider_data: {
+                [key: string]: unknown;
+            };
+            /** Revision */
+            revision: number;
+            /** Generation */
+            generation: number;
+            /** Content Hash */
+            content_hash: string;
+            /** Metadata Status */
+            metadata_status: string;
+            /** Hierarchy Complete */
+            hierarchy_complete: boolean;
+            /** Order Confirmed */
+            order_confirmed: boolean;
+            /** Can Associate Episode */
+            readonly can_associate_episode: boolean;
+        };
+        /** MetadataJobSchema */
+        MetadataJobSchema: {
+            /** Id */
+            id: number;
+            /** Item Id */
+            item_id: number;
+            /** Generation */
+            generation: number;
+            /** Status */
+            status: string;
+            /** Attempts */
+            attempts: number;
+            /** Error */
+            error: string | null;
+            /**
+             * Next Attempt At
+             * Format: date-time
+             */
+            next_attempt_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** MetadataPatch */
+        MetadataPatch: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Changes */
+            changes?: {
+                [key: string]: unknown;
+            };
+            /** Locked Fields */
+            locked_fields?: string[] | null;
+            /** Locked */
+            locked?: boolean | null;
         };
         /**
          * PlayMethod
@@ -2391,6 +3195,10 @@ export interface components {
         PlaybackSessionCreate: {
             /** Media File Id */
             media_file_id: number;
+            /** Item Id */
+            item_id?: number | null;
+            /** Continuation From Item Id */
+            continuation_from_item_id?: number | null;
             /** Duration Seconds */
             duration_seconds?: number | null;
             /** Video Stream Index */
@@ -2467,6 +3275,13 @@ export interface components {
             user_id: number;
             /** Media File Id */
             media_file_id: number;
+            /** Item Id */
+            item_id?: number | null;
+            /**
+             * State Revision
+             * @default 0
+             */
+            state_revision: number;
             /** Transcoding Job Id */
             transcoding_job_id?: string | null;
             /** Play Method */
@@ -2511,6 +3326,15 @@ export interface components {
          * @enum {string}
          */
         PlaybackSessionStatus: "active" | "ended" | "stopped_by_admin";
+        /** ProviderStatus */
+        ProviderStatus: {
+            /** Tmdb Configured */
+            tmdb_configured: boolean;
+            /** Anidb Configured */
+            anidb_configured: boolean;
+            /** Metadata Dir */
+            metadata_dir: string;
+        };
         /**
          * RecommendationRowCreate
          * @description Schema for creating a recommendation row.
@@ -2598,13 +3422,12 @@ export interface components {
             /** Visible On Recommend */
             visible_on_recommend?: boolean | null;
         };
-        /**
-         * RefreshRequest
-         * @description Request schema for token refresh.
-         */
-        RefreshRequest: {
-            /** Refresh Token */
-            refresh_token: string;
+        /** RestoreRequest */
+        RestoreRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+            /** Fields */
+            fields: string[];
         };
         /**
          * SettingsSchema
@@ -2623,6 +3446,16 @@ export interface components {
             cleanup_grace_period_days: number;
             /** Hardware Transcoding Device */
             hardware_transcoding_device: string;
+            /**
+             * Watched Threshold Percent
+             * @default 90
+             */
+            watched_threshold_percent: number;
+            /**
+             * Next Up Retention Days
+             * @default 90
+             */
+            next_up_retention_days: number;
         };
         /**
          * SettingsUpdate
@@ -2639,6 +3472,10 @@ export interface components {
             cleanup_grace_period_days?: number | null;
             /** Hardware Transcoding Device */
             hardware_transcoding_device?: string | null;
+            /** Watched Threshold Percent */
+            watched_threshold_percent?: number | null;
+            /** Next Up Retention Days */
+            next_up_retention_days?: number | null;
         };
         /**
          * StreamAccelerationSchema
@@ -3033,6 +3870,11 @@ export interface components {
             is_active: boolean;
             /** Language */
             language: string;
+            /**
+             * Autoplay Next Episode
+             * @default true
+             */
+            autoplay_next_episode: boolean;
             /** Preferred Audio Language */
             preferred_audio_language?: string | null;
             /** Preferred Subtitle Language */
@@ -3066,6 +3908,8 @@ export interface components {
             role?: components["schemas"]["UserRole"] | null;
             /** Language */
             language?: string | null;
+            /** Autoplay Next Episode */
+            autoplay_next_episode?: boolean | null;
             /** Is Admin */
             is_admin?: boolean | null;
             /** Is Active */
@@ -3143,12 +3987,49 @@ export interface components {
             /** Max Fall */
             max_fall?: number | null;
         };
+        /** WatchStateSchema */
+        WatchStateSchema: {
+            /** Item Id */
+            item_id: number;
+            /** Watched */
+            watched: boolean;
+            /** Watched At */
+            watched_at?: string | null;
+            /** State Revision */
+            state_revision: number;
+        };
+        /** WatchStateUpdate */
+        WatchStateUpdate: {
+            /** Watched */
+            watched: boolean;
+            /** Expected Revision */
+            expected_revision?: number | null;
+        };
         /** WatchlistState */
         WatchlistState: {
             /** Media File Id */
             media_file_id: number;
             /** In Watchlist */
             in_watchlist: boolean;
+        };
+        /**
+         * RefreshRequest
+         * @description Request schema for token refresh.
+         */
+        app__routers__v1__auth__RefreshRequest: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /** RefreshRequest */
+        app__routers__v1__metadata__RefreshRequest: {
+            /** Expected Revision */
+            expected_revision: number;
+            /**
+             * Mode
+             * @default unlocked
+             * @enum {string}
+             */
+            mode: "missing" | "unlocked";
         };
     };
     responses: never;
@@ -3291,7 +4172,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RefreshRequest"];
+                "application/json": components["schemas"]["app__routers__v1__auth__RefreshRequest"];
             };
         };
         responses: {
@@ -3326,7 +4207,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RefreshRequest"];
+                "application/json": components["schemas"]["app__routers__v1__auth__RefreshRequest"];
             };
         };
         responses: {
@@ -5739,6 +6620,672 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_resume_items_api_v1_items_resume_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCardSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_next_up_items_api_v1_items_next_up_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCardSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_watch_state_api_v1_items__item_id__watch_state_put: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatchStateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchStateSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_bulk_watch_state_api_v1_items__item_id__watch_state_bulk_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkWatchStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkWatchStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_continuation_api_v1_items__item_id__continuation_get: {
+        parameters: {
+            query?: {
+                mode?: "next" | "continue";
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_items_api_v1_items_get: {
+        parameters: {
+            query?: {
+                library_id?: number | null;
+                kind?: ("movie" | "series" | "season" | "episode" | "collection") | null;
+                parent_id?: number | null;
+                collection_id?: number | null;
+                q?: string | null;
+                skip?: number;
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCardSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_for_file_api_v1_items_for_file__media_id__get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                media_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDetailSchema"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_detail_api_v1_items__item_id__get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDetailSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    item_image_api_v1_items__item_id__images__role__get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    providers_api_v1_dashboard_metadata_providers_get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_api_v1_dashboard_metadata_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                kind?: "movie" | "series";
+                locale?: string;
+                provider?: "tmdb" | "anidb";
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchCandidate"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    jobs_api_v1_dashboard_metadata_jobs_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                skip?: number;
+                limit?: number;
+                api_key?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataJobSchema"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metadata_api_v1_dashboard_metadata_items__item_id__get: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataItemSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_metadata_api_v1_dashboard_metadata_items__item_id__patch: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataItemSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    identify_api_v1_dashboard_metadata_items__item_id__identify_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataJobSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_api_v1_dashboard_metadata_items__item_id__refresh_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__routers__v1__metadata__RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataJobSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_api_v1_dashboard_metadata_items__item_id__restore_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataItemSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_image_api_v1_dashboard_metadata_items__item_id__images__role__post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+                role: "poster" | "backdrop";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_image_api_v1_dashboard_metadata_items__item_id__images__role__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataItemSchema"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    associate_api_v1_dashboard_metadata_items__item_id__associate_post: {
+        parameters: {
+            query?: {
+                api_key?: string | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EpisodeAssociationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeAssociationResponse"];
                 };
             };
             /** @description Validation Error */

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +23,9 @@ class Library(Base):
     path: Mapped[str] = mapped_column(String, index=True, unique=True)
     library_type: Mapped[str] = mapped_column(String, default="movie")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_locale: Mapped[str] = mapped_column(String, default="fr-FR", server_default="fr-FR")
+    metadata_profile: Mapped[str] = mapped_column(String, default="standard", server_default="standard")
+    metadata_export_nfo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     # Relationship
@@ -41,6 +44,9 @@ class LibrarySchema(BaseModel):
     path: str
     library_type: str = "movie"
     enabled: bool = True
+    metadata_locale: str = "fr-FR"
+    metadata_profile: str = "standard"
+    metadata_export_nfo: bool = False
     created_at: datetime
 
 
@@ -51,6 +57,9 @@ class LibraryCreate(BaseModel):
     path: str
     library_type: str = "movie"
     enabled: bool = True
+    metadata_locale: str = Field(default="fr-FR", pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")
+    metadata_profile: str = Field(default="standard", pattern=r"^(standard|anime)$")
+    metadata_export_nfo: bool = False
 
 
 class LibraryUpdate(BaseModel):
@@ -60,3 +69,6 @@ class LibraryUpdate(BaseModel):
     path: str | None = None
     library_type: str | None = None
     enabled: bool | None = None
+    metadata_locale: str | None = Field(default=None, pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")
+    metadata_profile: str | None = Field(default=None, pattern=r"^(standard|anime)$")
+    metadata_export_nfo: bool | None = None

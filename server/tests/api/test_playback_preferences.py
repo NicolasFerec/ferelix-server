@@ -152,3 +152,22 @@ async def test_explicit_subtitle_off_and_text_override_persisted_forced_mode(
     assert info["SubtitleDeliveryMethod"] == "External"
     assert info["SubtitleUrl"] == f"/api/v1/subtitle/{preference_media.id}/4"
     assert info["PlayMethod"] == "DirectPlay"
+
+
+async def test_file_details_expose_resolved_track_preferences(
+    client, db_session, test_user, auth_headers, preference_media
+):
+    test_user.preferred_audio_language = "en"
+    test_user.preferred_subtitle_language = "fr"
+    test_user.subtitle_mode = "forced"
+    await db_session.commit()
+    endpoint = f"/api/v1/media/{preference_media.id}"
+    response = await client.get(endpoint, headers=auth_headers)
+    assert response.status_code == 200
+    details = response.json()
+    assert details["default_video_stream_index"] == 0
+    assert details["default_audio_stream_index"] == 2
+    assert details["default_subtitle_stream_index"] == 3
+    test_user.subtitle_mode = "off"
+    await db_session.commit()
+    assert (await client.get(endpoint, headers=auth_headers)).json()["default_subtitle_stream_index"] is None

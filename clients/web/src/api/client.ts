@@ -17,6 +17,11 @@ export type LibraryCreate = components["schemas"]["LibraryCreate"];
 export type LibraryUpdate = components["schemas"]["LibraryUpdate"];
 export type MediaFile = components["schemas"]["MediaFileSchema"];
 export type MediaCardInfo = components["schemas"]["MediaCardSchema"];
+export type ItemCard = components["schemas"]["ItemCardSchema"];
+export type ItemDetail = components["schemas"]["ItemDetailSchema"];
+export type MetadataItem = components["schemas"]["MetadataItemSchema"];
+export type MetadataPatch = components["schemas"]["MetadataPatch"];
+export type MetadataJob = components["schemas"]["MetadataJobSchema"];
 export type User = components["schemas"]["UserSchema"];
 export type UserCreate = components["schemas"]["UserCreate"];
 export type UserUpdate = components["schemas"]["UserUpdate"];
@@ -359,6 +364,223 @@ export const watchlist = {
     },
 };
 
+export const items = {
+    async list(
+        options: {
+            library_id?: number;
+            kind?: ItemCard["kind"];
+            parent_id?: number;
+            collection_id?: number;
+            q?: string;
+            skip?: number;
+            limit?: number;
+        },
+        signal?: AbortSignal,
+    ): Promise<ItemCard[]> {
+        const { data, error } = await client.GET("/api/v1/items", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { query: { limit: 49, ...options } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load items"));
+        return data;
+    },
+    async get(itemId: number, signal?: AbortSignal): Promise<ItemDetail> {
+        const { data, error } = await client.GET("/api/v1/items/{item_id}", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load item"));
+        return data;
+    },
+    async forFile(mediaId: number, signal?: AbortSignal): Promise<ItemDetail | null> {
+        const { data, error } = await client.GET("/api/v1/items/for-file/{media_id}", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { path: { media_id: mediaId } },
+        });
+        if (error) throw new Error(apiErrorMessage(error, "Failed to resolve item"));
+        return data ?? null;
+    },
+    async resume(limit = 24, signal?: AbortSignal): Promise<ItemCard[]> {
+        const { data, error } = await client.GET("/api/v1/items/resume", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { query: { limit } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load resume items"));
+        return data;
+    },
+    async nextUp(limit = 24, signal?: AbortSignal): Promise<ItemCard[]> {
+        const { data, error } = await client.GET("/api/v1/items/next-up", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { query: { limit } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load next episodes"));
+        return data;
+    },
+    async continuation(itemId: number, mode: "next" | "continue", signal?: AbortSignal) {
+        const { data, error } = await client.GET("/api/v1/items/{item_id}/continuation", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId }, query: { mode } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load continuation"));
+        return data;
+    },
+    async setWatched(itemId: number, watched: boolean, expectedRevision: number) {
+        const { data, error, response } = await client.PUT("/api/v1/items/{item_id}/watch-state", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body: { watched, expected_revision: expectedRevision },
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to update watched state")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async bulkWatched(itemId: number, watched: boolean, revisionToken?: string) {
+        const { data, error, response } = await client.POST("/api/v1/items/{item_id}/watch-state/bulk", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body: { watched, preview: revisionToken === undefined, revision_token: revisionToken },
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to update watched state")), {
+                status: response.status,
+            });
+        return data;
+    },
+    artworkUrl(value: string | null | undefined): string | null {
+        if (!value) return null;
+        const url = new URL(value, window.location.origin);
+        if (url.origin !== window.location.origin) return null;
+        const token = getAccessToken();
+        if (token) url.searchParams.set("api_key", token);
+        return `${url.pathname}${url.search}`;
+    },
+};
+
+export const metadata = {
+    async get(itemId: number, signal?: AbortSignal): Promise<MetadataItem> {
+        const { data, error } = await client.GET("/api/v1/dashboard/metadata/items/{item_id}", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load metadata"));
+        return data;
+    },
+    async update(itemId: number, body: MetadataPatch): Promise<MetadataItem> {
+        const { data, error, response } = await client.PATCH("/api/v1/dashboard/metadata/items/{item_id}", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body,
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to update metadata")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async search(
+        q: string,
+        kind: "movie" | "series",
+        locale: string,
+        provider: "tmdb" | "anidb",
+        signal?: AbortSignal,
+    ) {
+        const { data, error } = await client.GET("/api/v1/dashboard/metadata/search", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { query: { q, kind, locale, provider } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to search metadata"));
+        return data;
+    },
+    async providers(signal?: AbortSignal) {
+        const { data, error } = await client.GET("/api/v1/dashboard/metadata/providers", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load providers"));
+        return data;
+    },
+    async identify(itemId: number, expectedRevision: number, provider: "tmdb" | "anidb", providerId: string) {
+        const { data, error, response } = await client.POST("/api/v1/dashboard/metadata/items/{item_id}/identify", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body: { expected_revision: expectedRevision, provider, provider_id: providerId },
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to identify item")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async refresh(itemId: number, expectedRevision: number, mode: "missing" | "unlocked") {
+        const { data, error, response } = await client.POST("/api/v1/dashboard/metadata/items/{item_id}/refresh", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body: { expected_revision: expectedRevision, mode },
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to refresh metadata")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async restore(itemId: number, expectedRevision: number, fields: string[]) {
+        const { data, error, response } = await client.POST("/api/v1/dashboard/metadata/items/{item_id}/restore", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body: { expected_revision: expectedRevision, fields },
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to restore metadata")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async associateEpisode(itemId: number, expectedRevision: number, targetItemId: number, targetRevision: number) {
+        const { data, error, response } = await client.POST("/api/v1/dashboard/metadata/items/{item_id}/associate", {
+            signal: AbortSignal.timeout(30000),
+            params: { path: { item_id: itemId } },
+            body: {
+                expected_revision: expectedRevision,
+                target_item_id: targetItemId,
+                target_expected_revision: targetRevision,
+            },
+        });
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to associate episode")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async uploadImage(itemId: number, role: "poster" | "backdrop", file: File, expectedRevision: number) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("expected_revision", String(expectedRevision));
+        const { data, error, response } = await client.POST(
+            "/api/v1/dashboard/metadata/items/{item_id}/images/{role}",
+            {
+                signal: AbortSignal.timeout(30000),
+                params: { path: { item_id: itemId, role } },
+                body: { file: "", expected_revision: expectedRevision },
+                bodySerializer: () => form,
+            },
+        );
+        if (error || !data)
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to update image")), {
+                status: response.status,
+            });
+        return data;
+    },
+    async jobs(status?: string, skip = 0, limit = 49, signal?: AbortSignal): Promise<MetadataJob[]> {
+        const { data, error } = await client.GET("/api/v1/dashboard/metadata/jobs", {
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+            params: { query: { status, skip, limit } },
+        });
+        if (error || !data) throw new Error(apiErrorMessage(error, "Failed to load metadata jobs"));
+        return data;
+    },
+};
+
 // Export media-related functions
 export const media = {
     async search(q: string, skip = 0, limit = 49, signal?: AbortSignal): Promise<MediaCardInfo[]> {
@@ -385,8 +607,9 @@ export const media = {
     /**
      * Get media file by ID
      */
-    async getMediaFile(id: number): Promise<MediaFile> {
+    async getMediaFile(id: number, signal?: AbortSignal): Promise<MediaFile> {
         const { data, error } = await client.GET("/api/v1/media/{media_id}", {
+            signal,
             params: { path: { media_id: id } },
         });
         if (error || !data) {
@@ -664,20 +887,8 @@ export const libraries = {
     /**
      * Create a new library
      */
-    async createLibrary(
-        name: string,
-        path: string,
-        libraryType: "movie" | "show" = "movie",
-        enabled = true,
-    ): Promise<Library> {
-        const { data, error } = await client.POST("/api/v1/dashboard/libraries", {
-            body: {
-                name,
-                path,
-                library_type: libraryType,
-                enabled,
-            },
-        });
+    async createLibrary(body: LibraryCreate): Promise<Library> {
+        const { data, error } = await client.POST("/api/v1/dashboard/libraries", { body });
         if (error || !data) {
             throw new Error("Failed to create library");
         }
@@ -738,8 +949,8 @@ export const libraries = {
     /**
      * Get homepage rows
      */
-    async getHomepageRows(): Promise<HomepageRow[]> {
-        const { data, error } = await client.GET("/api/v1/homepage/rows");
+    async getHomepageRows(signal?: AbortSignal): Promise<HomepageRow[]> {
+        const { data, error } = await client.GET("/api/v1/homepage/rows", { signal });
         if (error || !data) {
             throw new Error("Failed to get homepage rows");
         }
@@ -949,6 +1160,8 @@ export const playbackSessions = {
     async create(
         payload: {
             mediaFileId: number;
+            itemId?: number;
+            continuationFromItemId?: number;
             durationSeconds?: number | null;
             audioStreamIndex?: number | null;
             videoStreamIndex?: number | null;
@@ -956,10 +1169,12 @@ export const playbackSessions = {
         },
         signal?: AbortSignal,
     ): Promise<PlaybackSession> {
-        const { data, error } = await client.POST("/api/v1/playback-sessions", {
+        const { data, error, response } = await client.POST("/api/v1/playback-sessions", {
             signal,
             body: {
                 media_file_id: payload.mediaFileId,
+                item_id: payload.itemId,
+                continuation_from_item_id: payload.continuationFromItemId,
                 duration_seconds: payload.durationSeconds,
                 audio_stream_index: payload.audioStreamIndex,
                 video_stream_index: payload.videoStreamIndex,
@@ -967,7 +1182,9 @@ export const playbackSessions = {
             },
         });
         if (error || !data) {
-            throw new Error("Failed to create playback session");
+            throw Object.assign(new Error(apiErrorMessage(error, "Failed to create playback session")), {
+                status: response.status,
+            });
         }
         return data;
     },
@@ -988,6 +1205,7 @@ export const playbackSessions = {
         },
     ): Promise<PlaybackSessionHeartbeatResponse> {
         const { data, error } = await client.POST("/api/v1/playback-sessions/{session_id}/heartbeat", {
+            signal: AbortSignal.timeout(10000),
             params: { path: { session_id: sessionId } },
             body: {
                 position_seconds: payload.positionSeconds,
@@ -1006,6 +1224,18 @@ export const playbackSessions = {
             throw new Error("Failed to update playback session");
         }
         return data;
+    },
+
+    /** Dispatch immediately during pagehide; keepalive survives document teardown. */
+    async endKeepalive(sessionId: string): Promise<void> {
+        const accessToken = getAccessToken();
+        const response = await fetch(`/api/v1/playback-sessions/${encodeURIComponent(sessionId)}`, {
+            method: "DELETE",
+            keepalive: true,
+            credentials: "same-origin",
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        });
+        if (!response.ok && response.status !== 404) throw new Error("Failed to end playback session");
     },
 
     async end(sessionId: string, signal?: AbortSignal): Promise<void> {

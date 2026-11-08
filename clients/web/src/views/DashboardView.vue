@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import MetadataJobsPanel from "@/components/MetadataJobsPanel.vue";
 import JobsPanel from "../components/JobsPanel.vue";
 import LibraryList from "../components/LibraryList.vue";
 import MenuBar from "../components/MenuBar.vue";
@@ -52,7 +53,7 @@ watch(
       <main id="main-content" class="min-w-0 flex-1 px-5 py-8 sm:p-8 lg:p-10">
         <StreamsPanel v-if="activeSection === 'dashboard'" />
         <LibraryList v-else-if="activeSection === 'libraries'" />
-        <JobsPanel v-else-if="activeSection === 'jobs'" />
+        <div v-else-if="activeSection === 'jobs'"><JobsPanel /><MetadataJobsPanel /></div>
         <ServerLogsPanel v-else-if="activeSection === 'logs'" />
         <UserManagementPanel v-else-if="activeSection === 'users'" />
         <SettingsPanel v-else-if="activeSection === 'settings'" />

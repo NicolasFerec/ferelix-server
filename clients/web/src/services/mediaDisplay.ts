@@ -44,3 +44,11 @@ function splitTitleAndYear(stem: string): MediaTitleInfo {
 
     return { title: cleanTitle(stem), year: null };
 }
+
+/** Provider dates have no time zone; format them without shifting the calendar day. */
+export function formatReleaseDate(value: string, locale: string): string {
+    const date = new Date(`${value}T12:00:00Z`);
+    return Number.isNaN(date.valueOf())
+        ? value
+        : new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(date);
+}

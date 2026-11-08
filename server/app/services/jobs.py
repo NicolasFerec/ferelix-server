@@ -110,6 +110,9 @@ class JobExecutionRecord:
 
 # Registry of known jobs. Add more entries as new background jobs are introduced.
 JOB_REGISTRY: dict[str, JobMeta] = {
+    "metadata_catalogue": JobMeta(
+        id="metadata_catalogue", name_key="jobs.names.metadataCatalogue", fallback_name="Metadata catalogue"
+    ),
     "library_scanner": JobMeta(
         id="library_scanner",
         name_key="jobs.names.library_scanner",

@@ -2,7 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import { type MediaCardInfo, media, watchlist } from "@/api/client";
+import { type ItemCard as Card, items as itemApi, type MediaCardInfo, watchlist } from "@/api/client";
+import ItemCard from "@/components/ItemCard.vue";
 import MediaCard from "@/components/MediaCard.vue";
 import MenuBar from "@/components/MenuBar.vue";
 
@@ -14,7 +15,7 @@ const query = computed(() => typeof route.query.q === "string" ? route.query.q.t
 const page = computed(() => Math.max(1, Math.min(1000000, Math.floor(Number(route.query.page) || 1))));
 const searchInput = ref(query.value);
 const searchField = ref<HTMLInputElement | null>(null);
-const items = ref<MediaCardInfo[]>([]);
+const items = ref<Array<MediaCardInfo|Card>>([]);
 const fetching = ref(false);
 const debouncing = ref(false);
 const error = ref("");
@@ -57,7 +58,7 @@ watch(() => [route.name, query.value, page.value, revision.value], async (_, _ol
   fetching.value = true;
   try {
     const cards = isSearch.value
-      ? await media.search(query.value, (page.value - 1) * 48, 49, controller.signal)
+      ? await itemApi.list({q:query.value,skip:(page.value-1)*48,limit:49},controller.signal)
       : await watchlist.list((page.value - 1) * 48, 49, controller.signal);
     controller.signal.throwIfAborted();
     hasNext.value = cards.length > 48;
@@ -89,7 +90,7 @@ onUnmounted(() => { clearTimeout(debounce); request?.abort(); });
       <template v-else>
         <p v-if="items.length" role="status" class="mb-5 text-sm text-muted">{{ $t('library.pageInfo', {page, count:items.length}) }}</p>
         <div v-if="items.length" class="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
-          <MediaCard v-for="item in items" :key="item.id" :media-file="item" :return-to="route.fullPath" />
+          <template v-for="item in items" :key="item.id"><ItemCard v-if="'kind' in item" :item="item" :return-to="route.fullPath" @changed="revision++" /><MediaCard v-else :media-file="item" :return-to="route.fullPath" @changed="revision++" /></template>
         </div>
         <div v-else role="status" class="empty-state">
           <p>{{ isSearch ? $t('discovery.empty', {query}) : $t('watchlist.empty') }}</p>

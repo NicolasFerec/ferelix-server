@@ -69,7 +69,7 @@ vi.mock("@/api/client", () => ({
         getDirectStreamUrl: vi.fn(() => "/direct"),
         getSubtitleUrl: () => "/subtitle",
     },
-    playbackSessions: { create: vi.fn(), heartbeat: vi.fn(), end: vi.fn() },
+    playbackSessions: { create: vi.fn(), heartbeat: vi.fn(), end: vi.fn(), endKeepalive: vi.fn() },
 }));
 
 const original = { width: 1920, height: 1080, label: "Original", is_original: true };
@@ -109,6 +109,7 @@ beforeEach(() => {
     } as never);
     vi.mocked(playbackSessions.heartbeat).mockResolvedValue({ kicked: false } as never);
     vi.mocked(playbackSessions.end).mockResolvedValue();
+    vi.mocked(playbackSessions.endKeepalive).mockResolvedValue();
     vi.mocked(media.stopHls).mockResolvedValue();
     vi.mocked(media.getPlaybackInfo).mockResolvedValue({ MediaSources: [remuxSource] } as never);
     for (const start of [media.startRemux, media.startAudioTranscode, media.startTranscode]) {
@@ -690,4 +691,169 @@ it("keeps an explicit Off chosen while the first preference negotiation is pendi
     expect(player.findComponent(PlayerControls).props("selectedSubtitleTrack")).toBeNull();
     expect(media.startTranscode).not.toHaveBeenCalled();
     expect(media.startRemux).toHaveBeenCalledOnce();
+});
+
+it("does not emit ended when progress crosses the watched threshold", async () => {
+    const player = await openPlayer();
+    const video = player.get("video");
+    video.element.currentTime = 3500;
+    await video.trigger("timeupdate");
+    await video.trigger("ended");
+    await flushPromises();
+    expect(player.emitted("ended")).toBeUndefined();
+});
+it("persists the final position before emitting a real ended event once", async () => {
+    const player = await openPlayer();
+    const video = player.get("video");
+    Object.defineProperty(video.element, "ended", { configurable: true, value: true });
+    video.element.currentTime = 3600;
+    await video.trigger("ended");
+    await flushPromises();
+    expect(playbackSessions.heartbeat).toHaveBeenLastCalledWith(
+        "session",
+        expect.objectContaining({ positionSeconds: 3600, isPaused: true }),
+    );
+    expect(player.emitted("ended")).toHaveLength(1);
+    await video.trigger("ended");
+    await flushPromises();
+    expect(player.emitted("ended")).toHaveLength(1);
+});
+it("does not emit a stale ended after closing during the final heartbeat", async () => {
+    const player = await openPlayer();
+    let finish: (value: never) => void = () => {};
+    vi.mocked(playbackSessions.heartbeat).mockReturnValue(
+        new Promise((resolve) => {
+            finish = resolve;
+        }),
+    );
+    const video = player.get("video");
+    Object.defineProperty(video.element, "ended", { configurable: true, value: true });
+    await video.trigger("ended");
+    player.unmount();
+    wrapper = undefined;
+    finish({ kicked: false } as never);
+    await flushPromises();
+    expect(player.emitted("ended")).toBeUndefined();
+});
+it("does not resurrect continuation after an action during the final heartbeat", async () => {
+    const player = await openPlayer();
+    let finish: (value: never) => void = () => {};
+    vi.mocked(playbackSessions.heartbeat).mockReturnValue(
+        new Promise((resolve) => {
+            finish = resolve;
+        }),
+    );
+    const video = player.get("video");
+    Object.defineProperty(video.element, "ended", { configurable: true, value: true });
+    await video.trigger("ended");
+    // The new selection is still negotiating; the DOM source has not changed yet.
+    vi.mocked(media.getPlaybackInfo).mockReturnValue(new Promise(() => {}));
+    player.getComponent(PlayerControls).vm.$emit("select-resolution", smaller);
+    finish({ kicked: false } as never);
+    await flushPromises();
+    expect(player.emitted("ended")).toBeUndefined();
+});
+it("resumes an active rewatch independently of the watched badge", async () => {
+    await openPlayer({
+        user_view: { watched: true, resume_active: true, duration_seconds: 3600, position_seconds: 1200 },
+    });
+    expect(media.startRemux).toHaveBeenCalledWith(1, expect.objectContaining({ startTime: 1200 }));
+});
+
+it("revokes the session with keepalive on pagehide and stops heartbeat and HLS without Vue unmount", async () => {
+    vi.useFakeTimers();
+    const player = await openPlayer();
+    const video = player.get("video");
+    video.element.currentTime = 120;
+    await video.trigger("timeupdate");
+    const heartbeats = vi.mocked(playbackSessions.heartbeat).mock.calls.length;
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+    await flushPromises();
+    expect(playbackSessions.endKeepalive).toHaveBeenCalledExactlyOnceWith("session");
+    expect(hlsPlayers.every((instance) => instance.destroyed)).toBe(true);
+    expect(player.emitted("activity")).toBeDefined();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(playbackSessions.heartbeat).toHaveBeenCalledTimes(heartbeats);
+    player.unmount();
+    wrapper = undefined;
+    expect(playbackSessions.end).not.toHaveBeenCalled();
+    expect(playbackSessions.endKeepalive).toHaveBeenCalledTimes(1);
+});
+it("does not finish a pending stream negotiation after pagehide", async () => {
+    let finish: (value: never) => void = () => {};
+    vi.mocked(media.getPlaybackInfo).mockReturnValue(
+        new Promise((resolve) => {
+            finish = resolve;
+        }),
+    );
+    await openPlayer();
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    finish({ MediaSources: [remuxSource] } as never);
+    await flushPromises();
+    expect(playbackSessions.endKeepalive).toHaveBeenCalledWith("session");
+    expect(media.startRemux).not.toHaveBeenCalled();
+    expect(media.startTranscode).not.toHaveBeenCalled();
+});
+it("restores a bfcache page with a fresh-instance snapshot preserving position and paused intent", async () => {
+    const player = await openPlayer();
+    const video = player.get("video");
+    video.element.currentTime = 123;
+    video.element.volume = 0.42;
+    video.element.muted = true;
+    await video.trigger("volumechange");
+    await video.trigger("timeupdate");
+    player.getComponent(PlayerControls).vm.$emit("toggle-play");
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+    expect(playbackSessions.endKeepalive).toHaveBeenCalledExactlyOnceWith("session");
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: false }));
+    expect(player.emitted("restore")).toBeUndefined();
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(player.emitted("restore")).toEqual([
+        [
+            expect.objectContaining({
+                positionSeconds: 123,
+                playing: false,
+                volume: 0.42,
+                muted: true,
+                audioStreamIndex: 1,
+                subtitleStreamIndex: -1,
+                resolution: original,
+            }),
+        ],
+    ]);
+    window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(player.emitted("restore")).toHaveLength(1);
+});
+it("keeps restored quality and explicit subtitles off while creating a fresh paused session", async () => {
+    wrapper = mount(CustomVideoPlayer, {
+        props: {
+            mediaFile: { id: 1, duration: 3600, audio_tracks: audio, subtitle_tracks: [imageSubtitle] } as never,
+            restoreState: {
+                positionSeconds: 123,
+                playing: false,
+                volume: 0.37,
+                muted: true,
+                audioStreamIndex: 2,
+                subtitleStreamIndex: -1,
+                resolution: smaller,
+            },
+        },
+        global: { stubs: { PlayerControls: true, PlayerInfoPanel: true, PlayerStatusOverlays: true } },
+    });
+    await flushPromises();
+    expect(playbackSessions.create).toHaveBeenCalledOnce();
+    expect(media.getPlaybackInfo).toHaveBeenCalledWith(
+        1,
+        expect.anything(),
+        expect.objectContaining({
+            audioStreamIndex: 2,
+            subtitleStreamIndex: -1,
+            requestedResolution: { width: 1280, height: 720 },
+        }),
+    );
+    expect(media.startRemux).toHaveBeenCalledWith(1, expect.objectContaining({ startTime: 123 }));
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(wrapper.get("video").element.volume).toBe(0.37);
+    expect(wrapper.get("video").element.muted).toBe(true);
+    expect(wrapper.getComponent(PlayerControls).props("isPlaying")).toBe(false);
 });

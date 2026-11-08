@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import type { MediaCardInfo } from "@/api/client";
+import type { ItemCard as Card, MediaCardInfo } from "@/api/client";
+import ItemCard from "./ItemCard.vue";
 import MediaCard from "./MediaCard.vue";
 
-const props = defineProps<{ displayName: string; items: MediaCardInfo[]; sourceLibraryId?: number | string | null }>();
+const props = defineProps<{ displayName: string; items: Array<MediaCardInfo|Card>; sourceLibraryId?: number | string | null; hideWatchActions?: boolean }>();
+const emit=defineEmits<{changed:[]}>();
 const scroller = ref<HTMLElement | null>(null);
 const canPrevious = ref(false);
 const canNext = ref(false);
@@ -33,7 +35,7 @@ watch(() => props.items, async () => { await nextTick(); updateArrows(); });
       </div>
     </div>
     <div ref="scroller" class="ferelix-hide-scrollbar -mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-3 pt-1" @scroll.passive="updateArrows">
-      <div v-for="item in items" :key="item.id" class="w-[150px] shrink-0 snap-start sm:w-[180px]"><MediaCard :media-file="item" :source-library-id="sourceLibraryId" /></div>
+      <div v-for="item in items" :key="item.id" class="w-[150px] shrink-0 snap-start sm:w-[180px]"><ItemCard v-if="'kind' in item" :item="item" :hide-watch-actions="hideWatchActions" @changed="emit('changed')" /><MediaCard v-else :media-file="item" :source-library-id="sourceLibraryId" :hide-watch-actions="hideWatchActions" @changed="emit('changed')" /></div>
       <p v-if="!items.length" class="empty-state w-full">{{ $t('home.noItems') }}</p>
     </div>
   </section>

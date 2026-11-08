@@ -1,6 +1,6 @@
 """Settings model and schemas for application configuration."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,8 @@ class Settings(Base):
     cleanup_grace_period_days: Mapped[int] = mapped_column(Integer, default=30)
     # Hardware transcoding settings
     hardware_transcoding_device: Mapped[str] = mapped_column(String, default="auto")
+    watched_threshold_percent: Mapped[int] = mapped_column(Integer, default=90, server_default="90")
+    next_up_retention_days: Mapped[int] = mapped_column(Integer, default=90, server_default="90")
 
 
 class SettingsSchema(BaseModel):
@@ -34,6 +36,8 @@ class SettingsSchema(BaseModel):
     cleanup_schedule_minute: int
     cleanup_grace_period_days: int
     hardware_transcoding_device: str
+    watched_threshold_percent: int = 90
+    next_up_retention_days: int = 90
 
 
 class SettingsUpdate(BaseModel):
@@ -44,3 +48,5 @@ class SettingsUpdate(BaseModel):
     cleanup_schedule_minute: int | None = None
     cleanup_grace_period_days: int | None = None
     hardware_transcoding_device: str | None = None
+    watched_threshold_percent: int | None = Field(default=None, ge=1, le=100)
+    next_up_retention_days: int | None = Field(default=None, ge=0, le=36500)

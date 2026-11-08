@@ -47,6 +47,7 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     language: Mapped[str] = mapped_column(String, default="en")
+    autoplay_next_episode: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     preferred_audio_language: Mapped[str | None] = mapped_column(String, nullable=True)
     preferred_subtitle_language: Mapped[str | None] = mapped_column(String, nullable=True)
     subtitle_mode: Mapped[str] = mapped_column(String, default=SubtitleMode.OFF, server_default="off")
@@ -92,6 +93,7 @@ class UserSchema(BaseModel):
     is_admin: bool
     is_active: bool
     language: str
+    autoplay_next_episode: bool = True
     preferred_audio_language: str | None = None
     preferred_subtitle_language: str | None = None
     subtitle_mode: SubtitleMode = SubtitleMode.OFF
@@ -124,6 +126,7 @@ class UserUpdate(BaseModel):
     current_password: str | None = None
     role: UserRole | None = None
     language: str | None = None
+    autoplay_next_episode: bool | None = None
     is_admin: bool | None = None
     is_active: bool | None = None
     preferred_audio_language: str | None = Field(

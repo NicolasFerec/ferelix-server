@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 import { auth, isAuthenticated } from "@/api/client";
 
 const routes: RouteRecordRaw[] = [
+    { path: "/items/:id", name: "item-detail", component: () => import("../views/ItemDetailView.vue") },
     { path: "/search", name: "search", component: () => import("../views/DiscoveryView.vue") },
     { path: "/watchlist", name: "watchlist", component: () => import("../views/DiscoveryView.vue") },
     {

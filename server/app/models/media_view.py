@@ -21,6 +21,8 @@ class MediaView(Base):
     position_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     watched: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    resume_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", index=True)
+    state_revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     play_count: Mapped[int] = mapped_column(Integer, default=0)
     first_viewed_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     last_viewed_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
@@ -38,6 +40,8 @@ class MediaViewSchema(BaseModel):
     position_seconds: float
     duration_seconds: float | None = None
     watched: bool
+    resume_active: bool = False
+    state_revision: int = 0
     play_count: int
     first_viewed_at: datetime
     last_viewed_at: datetime

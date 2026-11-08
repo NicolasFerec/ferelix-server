@@ -63,6 +63,12 @@ class MediaCardSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    item_id: int | None = None
+    title: str | None = None
+    year: int | None = None
+    poster_url: str | None = None
+    watched: bool = False
+    state_revision: int = 0
     file_name: str
     file_extension: str
     thumbnail_url: str | None = None
@@ -76,12 +82,11 @@ class MediaCardSchema(BaseModel):
     in_watchlist: bool = False
 
 
-class MediaFileSchema(BaseModel):
+class MediaFileSchema(MediaCardSchema):
     """Schema for MediaFile API responses."""
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int | None = None
     file_path: str
     file_name: str
     file_size: int
@@ -100,6 +105,9 @@ class MediaFileSchema(BaseModel):
     deleted_at: datetime | None = None
     user_view: MediaViewSchema | None = None
     in_watchlist: bool = False
+    default_video_stream_index: int | None = None
+    default_audio_stream_index: int | None = None
+    default_subtitle_stream_index: int | None = None
     video_tracks: list[VideoTrackSchema] = []
     audio_tracks: list[AudioTrackSchema] = []
     subtitle_tracks: list[SubtitleTrackSchema] = []

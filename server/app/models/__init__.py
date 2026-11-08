@@ -19,6 +19,7 @@ from .media_file import (
     VideoTrackSchema,
 )
 from .media_view import MediaView, MediaViewSchema, MediaViewUpdate
+from .metadata import Artwork, MediaItem, MediaItemFile, MetadataCache, MetadataJob, UserItemState
 from .playback_session import (
     PlaybackSession,
     PlaybackSessionCreate,
@@ -48,6 +49,7 @@ from .user import User, UserCreate, UserRole, UserSchema, UserUpdate
 from .watchlist import WatchlistEntry, WatchlistState
 
 __all__ = [
+    "Artwork",
     "AudioTrack",
     "AudioTrackSchema",
     "Base",
@@ -58,9 +60,13 @@ __all__ = [
     "MediaCardSchema",
     "MediaFile",
     "MediaFileSchema",
+    "MediaItem",
+    "MediaItemFile",
     "MediaView",
     "MediaViewSchema",
     "MediaViewUpdate",
+    "MetadataCache",
+    "MetadataJob",
     "PlaybackSession",
     "PlaybackSessionCreate",
     "PlaybackSessionHeartbeat",
@@ -82,6 +88,7 @@ __all__ = [
     "TranscodingProgressUpdate",
     "User",
     "UserCreate",
+    "UserItemState",
     "UserRole",
     "UserSchema",
     "UserUpdate",

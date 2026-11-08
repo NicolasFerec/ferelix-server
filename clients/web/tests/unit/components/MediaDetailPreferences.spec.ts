@@ -17,6 +17,9 @@ beforeEach(() => {
         duration: 1200,
         in_watchlist: true,
         video_tracks: [{ stream_index: 0, is_default: true }],
+        default_video_stream_index: 0,
+        default_audio_stream_index: 1,
+        default_subtitle_stream_index: 3,
         audio_tracks: [
             { id: 1, stream_index: 1, is_default: true },
             { id: 2, stream_index: 2 },
@@ -42,6 +45,9 @@ it("starts with automatic preferences and carries only explicitly selected audio
     expect(destination.searchParams.has("subtitle")).toBe(false);
     expect(wrapper.get('a[href^="/search"]').attributes("href")).toBe("/search?q=film&page=2");
     const selects = wrapper.findAllComponents(DropdownSelect);
+    expect(selects[0].props("modelValue")).toBe(0);
+    expect(selects[1].props("modelValue")).toBe(1);
+    expect(selects[2].props("modelValue")).toBe(3);
     selects[1].vm.$emit("update:modelValue", 2);
     await flushPromises();
     selects[2].vm.$emit("update:modelValue", -1);

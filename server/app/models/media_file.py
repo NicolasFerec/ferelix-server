@@ -105,6 +105,9 @@ class MediaFileSchema(MediaCardSchema):
     deleted_at: datetime | None = None
     user_view: MediaViewSchema | None = None
     in_watchlist: bool = False
+    default_video_stream_index: int | None = None
+    default_audio_stream_index: int | None = None
+    default_subtitle_stream_index: int | None = None
     video_tracks: list[VideoTrackSchema] = []
     audio_tracks: list[AudioTrackSchema] = []
     subtitle_tracks: list[SubtitleTrackSchema] = []

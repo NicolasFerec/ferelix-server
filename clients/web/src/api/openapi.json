@@ -9633,6 +9633,39 @@
             ],
             "title": "Deleted At"
           },
+          "default_video_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Video Stream Index"
+          },
+          "default_audio_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Audio Stream Index"
+          },
+          "default_subtitle_stream_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Subtitle Stream Index"
+          },
           "video_tracks": {
             "items": {
               "$ref": "#/components/schemas/VideoTrackSchema"

@@ -43,7 +43,7 @@ from app.services.library_paths import library_file_filter
 from app.services.media_access import require_owned_playback_session
 from app.services.playback_preferences import resolve_playback_tracks
 from app.services.playback_session import ClientContext, PlaybackSessionService
-from app.services.stream_builder import StreamBuilder
+from app.services.stream_builder import StreamBuilder, select_video_track
 from app.services.thumbnails import generate_video_thumbnail
 from app.services.viewing import apply_file_progress_patch, set_file_watch_state
 from app.services.watchlist import add_to_watchlist, remove_from_watchlist
@@ -349,6 +349,9 @@ async def get_media_file(
     view = await get_user_media_view(session, user.id, media_id)
     schema = media_file_with_user_view(media_file, view)
     schema.in_watchlist = bool(media_result and media_result[1])
+    video = select_video_track(media_file)
+    schema.default_video_stream_index = video.stream_index if video else None
+    schema.default_audio_stream_index, schema.default_subtitle_stream_index = resolve_playback_tracks(media_file, user)
     await enrich_file_cards(session, user.id, [schema])
     return schema
 

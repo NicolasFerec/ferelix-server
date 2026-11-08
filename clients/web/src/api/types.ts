@@ -2914,6 +2914,12 @@ export interface components {
             scan_error?: string | null;
             /** Deleted At */
             deleted_at?: string | null;
+            /** Default Video Stream Index */
+            default_video_stream_index?: number | null;
+            /** Default Audio Stream Index */
+            default_audio_stream_index?: number | null;
+            /** Default Subtitle Stream Index */
+            default_subtitle_stream_index?: number | null;
             /**
              * Video Tracks
              * @default []

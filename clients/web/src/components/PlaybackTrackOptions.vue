@@ -22,29 +22,34 @@ const videoTracks = computed(() => props.file.video_tracks ?? []);
 const audioTracks = computed(() => (props.file.audio_tracks ?? []) as AudioTrackOption[]);
 const subtitleTracks = computed(() => (props.file.subtitle_tracks ?? []) as SubtitleTrackOption[]);
 
+const defaults = computed(() => ({
+  video: props.file.default_video_stream_index ?? null,
+  audio: props.file.default_audio_stream_index ?? null,
+  subtitle: props.file.default_subtitle_stream_index ?? -1,
+}));
+
 function selectTrack(kind: keyof TrackSelection, value: string | number | null) {
   const next = { ...selection.value };
-  if (typeof value === "number") next[kind] = value;
+  if (typeof value === "number" && value !== defaults.value[kind]) next[kind] = value;
   else delete next[kind];
   selection.value = next;
 }
 
 const videoTrackOptions = computed<DropdownOption[]>(() => [
-  { value: null, label: t("preferences.auto") },
+  ...(!videoTracks.value.length ? [{ value: null, label: t("mediaDetail.track.unknown") }] : []),
   ...videoTracks.value.map((track) => ({
     value: track.stream_index,
-    label: formatVideoTrackLabel(track),
+    label: formatVideoTrackLabel(track) || t("mediaDetail.track.unknown"),
   })),
 ]);
 const audioTrackOptions = computed<DropdownOption[]>(() => [
-  {value:null, label:t("preferences.auto")},
+  ...(!audioTracks.value.length ? [{ value: null, label: t("mediaDetail.track.unknown") }] : []),
   ...audioTracks.value.map((track) => ({
     value: track.stream_index,
     label: formatAudioTrackLabel(track),
   })),
 ]);
 const subtitleTrackOptions = computed<DropdownOption[]>(() => [
-  { value: null, label: t("preferences.auto") },
   { value: -1, label: t("mediaDetail.track.subtitlesOff") },
   ...subtitleTracks.value.map((track) => ({
     value: track.stream_index,
@@ -126,7 +131,7 @@ function getVideoRangeLabel(track: VideoTrackOption): string | null {
       <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.video") }}</span>
       <DropdownSelect
         id="video-stream"
-        :model-value="selection.video ?? null"
+        :model-value="selection.video ?? defaults.video"
         @update:model-value="selectTrack('video', $event)"
         :options="videoTrackOptions"
         :disabled="videoTracks.length <= 1"
@@ -136,7 +141,7 @@ function getVideoRangeLabel(track: VideoTrackOption): string | null {
       <span class="w-24 shrink-0 text-gray-400">{{ t("mediaDetail.tracks.audio") }}</span>
       <DropdownSelect
         id="audio-stream"
-        :model-value="selection.audio ?? null"
+        :model-value="selection.audio ?? defaults.audio"
         @update:model-value="selectTrack('audio', $event)"
         :options="audioTrackOptions"
         :disabled="audioTrackOptions.length <= 1"
@@ -148,7 +153,7 @@ function getVideoRangeLabel(track: VideoTrackOption): string | null {
       }}</span>
       <DropdownSelect
         id="subtitle-stream"
-        :model-value="selection.subtitle ?? null"
+        :model-value="selection.subtitle ?? defaults.subtitle"
         @update:model-value="selectTrack('subtitle', $event)"
         :options="subtitleTrackOptions"
         :disabled="subtitleTrackOptions.length <= 1"

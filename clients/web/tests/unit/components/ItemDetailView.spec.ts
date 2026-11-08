@@ -177,7 +177,9 @@ it("loads playback options on demand and launches the chosen file with the selec
     } as never);
     vi.mocked(media.getMediaFile).mockResolvedValue({
         id: 42,
-        audio_tracks: [{ stream_index: 2, codec: "aac" }],
+        default_audio_stream_index: 2,
+        default_subtitle_stream_index: 3,
+        audio_tracks: [{ stream_index: 2, codec: "aac" }, { stream_index: 4, codec: "aac" }],
         subtitle_tracks: [{ stream_index: 3, codec: "subrip" }],
     } as never);
     const { view } = await open();
@@ -188,11 +190,13 @@ it("loads playback options on demand and launches the chosen file with the selec
     await flushPromises();
     expect(media.getMediaFile).toHaveBeenCalledWith(42, expect.any(AbortSignal));
     const controls = view.findAllComponents(DropdownSelect);
-    controls[1].vm.$emit("update:modelValue", 2);
+    expect(controls[1].props("modelValue")).toBe(2);
+    expect(controls[2].props("modelValue")).toBe(3);
+    controls[1].vm.$emit("update:modelValue", 4);
     await flushPromises();
     controls[2].vm.$emit("update:modelValue", -1);
     await flushPromises();
     const href = view.get('a[href^="/player/42"]').attributes("href");
     const query = new URL(href, "http://localhost").searchParams;
-    expect(Object.fromEntries(query)).toMatchObject({ item: "1", position: "120", audio: "2", subtitle: "-1" });
+    expect(Object.fromEntries(query)).toMatchObject({ item: "1", position: "120", audio: "4", subtitle: "-1" });
 });
